@@ -1,6 +1,6 @@
 # Hippocampus Memory
 
-A self-organizing long-term memory system for AI assistants and companions. It extracts facts from conversations, checks each fact against what was actually said, organizes facts into a star map of people, places, and events, and recalls them during chat. It can run fully on a local model, so conversations never leave your machine.
+A self-organizing long-term memory system for AI assistants and companions. It extracts facts from conversations, checks each fact against what was actually said, organizes facts into a star map of people, places, and events, and recalls them during chat. It can run fully on a local model, so conversations never leave your machine, and memories are encrypted at rest.
 
 > **Adapted from [Memory Constellations](https://github.com/ClaraShafiq/MemoryConstellations)** by **Clara Shafiq & Draco Malfoy**, released under the MIT License. The original copyright notice is preserved in [`LICENSE`](LICENSE), and the complete git history is kept. See [Acknowledgments](#acknowledgments).
 
@@ -17,7 +17,7 @@ A self-organizing long-term memory system for AI assistants and companions. It e
 | Two-character Chinese full-text search | Working |
 | Field encryption (fail-closed, v2 format, key rotation) | Working for chat messages and API keys |
 | SSRF protection for user-supplied endpoints | Working |
-| Encryption of memory content with a blind search index | In progress |
+| Encryption of memory content with a blind search index | Working (on by default) |
 | Archivist and cognitive model split into focused modules | Done |
 | All Chinese text in code, prompts, and UI in Traditional Chinese | Planned |
 
@@ -89,7 +89,9 @@ Recalling a memory resets its timer.
 ## Security and privacy
 
 - **Fail-closed field encryption.** Values are encrypted with AES-256-GCM in the format `enc:v2:<key id>:<nonce>:<ciphertext>`. Encryption failures throw instead of writing plaintext. Decryption failures return nothing instead of placeholder text, so garbage is never written back or sent to a model. Ciphertext can be bound to its row with associated data, and keys can be rotated. The older v1 format is still readable.
-- **What is encrypted today.** Chat messages and stored API keys. Memory content, entity profiles, and the full-text index are still plaintext; encrypting them with a blind search index is in progress.
+- **Memory content encrypted at rest.** Chat messages, stored API keys, fragment content and quotes, episode titles and content, and entity facts, status, judgment, and overviews are all encrypted, each bound to its table and column. Reads are decrypted transparently at the database layer, so encrypted text never reaches a model, the API, or the star map. A wrong key refuses to start instead of slowly corrupting data. Keys can be rotated with `node scripts/rotate_memory_keys.js`.
+- **Blind full-text index.** Two-character tokens are hashed with a key derived from the encryption key before indexing, so the search index holds no readable text. Content hashes used for deduplication are keyed too.
+- **Still in plain text.** Entity names and aliases, tags, fragment insights, some entity relationship fields, the user model and patterns, and any text sent to ChromaDB.
 - **SSRF protection.** Any endpoint a user can set is resolved through DNS first, and every resolved address is checked. Private, loopback, link-local, and reserved ranges are rejected, including encoded forms such as `http://2130706433/` and IPv4-mapped IPv6. Only HTTPS is allowed, credentials in URLs are rejected, redirects are refused, and connections are pinned to the verified address. A local model is allowed only through an exact-origin allowlist in `LLM_ENDPOINT_ALLOWLIST`.
 - **Local inference.** With Ollama, extraction, consolidation, and embeddings all run on your own machine.
 
@@ -199,6 +201,7 @@ node scripts/e2e_ollama.js    # end-to-end run against a real local Ollama
 - **Assistant replies get extracted.** In testing with an 8B local model, half of the extracted fragments were the assistant's own small talk.
 - **Entity resolution is broken upstream.** `entityResolver.js` reads a column `related_entity_ids` that no migration creates.
 - **The vector channel needs ChromaDB.** Without it, search falls back to full text and entities only.
+- **The blind index leaks frequency.** The same two-character token always hashes to the same value within a column, so token frequencies and shared tokens between rows are visible to someone holding the database file.
 - **Foreign keys are off.** Some child tables lack `ON DELETE` rules, so enabling them would break existing deletes.
 
 ---
