@@ -1,5 +1,6 @@
 // 4D 星圖示範資料：在「指定的暫存 DB」塞數個星系、約 50 顆星、不同 created_at、幾條橋、幾顆冷卻／凍結。
 // 用法：DB_PATH=<暫存 db 路徑> node scripts/seed_demo_starmap.js
+// SEED_EMOTION=1：另外替約 7 成的碎片補上八維情緒分數（H1 情緒上色的示範資料；其餘留 NULL＝早期舊碎片、少數全在底噪以下）。
 // 只做示範／截圖驗證，絕不對正式資料庫執行（未設定 DB_PATH 會直接拒絕）。
 require('dotenv').config();
 if (!process.env.DB_PATH) { console.error('拒絕執行：請明確設定 DB_PATH 指向暫存資料庫'); process.exit(2); }
@@ -38,6 +39,33 @@ const insFrag = db.prepare(`INSERT INTO memory_fragments (type, entity, content,
     VALUES (?, ?, ?, ?, 'chat', ?, ?, ?, ?, ?)`);
 const insLink = db.prepare('INSERT OR IGNORE INTO fragment_entities (fragment_id, entity_id, confidence, classified_by, relation) VALUES (?, ?, 0.8, ?, ?)');
 
+const DIMS = ['joy', 'trust', 'fear', 'surprise', 'sadness', 'disgust', 'anger', 'anticipation'];
+const VAL_W = { joy: 1, trust: 0.6, anticipation: 0.3, surprise: 0.05, fear: -0.7, sadness: -0.8, disgust: -0.7, anger: -0.9 };
+const insEmo = db.prepare(`UPDATE memory_fragments SET emo_joy=?, emo_trust=?, emo_fear=?, emo_surprise=?, emo_sadness=?, emo_disgust=?, emo_anger=?, emo_anticipation=?,
+    intensity=?, valence=?, emotion_conf=? WHERE id=?`);
+// 情緒傾向跟著內容挑（示範用，讓畫面有故事）：關鍵字 → 主導情緒
+const HINTS = [[/開心|好喝|很棒|漂亮|完賽|拿到|喜歡|好看/, 'joy'], [/推薦|請我|一起|固定|認識/, 'trust'], [/發抖|緊張|忘詞|膝蓋|痛/, 'fear'],
+    [/第一次|居然|想不到|竟/, 'surprise'], [/心情不太好|錯過|卡在|睡著|不太接受/, 'sadness'], [/亂跳|過慢|太慢/, 'disgust'], [/踩我的臉|熬夜|趕/, 'anger'],
+    [/約好|想學|報名|決定|下週|今年夏天/, 'anticipation']];
+function seedEmotion(fragId, text) {
+    const r = rnd();
+    if (r < 0.28) return;                                   // NULL：早期舊碎片
+    const scores = {};
+    DIMS.forEach(d => { scores[d] = +(rnd() * 0.18).toFixed(2); });   // 底噪以下
+    if (r < 0.36) {                                         // 全在底噪以下 → intensity 0
+        insEmo.run(...DIMS.map(d => scores[d]), 0, 0, 0.5, fragId); return;
+    }
+    let dom = (HINTS.find(([re]) => re.test(text)) || [null, DIMS[Math.floor(rnd() * 8)]])[1];
+    if (rnd() < 0.25) dom = DIMS[Math.floor(rnd() * 8)];
+    scores[dom] = +(0.35 + rnd() * 0.55).toFixed(2);
+    const second = DIMS[Math.floor(rnd() * 8)];
+    if (second !== dom && rnd() < 0.5) scores[second] = +(0.25 + rnd() * 0.3).toFixed(2);
+    const intensity = +(Math.max(...DIMS.map(d => scores[d])) - 0.2).toFixed(2);
+    let val = 0, wsum = 0;
+    DIMS.forEach(d => { const w = Math.max(0, scores[d] - 0.2); val += VAL_W[d] * w; wsum += w; });
+    insEmo.run(...DIMS.map(d => scores[d]), intensity, +(wsum ? val / wsum : 0).toFixed(2), +(0.6 + rnd() * 0.3).toFixed(2), fragId);
+}
+
 let seed = 20260930;
 const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
 
@@ -60,6 +88,7 @@ db.transaction(() => {
             const f = insFrag.run('event', name, sealField('memory_fragments', 'content', text), +(0.3 + rnd() * 0.6).toFixed(2),
                 iso(created).slice(0, 10), status, iso(created), recalled ? 1 + Math.floor(rnd() * 8) : 0, lastAcc);
             insLink.run(f.lastInsertRowid, ids[name], 'seed_demo', null);
+            if (process.env.SEED_EMOTION === '1') seedEmotion(Number(f.lastInsertRowid), text);
             total++;
         });
     });

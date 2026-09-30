@@ -593,11 +593,81 @@ body.mode-4d #mc, body.mode-4d #bg, body.mode-list #mc, body.mode-list #bg { dis
 body.mode-4d #breadcrumb { display: flex; }
 body.mode-list #breadcrumb { display: none; }
 
+
+/* ── H1：上色切換與情緒圖例 ── */
+#color-toggle {
+    position: absolute; top: 19px; right: 178px; z-index: 31; display: flex; align-items: center; gap: 2px;
+    background: rgba(4, 7, 22, 0.58); backdrop-filter: blur(20px);
+    border: 1px solid rgba(100, 120, 255, 0.13); border-radius: 30px; padding: 3px;
+}
+#color-toggle .ct-label { font-size: 10px; color: rgba(140, 165, 240, 0.4); padding: 0 6px 0 10px; letter-spacing: .06em; }
+#color-toggle button {
+    background: none; border: none; font-family: inherit; font-size: 11px; letter-spacing: .06em;
+    color: rgba(140, 165, 240, 0.55); padding: 4px 11px; border-radius: 24px; cursor: pointer; transition: all .2s;
+}
+#color-toggle button:hover { color: rgba(200, 215, 255, 0.9); }
+#color-toggle button.active { background: rgba(100, 120, 255, 0.18); color: rgba(225, 235, 255, 0.95); }
+#emo-legend {
+    position: absolute; top: 62px; left: 20px; z-index: 31; width: 128px;
+    background: rgba(4, 7, 22, 0.62); backdrop-filter: blur(20px);
+    border: 1px solid rgba(100, 120, 255, 0.13); border-radius: 12px; overflow: hidden;
+}
+#emo-legend-head {
+    width: 100%; display: flex; justify-content: space-between; align-items: center; background: none; border: none;
+    font-family: inherit; font-size: 10px; letter-spacing: .08em; color: rgba(150, 175, 245, 0.6); padding: 7px 11px; cursor: pointer;
+}
+#emo-legend.collapsed #emo-legend-body { display: none; }
+#emo-legend.collapsed .el-chev { transform: rotate(-90deg); }
+.el-chev { transition: transform .2s; }
+#emo-legend-body { padding: 2px 11px 9px; }
+.el-row { display: flex; align-items: center; gap: 8px; font-size: 11px; color: rgba(210, 220, 250, 0.82); padding: 2.5px 0; }
+.el-swatch { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; box-shadow: 0 0 7px currentColor; }
+.el-row.neutral { color: rgba(150, 160, 190, 0.6); margin-top: 3px; padding-top: 5px; border-top: 1px solid rgba(100, 120, 255, 0.08); }
+
+/* ── H1：側欄情緒長條圖與再鞏固操作 ── */
+.emo-bars { margin-top: 9px; padding-top: 8px; border-top: 1px solid rgba(255, 255, 255, 0.05); }
+.emo-bars-title { display: flex; justify-content: space-between; font-size: 9px; letter-spacing: .1em; color: rgba(140, 162, 255, 0.45); margin-bottom: 5px; }
+.emo-bar-row { display: flex; align-items: center; gap: 7px; margin-bottom: 3px; }
+.emo-bar-label { font-size: 9.5px; color: rgba(190, 205, 245, 0.62); width: 24px; }
+.emo-bar-track { flex: 1; height: 4px; background: rgba(255, 255, 255, 0.06); border-radius: 3px; overflow: hidden; position: relative; }
+.emo-bar-fill { height: 100%; border-radius: 3px; }
+.emo-bar-noise { position: absolute; top: -1px; bottom: -1px; width: 1px; background: rgba(255, 255, 255, 0.28); }
+.emo-bar-val { font-size: 9px; color: rgba(180, 200, 255, 0.5); min-width: 26px; text-align: right; font-variant-numeric: tabular-nums; }
+.emo-none { font-size: 10px; color: rgba(140, 155, 200, 0.4); margin-top: 8px; }
+.rc-box { margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(255, 255, 255, 0.05); }
+.rc-title { font-size: 9px; letter-spacing: .1em; color: rgba(140, 162, 255, 0.45); margin-bottom: 7px; }
+.rc-actions { display: flex; gap: 6px; }
+.rc-btn {
+    flex: 1; font-family: inherit; font-size: 11px; padding: 6px 4px; border-radius: 7px; cursor: pointer; transition: all .2s;
+    background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.10); color: rgba(210, 222, 255, 0.8);
+}
+.rc-btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.08); }
+.rc-btn:disabled { opacity: .4; cursor: default; }
+.rc-btn.ok { border-color: rgba(95, 214, 150, 0.35); color: rgba(140, 235, 185, 0.9); }
+.rc-btn.no { border-color: rgba(255, 130, 110, 0.32); color: rgba(255, 165, 145, 0.9); }
+.rc-btn.mod { border-color: rgba(255, 210, 100, 0.32); color: rgba(255, 224, 140, 0.9); }
+.rc-form { margin-top: 8px; }
+.rc-form textarea {
+    width: 100%; box-sizing: border-box; min-height: 58px; resize: vertical; font-family: inherit; font-size: 12px; line-height: 1.5;
+    background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(120, 140, 255, 0.25); border-radius: 7px; color: #e4e8ff; padding: 7px 8px;
+}
+.rc-form .rc-hint { font-size: 10px; color: rgba(150, 165, 210, 0.55); margin: 4px 0 6px; display: flex; justify-content: space-between; }
+.rc-status { margin-top: 8px; font-size: 11px; line-height: 1.5; color: rgba(170, 190, 245, 0.75); display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+.rc-status.err { color: rgba(255, 150, 130, 0.9); }
+.rc-undo { font-family: inherit; font-size: 11px; background: none; border: 1px solid rgba(255, 255, 255, 0.2); color: rgba(220, 230, 255, 0.85); border-radius: 6px; padding: 2px 9px; cursor: pointer; }
+.rc-ep-actions { display: flex; gap: 5px; margin-top: 7px; }
+.rc-ep-actions .rc-btn { padding: 3px 4px; font-size: 10px; }
+
+@media (max-width: 1320px) {
+    #color-toggle { top: 62px; right: 20px; }
+}
 @media (max-width: 1100px) {
     #timebar { left: 20px; right: 20px; bottom: 122px; }
 }
 @media (max-width: 700px) {
     #view-toggle { top: 62px; right: 12px; }
+    #color-toggle { top: 62px; right: 156px; }
+    #emo-legend { top: 104px; left: 12px; }
     #timebar { bottom: 112px; left: 12px; right: 12px; flex-wrap: wrap; }
     #tl-now { min-width: 0; }
     #list-view { padding-top: 104px; }

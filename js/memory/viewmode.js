@@ -8,6 +8,7 @@ import { universe, conById } from './data.js';
 import { view, onViewChange, gotoConstellation, gotoGalaxy, gotoStar } from './state.js';
 import { showStarPanel, showTooltip, hideTooltip } from './panels.js';
 import { parseSqlTime } from './layout3d.js';
+import { EMOTION_DIMS, EMOTION_INFO, NEUTRAL_RGB, getColorMode, setColorMode, onColorModeChange } from './emotion.js';
 
 const $ = id => document.getElementById(id);
 
@@ -54,6 +55,7 @@ async function ensure4D() {
                 onPickGalaxy(id) { gotoGalaxy(id); },
             });
             window.__mcStarMap = map4d;   // 除錯／截圖驗證用
+            map4d.setColorMode(getColorMode());
             if (universe.loaded) { map4d.setData(universe); syncTimebar(); }
             return map4d;
         });
@@ -181,6 +183,32 @@ function syncFocus() {
     else map4d.focus('universe');
 }
 
+// ── 上色切換（星系／情緒）與情緒圖例 ──
+function buildLegend() {
+    $('emo-legend-body').innerHTML = EMOTION_DIMS.map(d =>
+        `<div class="el-row"><span class="el-swatch" style="background:${EMOTION_INFO[d].hex};color:${EMOTION_INFO[d].hex}"></span>${EMOTION_INFO[d].label}</div>`).join('') +
+        `<div class="el-row neutral"><span class="el-swatch" style="background:rgb(${NEUTRAL_RGB.join(',')});color:transparent"></span>無明顯情緒</div>`;
+}
+function syncColorUI(m) {
+    document.querySelectorAll('#color-toggle button').forEach(b => b.classList.toggle('active', b.dataset.cmode === m));
+    $('emo-legend').style.display = m === 'emotion' ? 'block' : 'none';
+    if (map4d) map4d.setColorMode(m);
+    if (mode === '2d') window.dispatchEvent(new Event('memory-recolor'));
+}
+function initColorMode() {
+    buildLegend();
+    document.querySelectorAll('#color-toggle button').forEach(b => b.addEventListener('click', e => {
+        e.stopPropagation();
+        setColorMode(b.dataset.cmode);
+    }));
+    $('emo-legend-head').addEventListener('click', () => {
+        const c = $('emo-legend').classList.toggle('collapsed');
+        $('emo-legend-head').setAttribute('aria-expanded', String(!c));
+    });
+    onColorModeChange(syncColorUI);
+    syncColorUI(getColorMode());
+}
+
 export function onDataLoaded() {
     if (map4d) {
         const r0 = map4d.getRange();
@@ -208,6 +236,7 @@ export function initViewModes(cb) {
         setTimeFrac(parseInt(e.target.value, 10) / 1000);
     });
     $('tl-play').addEventListener('click', () => { if (playing) stopPlay(); else startPlay(); });
+    initColorMode();
     onViewChange(() => syncFocus());
     document.addEventListener('keydown', e => {
         if (mode === '4d' && e.key === ' ' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {

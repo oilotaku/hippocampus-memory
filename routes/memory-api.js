@@ -354,22 +354,12 @@ router.get('/api/memory/universe', requireAuth, (req, res) => {
         // Build constellations: each entity = one constellation with its linked fragments as stars
         const maxFrags = Math.max(1, ...normalEntities.map(e => e.fragment_count || 0));
 
-        // 衰減λ按情緒權重四檔（與 Librarian segmentedDecay 同語義）：
-        // 高情緒記憶亮得久，瑣事快速變暗
-        const ewLambda = (ew) => {
-            if (ew >= 0.8) return 0.005;   // 半衰期 ~139天
-            if (ew >= 0.6) return 0.01;    // ~69天
-            if (ew >= 0.4) return 0.02;    // ~35天
-            return 0.04;                   // ~17天
-        };
+        const { STAR_COLUMNS, formatStar } = require('../utils/starFormat');
 
         const constellations = normalEntities.map(ent => {
             const frags = db.prepare(`
-                SELECT mf.id, mf.content AS title, mf.content,
-                       mf.emotional_weight, mf.created_at AS date, mf.status AS lifecycle,
-                       CAST(julianday('now') - julianday(COALESCE(mf.last_accessed_at, mf.created_at)) AS REAL) AS days_since_access,
-                       mf.read_count, mf.created_at, mf.last_accessed_at,
-                       mf.entity_id, fe.confidence AS link_confidence, fe.relation
+                SELECT ${STAR_COLUMNS},
+                       fe.confidence AS link_confidence, fe.relation
                 FROM memory_fragments mf
                 JOIN fragment_entities fe ON fe.fragment_id = mf.id
                 WHERE fe.entity_id = ? AND mf.status IN ('active', 'consolidated', 'cooling', 'frozen')
@@ -381,39 +371,13 @@ router.get('/api/memory/universe', requireAuth, (req, res) => {
 
             const depth = 0.4 + (ent.fragment_count / maxFrags) * 1.2;
 
-            const stars = frags.map(f => {
-                const daysSince = Math.max(0, f.days_since_access || 0);
-                const λ = ewLambda(f.emotional_weight || 0.3);
-                const decay = Math.exp(-λ * daysSince);
-                // read_count = Librarian 檢索命中次數（聊天裡被想起 → 星星更亮）
-                const recallBonus = Math.min(0.3, Math.log(1 + (f.read_count || 0)) * 0.08);
-                let brightness = Math.min(1.0, decay + recallBonus);
-                // 生命週期硬上限：冷卻的星不可能亮，凍結的星接近熄滅
-                if (f.lifecycle === 'cooling') brightness = Math.min(brightness, 0.30);
-                else if (f.lifecycle === 'frozen') brightness = Math.min(brightness, 0.12);
-                const mag = +(6.5 - brightness * 5.5).toFixed(1);
-                return {
-                    id: 'f' + f.id,
-                    title: (f.title || '').slice(0, 40) || '…',
-                    content: (f.content || '').slice(0, 200),
-                    conf: brightness,
-                    mag,
-                    lifecycle: f.lifecycle,
-                    date: f.date?.slice(0, 10) || '',
-                    // G4（4D 星圖時間軸）新增欄位：完整時間戳（UTC）與被回憶次數，既有欄位語意不變
-                    createdAt: f.created_at || null,
-                    lastAccessedAt: f.last_accessed_at || null,
-                    readCount: f.read_count || 0,
-                    entity_id: f.entity_id,
-                    relation: f.relation || null,
-                };
-            });
+            const stars = frags.map(f => formatStar(f));
             const coolingCount = stars.filter(s => s.lifecycle !== 'active').length;
 
             // v5.3: 星座的記憶敘事片段（episodes）
             // 舊 episode 可能是加密的，需解密後再擷取
             const episodes = db.prepare(`
-                SELECT id, title, content, weight, valid_from AS date
+                SELECT id, title, content, weight, valid_from AS date, layer, last_accessed_at
                 FROM memories
                 WHERE layer = 'episode' AND status = 'permanent' AND entity_id = ?
                 ORDER BY weight DESC, valid_from DESC
@@ -429,6 +393,8 @@ router.get('/api/memory/universe', requireAuth, (req, res) => {
                     content: content.slice(0, 250),
                     weight: ep.weight,
                     date: ep.date?.slice(0, 10) || '',
+                    // H1：再鞏固用（被否認/修改的敘事 layer 變 cooling，本查詢只列 episode，重新載入後就不會再出現）
+                    lastAccessedAt: ep.last_accessed_at || null,
                 };
             });
 

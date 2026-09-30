@@ -4,7 +4,9 @@
 // ========================================
 
 import { universe, conById, decideMergeProposal } from './data.js';
-import { view, breadcrumb, gotoConstellation } from './state.js';
+import { view, breadcrumb, gotoConstellation, gotoStar } from './state.js';
+import { EMOTION_DIMS, EMOTION_INFO, NOISE_FLOOR, dominantEmotion } from './emotion.js';
+import { mountReconsolidate } from './reconsolidate.js';
 import { bridgesOfCon } from './layout.js';
 
 const TOKEN = () => localStorage.getItem('token');
@@ -72,6 +74,64 @@ function addMeta(label, valuePct, valueText) {
     $('p-meta').appendChild(row);
 }
 
+
+// ── H1：情緒長條圖與再鞏固 ──
+function valenceWord(v) { return v > 0.15 ? '偏正向' : v < -0.15 ? '偏負向' : '中性'; }
+function addEmotionBars(star) {
+    const box = document.createElement('div');
+    box.className = 'emo-bars';
+    if (!star.emotion) {
+        box.innerHTML = '<div class="emo-none">尚無情緒資料（較早期的記憶沒有做過情緒分析）</div>';
+        $('p-meta').appendChild(box);
+        return;
+    }
+    const dom = dominantEmotion(star.emotion);
+    const head = document.createElement('div');
+    head.className = 'emo-bars-title';
+    const v = star.valence;
+    head.innerHTML = `<span>情緒 · ${dom ? '主導：' + esc(EMOTION_INFO[dom.dim].label) : '無明顯情緒'}</span>` +
+        `<span>${v == null ? '' : esc(valenceWord(v) + ' ' + (v > 0 ? '+' : '') + v.toFixed(2))}</span>`;
+    box.appendChild(head);
+    for (const d of EMOTION_DIMS) {
+        const raw = star.emotion[d] || 0;
+        const row = document.createElement('div');
+        row.className = 'emo-bar-row';
+        const hex = EMOTION_INFO[d].hex;
+        const strong = dom && dom.dim === d;
+        row.innerHTML = `<span class="emo-bar-label" style="${strong ? 'color:' + hex : ''}">${esc(EMOTION_INFO[d].label)}</span>` +
+            `<div class="emo-bar-track"><div class="emo-bar-fill" style="width:${Math.min(100, raw * 100)}%;background:${hex};opacity:${raw > NOISE_FLOOR ? 1 : 0.35}"></div>` +
+            `<span class="emo-bar-noise" style="left:${NOISE_FLOOR * 100}%" title="底噪 ${NOISE_FLOOR}"></span></div>` +
+            `<span class="emo-bar-val">${raw.toFixed(2)}</span>`;
+        box.appendChild(row);
+    }
+    $('p-meta').appendChild(box);
+}
+
+let _rcNotice = null;   // 操作後重畫側欄時要顯示的一行訊息 { id, text }
+const stripF = id => parseInt(String(id).replace(/^f/, ''), 10);
+
+// 操作成功 → 把伺服器回傳的最新狀態寫回本地資料，通知畫面重繪（不重新載入整個宇宙）
+function applyStarResult(star, con, r, action) {
+    const st = r.state || {};
+    for (const k of ['conf', 'mag', 'lifecycle', 'lastAccessedAt', 'readCount', 'citedCount']) if (st[k] !== undefined) star[k] = st[k];
+    if (r.newStar && con) {
+        const ns = { ...r.newStar, conId: con.id, conLabel: con.label };
+        con.stars.push(ns);
+        con.fragment_count = (con.fragment_count || 0) + 1;
+    }
+    con && (con.coolingCount = con.stars.filter(x => x.lifecycle !== 'active').length);
+    window.dispatchEvent(new CustomEvent('memory-star-changed'));
+    if (r.newStar && con) {
+        const ns = con.stars[con.stars.length - 1];
+        _rcNotice = { id: ns.id, text: '已修改：舊記憶降溫，這是你輸入的新記憶。' };
+        gotoStar(ns.id, con.id);
+        showStarPanel(ns, con.id);
+    } else {
+        _rcNotice = { id: star.id, text: action === 'confirm' ? (r.deduped ? '剛剛才確認過，不重複計算。' : `已確認 ✓ · 累計 ${star.citedCount || 0} 次`) : '已標為不正確（冷卻中），並記入更正紀錄。' };
+        showStarPanel(star, con && con.id);
+    }
+}
+
 // 星星（碎片）詳情
 export function showStarPanel(star, viewConId) {
     const con = conById(viewConId);
@@ -87,6 +147,17 @@ export function showStarPanel(star, viewConId) {
     addMeta('鮮活度', (star.conf || 0) * 100, ((star.conf || 0) * 100).toFixed(0) + '%');
     addMeta('視星等', Math.max(0, (6.5 - (star.mag || 4)) / 5.5 * 100), (star.mag || 4).toFixed(1) + '等');
     $('p-date').textContent = star.date || '';
+    if (star.citedCount) addMeta('被確認', Math.min(100, star.citedCount * 20), star.citedCount + ' 次');
+    addEmotionBars(star);
+
+    // H1：再鞏固——確認／否認／修改（瀏覽本身不算回想，只有按鈕才會送出）
+    const rcId = stripF(star.id);
+    if (rcId) {
+        const notice = _rcNotice && _rcNotice.id === star.id ? _rcNotice.text : null;
+        _rcNotice = null;
+        mountReconsolidate($('p-meta'), { type: 'fragment', id: rcId, entityId: con ? parseInt(String(con.id).replace('e', ''), 10) : null },
+            { notice, onResult: (r, action) => applyStarResult(star, con, r, action) });
+    }
 
     // v5.0: 星星操作 — 解除與該星座的關聯
     // star.id = "f12345" → fragId = 12345, con needs real id (strip 'e' prefix)
@@ -274,6 +345,20 @@ export function showConPanel(con) {
                     <span class="p-episode-date">${esc(ep.date || '')}</span>
                 </div>
                 <div class="p-episode-content">${esc(ep.content)}</div>`;
+                // H1：敘事也能當場確認／否認／修改
+                const epHost = document.createElement('div');
+                card.appendChild(epHost);
+                mountReconsolidate(epHost, { type: 'episode', id: ep.id, entityId: parseInt(String(con.id).replace('e', ''), 10) }, {
+                    compact: true,
+                    onResult: (r, action) => {
+                        if (action === 'deny' || action === 'modify') card.style.opacity = '0.55';
+                        if (r.newStar) {
+                            con.stars.push({ ...r.newStar, conId: con.id, conLabel: con.label });
+                            con.fragment_count = (con.fragment_count || 0) + 1;
+                            window.dispatchEvent(new CustomEvent('memory-star-changed'));
+                        }
+                    },
+                });
                 epList.appendChild(card);
             });
             epDiv.appendChild(epList);

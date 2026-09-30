@@ -411,6 +411,9 @@ initStardustLens();
 initViewModes();
 window.addEventListener('resize', () => { markInteraction(); resizeRender(); });
 window.addEventListener('memory-refresh', () => refresh());
+// H1：再鞏固操作已把新狀態寫回 universe（不重新抓整包），這裡只重排版重繪
+window.addEventListener('memory-star-changed', () => { onDataLoaded(); onViewDataLoaded(); renderTopCount(); markInteraction(); });
+window.addEventListener('memory-recolor', () => markInteraction());
 refresh();
 setInterval(refresh, 5 * 60 * 1000);
 loop();

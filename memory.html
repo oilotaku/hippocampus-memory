@@ -34,6 +34,16 @@
   <button data-mode="list" title="依時間排序的記憶清單">列表</button>
 </div>
 
+<div id="color-toggle" role="group" aria-label="上色方式">
+  <span class="ct-label">上色</span>
+  <button data-cmode="galaxy" title="依星系上色（預設）">星系</button>
+  <button data-cmode="emotion" title="依情緒上色：每顆星的色調是它的主導情緒">情緒</button>
+</div>
+<div id="emo-legend" style="display:none" aria-label="情緒色彩圖例">
+  <button id="emo-legend-head" aria-expanded="true" title="收合／展開圖例"><span>情緒圖例</span><span class="el-chev">▾</span></button>
+  <div id="emo-legend-body"></div>
+</div>
+
 <div id="timebar" style="display:none">
   <button id="tl-play" title="播放時間軸" aria-label="播放">▶</button>
   <span class="tl-edge" id="tl-min"></span>

@@ -7,6 +7,7 @@
 import { GALAXIES, universe, hslToRgbStr, GALAXY_BY_ID, strHash, mulberry32 } from './data.js';
 import { layoutUniverse, layoutGalaxy, layoutConstellation, universeBridgeSegments, galaxyBridgeSegments } from './layout.js';
 import { view } from './state.js';
+import { getColorMode, emotionRgbString } from './emotion.js';
 import { conById } from './data.js';
 
 let W = 0, H = 0, dpr = 1;
@@ -249,17 +250,20 @@ function spikeAt(c, x, y, fromR, ang, len, alpha, rgb) {
 
 // 星點：小星走廉價路徑（純圓點），亮星/大星走光暈+星芒
 // lifecycle: active=正常 / cooling=暗紅餘燼 / frozen=灰白殘骸
-function drawStar(x, y, r, rgb, conf, alpha, pulse, isHov, isSel, T, lifecycle) {
+// emo=true（情緒上色）時 rgb 是情緒色：冷卻／凍結仍保留原本的暗化語意，只是把色調帶進去
+function drawStar(x, y, r, rgb, conf, alpha, pulse, isHov, isSel, T, lifecycle, emo) {
     if (lifecycle === 'cooling') {
+        const ember = emo ? rgb.split(',').map((v, i) => Math.round(v * 0.55 + [200, 80, 60][i] * 0.45)).join(',') : '200,80,60';
+        const emberCore = emo ? rgb.split(',').map((v, i) => Math.round(v * 0.55 + [255, 140, 100][i] * 0.45)).join(',') : '255,140,100';
         // 餘燼：暗紅、無星芒、緩慢呼吸
         const er = Math.max(0.8, r * 0.7);
         const breathe = 0.6 + 0.4 * Math.abs(Math.sin(T * 0.4 + x * 0.01));
         const eg = ctx.createRadialGradient(x, y, 0, x, y, er * 2.5);
-        eg.addColorStop(0, `rgba(200,80,60,${0.35 * alpha * breathe})`);
+        eg.addColorStop(0, `rgba(${ember},${0.35 * alpha * breathe})`);
         eg.addColorStop(1, 'transparent');
         ctx.beginPath(); ctx.arc(x, y, er * 2.5, 0, Math.PI * 2); ctx.fillStyle = eg; ctx.fill();
         ctx.beginPath(); ctx.arc(x, y, er * 0.4, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255,140,100,${0.5 * alpha * breathe})`; ctx.fill();
+        ctx.fillStyle = `rgba(${emberCore},${0.5 * alpha * breathe})`; ctx.fill();
         if (isHov || isSel) {
             ctx.beginPath(); ctx.arc(x, y, er * 3, 0, Math.PI * 2);
             ctx.strokeStyle = `rgba(200,90,70,0.3)`; ctx.lineWidth = 0.6;
@@ -271,7 +275,7 @@ function drawStar(x, y, r, rgb, conf, alpha, pulse, isHov, isSel, T, lifecycle) 
         // 殘骸：灰白小點，幾乎熄滅
         const fr = Math.max(0.5, r * 0.45);
         ctx.beginPath(); ctx.arc(x, y, fr, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(150,155,170,${0.28 * alpha})`; ctx.fill();
+        ctx.fillStyle = emo ? `rgba(${rgb.split(',').map((v, i) => Math.round(v * 0.35 + [150, 155, 170][i] * 0.65)).join(',')},${0.3 * alpha})` : `rgba(150,155,170,${0.28 * alpha})`; ctx.fill();
         if (isHov || isSel) {
             ctx.beginPath(); ctx.arc(x, y, fr * 4, 0, Math.PI * 2);
             ctx.strokeStyle = 'rgba(160,165,180,0.25)'; ctx.lineWidth = 0.5;
@@ -286,12 +290,14 @@ function drawStar(x, y, r, rgb, conf, alpha, pulse, isHov, isSel, T, lifecycle) 
         return;
     }
     const glow = ctx.createRadialGradient(x, y, 0, x, y, rr * 4);
-    glow.addColorStop(0, `rgba(${rgb},${0.32 * alpha})`);
-    glow.addColorStop(0.5, `rgba(${rgb},${0.08 * alpha})`);
+    const ga = emo ? 1.6 : 1;   // 情緒模式光暈加強，色調才看得出來
+    glow.addColorStop(0, `rgba(${rgb},${Math.min(1, 0.32 * ga) * alpha})`);
+    glow.addColorStop(0.5, `rgba(${rgb},${Math.min(1, 0.08 * ga) * alpha})`);
     glow.addColorStop(1, 'transparent');
     ctx.beginPath(); ctx.arc(x, y, rr * 4, 0, Math.PI * 2); ctx.fillStyle = glow; ctx.fill();
     ctx.beginPath(); ctx.arc(x, y, rr * 0.45, 0, Math.PI * 2);
-    ctx.fillStyle = `rgba(255,255,255,${(isSel ? 1 : 0.92) * alpha})`; ctx.fill();
+    const core = emo ? rgb.split(',').map(v => Math.round(+v * 0.6 + 255 * 0.4)).join(',') : '255,255,255';
+    ctx.fillStyle = `rgba(${core},${(isSel ? 1 : 0.92) * alpha})`; ctx.fill();
     // 亮星星芒（conf 高 = 記憶鮮活）
     if (conf > 0.62 || isHov || isSel) {
         const len = rr * (isSel ? 8 : isHov ? 6.5 : 5);
@@ -402,7 +408,8 @@ function drawGalaxy(T, alpha, hovered, selected) {
             const p = pts[i];
             if (offScreen(p.x, p.y)) return;
             const pulse = Math.sin(T * 1.25 + st.phase) * 0.18 + 0.9;
-            drawStar(p.x, p.y, st.baseR * camera.scale, pc.con.rgb, st.star.conf || 0.5, conAlpha, pulse, false, false, T, st.star.lifecycle);
+            const emo = getColorMode() === 'emotion';
+            drawStar(p.x, p.y, st.baseR * camera.scale, emo ? emotionRgbString(st.star.emotion, st.star.intensity) : pc.con.rgb, st.star.conf || 0.5, conAlpha, pulse, false, false, T, st.star.lifecycle, emo);
         });
         // hover 範圍環（用點選半徑 hitR）
         if (isHov) {
@@ -457,7 +464,8 @@ function drawConstellation(T, alpha, hovered, selected) {
         const isSel = view.level === 'star' && view.starId === st.star.id;
         const dim = view.level === 'star' && !isSel ? 0.45 : 1;
         const pulse = Math.sin(T * 1.25 + st.phase) * 0.18 + 0.9;
-        drawStar(p.x, p.y, st.baseR * camera.scale, con.rgb, st.star.conf || 0.5, alpha * dim, pulse, isHov, isSel, T, st.star.lifecycle);
+        const emo = getColorMode() === 'emotion';
+        drawStar(p.x, p.y, st.baseR * camera.scale, emo ? emotionRgbString(st.star.emotion, st.star.intensity) : con.rgb, st.star.conf || 0.5, alpha * dim, pulse, isHov, isSel, T, st.star.lifecycle, emo);
     });
     // 星座名（頂部居中淡顯示）
     ctx.font = `500 13px 'Inter','PingFang SC',sans-serif`;

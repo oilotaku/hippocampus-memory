@@ -11,6 +11,7 @@ import {
     computeLayout3D, starStateAt, timeRange, parseSqlTime, mulberry32, strHash,
 } from './layout3d.js';
 import { GALAXIES, GALAXY_BY_ID, hslToRgbStr } from './data.js';
+import { emotionColor } from './emotion.js';
 
 const DAY = 86400000;
 const LIFE_ALPHA = { active: 1, consolidated: 1, cooling: 0.62, frozen: 0.4 };
@@ -173,6 +174,7 @@ export function createStarMap4D(opts) {
                 items.push({
                     idx: items.length, key: c.id + '|' + s.id, conId: c.id, ci, star: s,
                     x: P.x, y: P.y, z: P.z, rgb,
+                    emoRgb: emotionColor(s.emotion, s.intensity).rgb.map(v => v / 255),   // 情緒上色用
                     createdMs: parseSqlTime(s.createdAt || s.date),
                     lastAccessedMs: parseSqlTime(s.lastAccessedAt),
                     lifecycle: s.lifecycle || 'active',
@@ -278,6 +280,7 @@ export function createStarMap4D(opts) {
     }
 
     // ── 時間 → 每顆星的外觀 ──
+    let colorMode = 'galaxy';
     const COOL_RGB = [0.45, 0.58, 0.85], FROZEN_RGB = [0.5, 0.55, 0.68];
     function applyTime(t) {
         curTime = t;
@@ -292,11 +295,12 @@ export function createStarMap4D(opts) {
             if (!st.visible) { aA.array[i] = 0; aS.array[i] = 0; it.alpha = 0; continue; }
             const la = LIFE_ALPHA[st.lifecycle] ?? 1;
             const alpha = st.fade * (0.5 + 0.5 * st.glow) * la;
-            let rgb = it.rgb;
-            if (st.lifecycle === 'cooling') rgb = mix3(it.rgb, COOL_RGB, 0.55);
-            else if (st.lifecycle === 'frozen') rgb = mix3(it.rgb, FROZEN_RGB, 0.8);
+            // 上色模式：星系（預設）或情緒；冷卻／凍結的暗化在兩種模式下都保留
+            let rgb = colorMode === 'emotion' ? it.emoRgb : it.rgb;
+            if (st.lifecycle === 'cooling') rgb = mix3(rgb, COOL_RGB, colorMode === 'emotion' ? 0.4 : 0.55);
+            else if (st.lifecycle === 'frozen') rgb = mix3(rgb, FROZEN_RGB, colorMode === 'emotion' ? 0.7 : 0.8);
             // 最近被回憶的星再多一點白（亮）
-            rgb = mix3(rgb, [1, 1, 1], Math.min(0.5, st.glow * 0.45) * la);
+            rgb = mix3(rgb, [1, 1, 1], Math.min(colorMode === 'emotion' ? 0.2 : 0.5, st.glow * 0.45) * la);
             aC.array[i * 3] = rgb[0]; aC.array[i * 3 + 1] = rgb[1]; aC.array[i * 3 + 2] = rgb[2];
             let size = it.baseSize * (0.7 + 0.5 * st.glow) * (0.4 + 0.6 * st.fade);
             if (i === selIdx) size *= 1.9; else if (i === hoverIdx) size *= 1.5;
@@ -486,6 +490,7 @@ export function createStarMap4D(opts) {
         getTime: () => curTime,
         getItems: () => items,
         getVisibleCount: () => visibleCount,
+        setColorMode(mode) { colorMode = mode === 'emotion' ? 'emotion' : 'galaxy'; poke(); applyTime(curTime); },
         selectStar(starId) { const it = items.find(x => x.star.id === starId); selIdx = it ? it.idx : -1; applyTime(curTime); },
         setRunning(v) {
             running = v;

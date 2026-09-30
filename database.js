@@ -1421,6 +1421,22 @@ function initDatabase() {
         );
     `);
 
+    // v115（H1）：星圖側欄的「再鞏固」操作紀錄（確認／否認／修改）。
+    // 用途：(1) 確認的 10 分鐘去重；(2) 修改時記下舊記憶 → 新碎片的可追溯關係
+    //（target_* = 被操作的舊記憶，new_fragment_id = 修改後寫入的新碎片）。不存記憶內容本身。
+    runMigration(115, 'H1: reconsolidation_log — 星圖再鞏固操作紀錄', `
+        CREATE TABLE IF NOT EXISTS reconsolidation_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            action TEXT NOT NULL CHECK(action IN ('confirm', 'deny', 'modify')),
+            target_type TEXT NOT NULL CHECK(target_type IN ('fragment', 'episode')),
+            target_id INTEGER NOT NULL,
+            new_fragment_id INTEGER,
+            correction_id INTEGER,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_recon_target ON reconsolidation_log(target_type, target_id, action, created_at);
+    `);
+
     // 種子資料：初始本體論類別（僅當表為空時插入）
     try {
         const existingRoots = db.prepare('SELECT COUNT(*) as c FROM memory_ontology WHERE parent_id IS NULL').get();

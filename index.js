@@ -86,6 +86,9 @@ app.get('/memory.html', requireAuth, (req, res) => {
 // 否則實際路徑會變成 /api/memory/api/memory/...，前端全部 404。
 app.use(require('./routes/memory-api'));
 
+// ── 星圖再鞏固操作：確認／否認／修改（H1）──
+app.use(require('./routes/reconsolidate-api'));
+
 // ── 人格三層：提案審核、漂移事件（G3）──
 app.use(require('./routes/persona-api'));
 
