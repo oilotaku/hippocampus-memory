@@ -1,0 +1,54 @@
+{
+ "variants": [
+  "C",
+  "C-S"
+ ],
+ "configs": [
+  {
+   "name": "legacy",
+   "cfg": {
+    "ranking": "legacy"
+   }
+  },
+  {
+   "name": "b0_w0",
+   "cfg": {
+    "entity_boost": 0,
+    "decay_weight": 0,
+    "candidate_overfetch": 2
+   }
+  },
+  {
+   "name": "b0.1_w0",
+   "cfg": {
+    "entity_boost": 0.1,
+    "decay_weight": 0,
+    "candidate_overfetch": 2
+   }
+  },
+  {
+   "name": "b0.1_w0.05",
+   "cfg": {
+    "entity_boost": 0.1,
+    "decay_weight": 0.05,
+    "candidate_overfetch": 2
+   }
+  },
+  {
+   "name": "b0.25_w0.05",
+   "cfg": {
+    "entity_boost": 0.25,
+    "decay_weight": 0.05,
+    "candidate_overfetch": 2
+   }
+  },
+  {
+   "name": "b0.1_w0.1",
+   "cfg": {
+    "entity_boost": 0.1,
+    "decay_weight": 0.1,
+    "candidate_overfetch": 2
+   }
+  }
+ ]
+}

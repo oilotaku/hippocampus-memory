@@ -102,6 +102,8 @@ function runChild(variant, idx) {
         };
     }
     const lib = require('../services/librarian');
+    // 調參用：LIBRARIAN_OVERRIDE='{"entity_boost":0.1,...}' 覆蓋 memory_config.json 的 librarian.*（見 eval/locomo_tune.js）
+    if (process.env.LIBRARIAN_OVERRIDE) require('../services/hippocampus/ca3/librarianConfig').setLibrarianConfigOverride(JSON.parse(process.env.LIBRARIAN_OVERRIDE));
 
     const results = [];
     const tQ = Date.now();

@@ -1,0 +1,110 @@
+{
+ "variants": [
+  "A",
+  "C"
+ ],
+ "configs": [
+  {
+   "name": "legacy",
+   "cfg": {
+    "ranking": "legacy"
+   }
+  },
+  {
+   "name": "b0_w0",
+   "cfg": {
+    "entity_boost": 0,
+    "decay_weight": 0,
+    "candidate_overfetch": 2
+   }
+  },
+  {
+   "name": "b0_w0.25",
+   "cfg": {
+    "entity_boost": 0,
+    "decay_weight": 0.25,
+    "candidate_overfetch": 2
+   }
+  },
+  {
+   "name": "b0_w0.5",
+   "cfg": {
+    "entity_boost": 0,
+    "decay_weight": 0.5,
+    "candidate_overfetch": 2
+   }
+  },
+  {
+   "name": "b0.1_w0",
+   "cfg": {
+    "entity_boost": 0.1,
+    "decay_weight": 0,
+    "candidate_overfetch": 2
+   }
+  },
+  {
+   "name": "b0.1_w0.25",
+   "cfg": {
+    "entity_boost": 0.1,
+    "decay_weight": 0.25,
+    "candidate_overfetch": 2
+   }
+  },
+  {
+   "name": "b0.1_w0.5",
+   "cfg": {
+    "entity_boost": 0.1,
+    "decay_weight": 0.5,
+    "candidate_overfetch": 2
+   }
+  },
+  {
+   "name": "b0.25_w0",
+   "cfg": {
+    "entity_boost": 0.25,
+    "decay_weight": 0,
+    "candidate_overfetch": 2
+   }
+  },
+  {
+   "name": "b0.25_w0.25",
+   "cfg": {
+    "entity_boost": 0.25,
+    "decay_weight": 0.25,
+    "candidate_overfetch": 2
+   }
+  },
+  {
+   "name": "b0.25_w0.5",
+   "cfg": {
+    "entity_boost": 0.25,
+    "decay_weight": 0.5,
+    "candidate_overfetch": 2
+   }
+  },
+  {
+   "name": "b0.1_w1",
+   "cfg": {
+    "entity_boost": 0.1,
+    "decay_weight": 1,
+    "candidate_overfetch": 2
+   }
+  },
+  {
+   "name": "b0.1_w0.25_of1",
+   "cfg": {
+    "entity_boost": 0.1,
+    "decay_weight": 0.25,
+    "candidate_overfetch": 1
+   }
+  },
+  {
+   "name": "b0.25_w0.25_of1",
+   "cfg": {
+    "entity_boost": 0.25,
+    "decay_weight": 0.25,
+    "candidate_overfetch": 1
+   }
+  }
+ ]
+}

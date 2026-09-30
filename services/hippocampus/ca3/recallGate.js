@@ -229,13 +229,18 @@ function decideRecall(message, o = {}) {
 /**
  * results 需已依分數（_rrf）由高到低排序。
  * 只留 _rrf ≥ 第一名 × relativeCutoff 的項目，最多 maxK 條。
+ * 檢索排序 v2（librarian.ranking='v2'）的結果帶 _relevance（相關度，不含時間衰減）：
+ * 此時門檻改比「相關度 ≥ 最高相關度 × relativeCutoff」，順序仍依 _rrf——
+ * 時間衰減只影響排序，不讓很舊但一樣相關的記憶被相對門檻砍掉。沒有 _relevance 的項目沿用 _rrf。
  */
 function selectDynamicK(results, { relativeCutoff = 0.5, maxK = 8 } = {}) {
     const list = (results || []).filter(Boolean);
     if (!list.length) return [];
-    const top = Number(list[0]._rrf) || 0;
+    const hasRel = list.some(r => r._relevance != null);
+    const score = (r) => Number(hasRel && r._relevance != null ? r._relevance : r._rrf) || 0;
+    const top = hasRel ? Math.max(...list.map(score)) : score(list[0]);
     if (top <= 0) return list.slice(0, maxK);
-    return list.filter(r => (Number(r._rrf) || 0) >= top * relativeCutoff).slice(0, maxK);
+    return list.filter(r => score(r) >= top * relativeCutoff).slice(0, maxK);
 }
 
 /** 總預算依比例拆成 核心／檢索／浮現與前瞻 三份（整數，餘數併入檢索） */

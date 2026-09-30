@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const { setupEnv, cleanupDb, quiet } = require('./_helpers');
 
 const dbPath = setupEnv('librarian');
-let restore, db, lib;
+let restore, db, lib, libCfg;
 let vecResults = [];      // 向量通道 stub 的回傳
 let vecThrows = false;
 let boostMap = new Map(); // workingMemory stub
@@ -24,6 +24,7 @@ before(() => {
     const wm = require('../../services/workingMemory');
     wm.getBoostMap = async () => boostMap;
     lib = require('../../services/librarian');
+    libCfg = require('../../services/hippocampus/ca3/librarianConfig');
     Math.random = () => 0.99; // 關掉「隨機浮現」
 });
 
@@ -37,6 +38,7 @@ beforeEach(() => {
     vecResults = [];
     vecThrows = false;
     boostMap = new Map();
+    libCfg.setLibrarianConfigOverride({});   // librarian.* 一律用程式預設（v2），不受本機 memory_config.json 影響
     db.exec('DELETE FROM fragment_entities; DELETE FROM memory_fragments; DELETE FROM memories; DELETE FROM entity_profiles;');
 });
 
@@ -323,7 +325,10 @@ describe('searchHybrid：情緒褪色進排序（F4 接 G2）', () => {
     });
 });
 
-describe('searchHybrid：RRF 與 combined 分數', () => {
+// librarian.ranking='legacy'：修正前的排序規則（實體「最新 N 條」虛擬名次、FTS 單通道 ×0.7、綜合分底線 0.005 含衰減）。
+// 這組測試證明開關有效——legacy 下行為與修正前逐項相同。
+describe('searchHybrid legacy 模式（librarian.ranking=legacy）：RRF 與 combined 分數維持修正前規則', () => {
+    beforeEach(() => libCfg.setLibrarianConfigOverride({ ranking: 'legacy' }));
     test('空查詢 → []', async () => assert.deepEqual(await lib.searchHybrid('  '), []));
 
     test('只有 FTS5（無向量）：source=FTS5*、乘 0.7 懲罰，數值符合公式', async () => {
@@ -515,5 +520,134 @@ describe('searchHybrid：RRF 與 combined 分數', () => {
         addFrag({ content: '蘋果 被濾掉', ew: 0.2, daysAgo: 400, readCount: 5 });
         addFrag({ content: '完全無關的舊事', daysAgo: 30, readCount: 0 });
         assert.deepEqual(await lib.searchHybrid('蘋果'), []);
+    });
+});
+
+// ─────────────────────────────────────────────
+// librarian.ranking='v2'（預設）：實體只加分不塞候選、FTS 單通道不打折、衰減只影響排序不影響去留
+describe('searchHybrid v2（預設排序）', () => {
+    const cfg = () => libCfg.getLibrarianConfig();
+    const addEntity = (name, category = 'person') =>
+        Number(db.prepare('INSERT INTO entity_profiles (name, category) VALUES (?, ?)').run(name, category).lastInsertRowid);
+    const link = (f, e) => db.prepare('INSERT INTO fragment_entities (fragment_id, entity_id) VALUES (?,?)').run(f, e);
+
+    test('預設值：ranking=v2、FTS 單通道懲罰 1.0；非法值回退預設；legacy 可切回', () => {
+        const d = libCfg.LIBRARIAN_DEFAULTS;
+        assert.equal(cfg().ranking, 'v2');
+        assert.equal(cfg().fts_only_penalty, 1);
+        libCfg.setLibrarianConfigOverride({ ranking: 'xx', entity_boost: -1, decay_weight: 2, fts_only_penalty: 'a', min_relevance: NaN, candidate_overfetch: 0 });
+        assert.deepEqual(cfg(), { ...d });
+        libCfg.setLibrarianConfigOverride({ ranking: 'legacy', entity_boost: 0.25 });
+        assert.equal(cfg().ranking, 'legacy');
+        assert.equal(cfg().entity_boost, 0.25);
+    });
+
+    test('只有 FTS5（無向量）：不再打折，source=FTS5；_relevance=1/61，_rrf=相關度×時間因子^w×重要性', async () => {
+        const id = addFrag({ content: '我喜歡蘋果派', ew: 0.5, daysAgo: 0.5 });
+        const r = await lib.searchHybrid('蘋果派');
+        assert.equal(r.length, 1);
+        assert.equal(r[0].id, id);
+        assert.equal(r[0]._source, 'FTS5');
+        close(r[0]._relevance, 1 / 61);
+        close(r[0]._rrf, (1 / 61) * Math.pow(refDecay(0.5, 0.5) * 1.3, cfg().decay_weight) * (0.4 + 0.5 * 0.6));
+    });
+
+    test('fts_only_penalty 可設定：0.7 → 相關度乘 0.7、標記 FTS5*', async () => {
+        libCfg.setLibrarianConfigOverride({ fts_only_penalty: 0.7 });
+        addFrag({ content: '我喜歡蘋果派', daysAgo: 0.5 });
+        const r = await lib.searchHybrid('蘋果派');
+        assert.equal(r[0]._source, 'FTS5*');
+        close(r[0]._relevance, 0.7 / 61);
+    });
+
+    test('實體不再用「最新 N 條」擠掉答案：某人很早以前說的話仍排第一，近期大量無關發言不會被塞進結果', async () => {
+        const zed = addEntity('Zed');
+        const answer = addFrag({ content: 'Zed 說他最喜歡的咖啡店是巷口的藍瓶咖啡', ew: 0.5, daysAgo: 200 });
+        link(answer, zed);
+        const noise = [];
+        for (let i = 0; i < 30; i++) { const f = addFrag({ content: `今天去公司開會第${i}次`, ew: 0.5, daysAgo: 0.5 + i * 0.01 }); link(f, zed); noise.push(f); }
+        const r = await lib.searchHybrid('Zed 最喜歡的咖啡店在哪', 6, { surface: 'none' });
+        assert.equal(r[0].id, answer);
+        assert.equal(r[0]._source, 'ENTITY+FTS5');
+        assert.ok(r.every(x => !noise.includes(x.id)), '無關的近期發言不應出現');
+        // 對照：legacy 下同一情境，實體通道的最新 N 條會蓋過答案
+        libCfg.setLibrarianConfigOverride({ ranking: 'legacy' });
+        const old = await lib.searchHybrid('Zed 最喜歡的咖啡店在哪', 6, { surface: 'none' });
+        assert.notEqual(old[0] && old[0].id, answer);
+        assert.ok(noise.includes(old[0].id));
+    });
+
+    test('實體加分：同樣被 FTS 找到時，連到訊息所提實體的候選相關度 ×(1+entity_boost)、排前面', async () => {
+        libCfg.setLibrarianConfigOverride({ entity_boost: 0.1 });
+        const zed = addEntity('Zed');
+        addFrag({ content: 'Zed 週末去爬山', daysAgo: 1 });
+        const b = addFrag({ content: 'Zed 週末去爬山', daysAgo: 1 });
+        link(b, zed);
+        const ftsRank = lib.searchFragments('Zed 爬山', 12).findIndex(x => x.id === b);
+        const r = await lib.searchHybrid('Zed 爬山', 6, { surface: 'none' });
+        assert.equal(r[0].id, b);
+        assert.equal(r[0]._entity_id, zed);
+        close(r[0]._relevance, 1.1 / (61 + ftsRank));
+        assert.equal(r[1]._entity_id, undefined);
+        // entity_boost=0：不加分
+        libCfg.setLibrarianConfigOverride({ entity_boost: 0 });
+        const r0 = await lib.searchHybrid('Zed 爬山', 6, { surface: 'none' });
+        assert.ok(r0.every(x => x._entity_id === undefined));
+    });
+
+    test('使用者本人與 AI 的名稱（SKIP_NAMES）不觸發實體加分', async () => {
+        const { AI, USER } = require('../../services/nameResolver');
+        const f = addFrag({ content: '週末去爬山', daysAgo: 1 });
+        link(f, addEntity(AI.name));
+        link(f, addEntity(USER.name));
+        const r = await lib.searchHybrid(`${AI.name} 和 ${USER.name} 週末爬山`, 6, { surface: 'none' });
+        assert.equal(r.length, 1);
+        assert.equal(r[0]._entity_id, undefined);
+        assert.equal(r[0]._source, 'FTS5');
+    });
+
+    test('很舊但高度相關的記憶仍會回傳（legacy 會被綜合分底線整批濾掉）', async () => {
+        const id = addFrag({ content: '蘋果 低情緒', ew: 0.2, daysAgo: 400 });
+        const r = await lib.searchHybrid('蘋果', 6, { surface: 'none' });
+        assert.deepEqual(r.map(x => x.id), [id]);
+        assert.ok(r[0]._relevance >= cfg().min_relevance);
+        libCfg.setLibrarianConfigOverride({ ranking: 'legacy' });
+        assert.deepEqual(await lib.searchHybrid('蘋果', 6, { surface: 'none' }), []);
+    });
+
+    test('衰減只影響排序：同樣相關時新的在前；decay_weight=0 則只看相關度', async () => {
+        const oldF = addFrag({ content: '蘋果 派', ew: 0.5, daysAgo: 300 });
+        const newF = addFrag({ content: '蘋果 塔', ew: 0.5, daysAgo: 0.5 });
+        const r = await lib.searchHybrid('蘋果', 6, { surface: 'none' });
+        assert.deepEqual(r.map(x => x.id), [newF, oldF]);
+        libCfg.setLibrarianConfigOverride({ decay_weight: 0 });
+        const r0 = await lib.searchHybrid('蘋果', 6, { surface: 'none' });
+        assert.equal(r0.length, 2);
+        for (const x of r0) close(x._rrf, x._relevance * (0.4 + 0.5 * 0.6));
+    });
+
+    test('動態 k（G1 相對門檻）看相關度：很舊但一樣相關的不會因衰減被砍掉；相關度差很多的仍會被砍', async () => {
+        const G = require('../../services/hippocampus/ca3/recallGate');
+        libCfg.setLibrarianConfigOverride({ decay_weight: 1 });   // 最強衰減下仍成立
+        const newF = addFrag({ content: '蘋果 派', ew: 0.3, daysAgo: 0.5 });
+        const oldF = addFrag({ content: '蘋果 塔', ew: 0.3, daysAgo: 300 });
+        const r = await lib.searchHybrid('蘋果', 6, { surface: 'none' });
+        assert.ok(r[1]._rrf < r[0]._rrf * 0.5, '排序分數差超過一半');
+        assert.deepEqual(G.selectDynamicK(r, { relativeCutoff: 0.5, maxK: 8 }).map(x => x.id), [newF, oldF]);
+        const mk = (rel, rrf) => ({ id: rel, _relevance: rel, _rrf: rrf });
+        assert.deepEqual(G.selectDynamicK([mk(0.02, 0.02), mk(0.009, 0.019)], { relativeCutoff: 0.5 }).map(x => x.id), [0.02]);
+        // 沒有 _relevance（legacy 結果）→ 沿用 _rrf
+        assert.deepEqual(G.selectDynamicK([{ id: 1, _rrf: 1 }, { id: 2, _rrf: 0.4 }], { relativeCutoff: 0.5 }).map(x => x.id), [1]);
+    });
+
+    test('候選多取：FTS 取 limit × candidate_overfetch，實體加分可把第 limit 名之外的換進來', async () => {
+        libCfg.setLibrarianConfigOverride({ entity_boost: 0.5, candidate_overfetch: 3, decay_weight: 0 });
+        const zed = addEntity('Zed');
+        for (let i = 0; i < 4; i++) addFrag({ content: `蘋果 派 ${i}`, daysAgo: 1 });
+        const linked = addFrag({ content: `蘋果 派 9`, daysAgo: 1 });
+        link(linked, zed);
+        const ids = (await lib.searchHybrid('Zed 蘋果派', 2, { surface: 'none' })).map(x => x.id);
+        assert.equal(ids.length, 2);
+        assert.equal(ids[0], linked);
     });
 });

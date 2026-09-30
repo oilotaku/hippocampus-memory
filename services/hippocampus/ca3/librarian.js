@@ -1,7 +1,7 @@
 const { getDb } = require('../../../database');
 const { encryption } = require('../../../encryption');
 const { fragmentsMatchQuery, memoriesMatchQuery } = require('../../memoryCrypto');
-const { AI } = require('../../nameResolver');
+const { AI, SKIP_NAMES } = require('../../nameResolver');
 const { toQueryTokens } = require('../../../utils/cjkTokenize');
 const { toTraditionalChars } = require('../../../utils/zhNormalize');
 const { parseDbTime } = require('../../../utils/time');
@@ -23,6 +23,9 @@ const EXCLUDE_SOURCE_SQL = EXCLUDED_SOURCES.length > 0
     ? `AND mf.source NOT IN (${EXCLUDED_SOURCES.map(() => '?').join(',')})`
     : '';
 const EXCLUDE_SOURCE_PARAMS = EXCLUDED_SOURCES;
+
+// 檢索排序設定（librarian.ranking／entity_boost／fts_only_penalty／decay_weight／min_relevance／candidate_overfetch）見 ./librarianConfig.js
+const { getLibrarianConfig } = require('./librarianConfig');
 
 // 時間衰減：半衰期由 emotional_weight 決定
 // ew ≥ 0.8 → λ=0.005 (140天半衰期)  重要記憶持久
@@ -65,7 +68,7 @@ function segmentedDecay(days, emotionalWeight) {
 const MIN_COMBINED_SCORE = 0.005;   // 綜合分底線（0.002→0.005，過濾弱關聯）
 const VEC_SIMILARITY_FLOOR = 0.22;  // 向量結果相似度地板，低於此值不進RRF
 const EPISODE_BOOST = 1.5;          // EbbingFlow思路：整合過的episode權重高於原始碎片
-const FTS5_ONLY_PENALTY = 0.7;      // FTS5單字匹配無向量交叉驗證 → 降權（CJK單字索引太鬆）
+const FTS5_ONLY_PENALTY = 0.7;      // legacy 專用：FTS5單字匹配無向量交叉驗證 → 降權（v2 改用 librarian.fts_only_penalty，見上方說明）
 
 // 新穎度懲罰：被訪問越多次的碎片越往後讓，防止通用碎片汙染所有查詢
 // read_count=0→1.0, 35→0.46, 100→0.33, 500→0.27, 1000→0.25
@@ -182,6 +185,46 @@ function getEntityFragments(entityIds, limit = 10) {
         ORDER BY mf.created_at DESC
         LIMIT ?
     `).all(...entityIds, limit);
+}
+
+// v2：使用者本人與 AI 的名稱（SKIP_NAMES）不觸發實體加分——幾乎每條記憶都和他們有關，加分等於沒加、卻會擾動排序
+function dropSkipEntities(entityIds) {
+    if (!entityIds || entityIds.length === 0) return [];
+    const skip = new Set((SKIP_NAMES || []).filter(Boolean).map(n => toTraditionalChars(String(n)).toLowerCase()));
+    if (skip.size === 0) return entityIds;
+    const rows = getDb().prepare(`SELECT id, name FROM entity_profiles WHERE id IN (${entityIds.map(() => '?').join(',')})`).all(...entityIds);
+    const nameOf = new Map(rows.map(r => [r.id, r.name]));
+    return entityIds.filter(id => !skip.has(toTraditionalChars(String(nameOf.get(id) || '')).toLowerCase()));
+}
+
+// v2：候選（key = `${source_table}-${id}`）中連到指定實體者 → Map(key → entity_id)
+function linkedToEntities(keys, entityIds) {
+    const out = new Map();
+    if (!entityIds.length || !keys.length) return out;
+    const db = getDb();
+    const ents = entityIds.map(() => '?').join(',');
+    const fragIds = [], memIds = [];
+    for (const k of keys) {
+        const i = k.lastIndexOf('-');
+        const table = k.slice(0, i), id = Number(k.slice(i + 1));
+        if (!Number.isFinite(id)) continue;
+        if (table === 'fragment') fragIds.push(id); else if (table === 'memory') memIds.push(id);
+    }
+    try {
+        if (fragIds.length) {
+            for (const r of db.prepare(`SELECT fragment_id, entity_id FROM fragment_entities
+                WHERE fragment_id IN (${fragIds.map(() => '?').join(',')}) AND entity_id IN (${ents})`).all(...fragIds, ...entityIds)) {
+                if (!out.has(`fragment-${r.fragment_id}`)) out.set(`fragment-${r.fragment_id}`, r.entity_id);
+            }
+        }
+        if (memIds.length) {
+            for (const r of db.prepare(`SELECT id, entity_id FROM memories
+                WHERE id IN (${memIds.map(() => '?').join(',')}) AND entity_id IN (${ents})`).all(...memIds, ...entityIds)) {
+                out.set(`memory-${r.id}`, r.entity_id);
+            }
+        }
+    } catch (e) { console.error('Hybrid: 實體連結查詢失敗，略過實體加分:', e.message); }
+    return out;
 }
 
 // =================================================================
@@ -368,12 +411,17 @@ async function searchHybrid(userMessage, limit = 6, opts = {}) {
     console.log(`Hybrid: 意圖路由 → ${intent} (query: "${userMessage.slice(0, 50)}")`);
   }
 
-  // 1. FTS5 關鍵詞檢索（同步）
-  const ftsResults = searchFragments(userMessage, limit);
+  const libCfg = getLibrarianConfig();
+  const v2 = libCfg.ranking !== 'legacy';
 
-  // 1.5 實體聚合：識別訊息中的已知實體 → 按 entity_id 全量撈碎片（實體時間線）
-  const entityIds = await lookupEntityIds(userMessage);
-  const entityResults = entityIds.length > 0 ? getEntityFragments(entityIds, limit) : [];
+  // 1. FTS5 關鍵詞檢索（同步）；v2 多取候選，讓實體加分／時間排序能把前 limit 名之外的相關結果換進來
+  const ftsResults = searchFragments(userMessage, v2 ? Math.max(limit, Math.ceil(limit * libCfg.candidate_overfetch)) : limit);
+
+  // 1.5 實體：legacy → 按 entity_id 撈「最新 N 條」當獨立候選（實體時間線）；
+  //     v2 → 不提供候選，只在後面對「已被 FTS／向量找到、且連到這些實體」的候選加分（排除使用者本人與 AI）
+  let entityIds = await lookupEntityIds(userMessage);
+  if (v2) entityIds = dropSkipEntities(entityIds);
+  const entityResults = !v2 && entityIds.length > 0 ? getEntityFragments(entityIds, limit) : [];
   if (entityResults.length > 0) {
     console.log(`Hybrid: 實體聚合命中 ${entityResults.length} 條 (entity_ids=${entityIds.join(',')}) → "${userMessage.slice(0, 40)}"`);
   }
@@ -480,6 +528,14 @@ async function searchHybrid(userMessage, limit = 6, opts = {}) {
     console.log('Hybrid: 無候選結果通過質量關卡（仍會依規則嘗試隨機浮現）');
   }
 
+  // v2：候選中連到訊息所提實體者（實體加分用）
+  const entityLinked = v2 && entityIds.length > 0 && libCfg.entity_boost > 0
+    ? linkedToEntities([...rrfScores.keys()], entityIds) : new Map();
+  if (entityLinked.size > 0) {
+    console.log(`Hybrid: 實體加分 ${entityLinked.size}/${rrfScores.size} 條候選 (entity_ids=${entityIds.join(',')}, ×${1 + libCfg.entity_boost})`);
+  }
+  const ftsOnlyPenalty = v2 ? libCfg.fts_only_penalty : FTS5_ONLY_PENALTY;
+
   // 按 RRF 分數降序排列
   const ranked = Array.from(rrfScores.entries())
     .sort((a, b) => b[1] - a[1])
@@ -491,6 +547,7 @@ async function searchHybrid(userMessage, limit = 6, opts = {}) {
         return `${vt}-${v.id}` === key;
       });
 
+      if (v2 && entityLinked.has(key)) item._entity_id = entityLinked.get(key);
       const isEntity = item._entity_id != null;
 
       let confidence = 'low';
@@ -505,11 +562,13 @@ async function searchHybrid(userMessage, limit = 6, opts = {}) {
         : isEntity && vecRank >= 0 ? 'ENTITY+VEC'
         : isEntity ? 'ENTITY'
         : ftsRank >= 0 ? 'FTS5' : 'VEC';
-      // FTS5單字索引太鬆散，無向量交叉驗證 → 降權（fact意圖不需要交叉驗證）
-      if (source === 'FTS5' && intent !== 'fact') {
-        rrf *= FTS5_ONLY_PENALTY;
+      // 無向量交叉驗證 → 降權（fact意圖不需要交叉驗證）。legacy 固定 0.7；v2 預設 1.0（=不打折，見 LIBRARIAN_DEFAULTS）
+      if (source === 'FTS5' && intent !== 'fact' && ftsOnlyPenalty < 1) {
+        rrf *= ftsOnlyPenalty;
         source = 'FTS5*';
       }
+      // v2 實體加分：乘在相關度上（只加給本來就被 FTS／向量找到的候選）
+      if (v2 && entityLinked.has(key)) rrf *= 1 + libCfg.entity_boost;
       return { ...item, _rrf: rrf, _confidence: confidence, _source: source };
     });
 
@@ -551,10 +610,18 @@ async function searchHybrid(userMessage, limit = 6, opts = {}) {
     const wmBoost = boostMap.get(`${item.source_table}-${item.id}`) || 1.0;
     // 時效加權：語義相近時，新記憶優先。≤1天的×1.3，≤3天×1.15，≤7天×1.05，之後無加成
     const recencyBoost = days <= 1 ? 1.3 : days <= 3 ? 1.15 : days <= 7 ? 1.05 : 1.0;
-    const combinedScore = item._rrf * decay * importance * novelty * wmBoost * recencyBoost;
-    return { ...item, _rrf: combinedScore, _decay: decay, _importance: importance, _novelty: novelty, _daysAgo: Math.round(days), _wmBoost: wmBoost, _recencyBoost: recencyBoost };
+    if (!v2) {
+      const combinedScore = item._rrf * decay * importance * novelty * wmBoost * recencyBoost;
+      return { ...item, _rrf: combinedScore, _decay: decay, _importance: importance, _novelty: novelty, _daysAgo: Math.round(days), _wmBoost: wmBoost, _recencyBoost: recencyBoost };
+    }
+    // v2：_relevance＝相關度（決定去留）；_rrf＝排序分數（相關度 × 時間因子^decay_weight × 重要性 × 新穎度 × 工作記憶）
+    const relevance = item._rrf;
+    const timeFactor = Math.pow(decay * recencyBoost, libCfg.decay_weight);
+    const rankScore = relevance * timeFactor * importance * novelty * wmBoost;
+    return { ...item, _rrf: rankScore, _relevance: relevance, _timeFactor: timeFactor, _decay: decay, _importance: importance, _novelty: novelty, _daysAgo: Math.round(days), _wmBoost: wmBoost, _recencyBoost: recencyBoost };
   })
-  .filter(item => item._rrf >= MIN_COMBINED_SCORE)
+  // legacy：綜合分（含衰減）低於底線就丟——舊記憶會整批消失；v2：只看相關度，衰減只影響排序
+  .filter(item => v2 ? item._relevance >= libCfg.min_relevance : item._rrf >= MIN_COMBINED_SCORE)
   .sort((a, b) => b._rrf - a._rrf);
 
   // 直接取 top-N，不強制保留向量結果（讓質量說話，不做多樣性配額）

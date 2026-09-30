@@ -107,7 +107,19 @@
   },
   "librarian": {
     "_comment": "Exclude specific fragment sources from search results.",
-    "exclude_sources": []
+    "exclude_sources": [],
+    "_comment_ranking": "Retrieval ranking. 'v2' (default) = the ranking fix measured on LoCoMo and the Chinese synthetic set (eval/results/*_fix/); 'legacy' = the old behaviour exactly (entity channel adds the entity's newest N fragments as candidates, FTS-only results x0.7, a 0.005 floor on the decayed score that drops old memories). Every key below is optional; invalid values fall back to the defaults shown and only apply to v2.",
+    "ranking": "v2",
+    "entity_boost": 0.1,
+    "_comment_entity_boost": "Candidates already found by FTS/vector that are linked to an entity named in the message get relevance x (1 + entity_boost). The entity no longer injects its own candidates. The user's and the AI's own names never trigger it.",
+    "fts_only_penalty": 1.0,
+    "_comment_fts_only_penalty": "Relevance multiplier for results found by FTS only (no vector confirmation). The old 0.7 was for single-character CJK indexing; with two-character tokens (W4) it only pushed correct answers down, so the default is 1.0 (no penalty).",
+    "decay_weight": 0.05,
+    "_comment_decay_weight": "Time decay affects ORDER only, never whether a memory is returned. Rank score = relevance x (decay x recency)^decay_weight x importance x novelty. 0 = time ignored, 1 = old strength. RRF scores are flat, so even small values reorder noticeably.",
+    "min_relevance": 0.005,
+    "_comment_min_relevance": "Keep/drop threshold on relevance (fused RRF score incl. entity boost; excludes decay/importance/novelty), so very old but relevant memories are still returned. The recall gate's relative cutoff (recall.relative_cutoff) also compares relevance.",
+    "candidate_overfetch": 2,
+    "_comment_candidate_overfetch": "FTS fetches limit x this many candidates so entity boost and time ordering can promote relevant results from just outside the top limit."
   },
   "tag_routing": {
     "_comment": "按值標自動建星座：提取時打的標 → 一顆專門的星座（程式碼直連，不靠分類器）。可選值跑 scripts/list_tag_routing.js 看。不填 = 一顆都不建。",
