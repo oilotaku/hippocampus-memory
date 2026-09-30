@@ -44,8 +44,9 @@ const DAY = 86400000;
 const iso = (daysAgo) => new Date(Date.now() - daysAgo * DAY).toISOString();
 
 function addFrag({ content, ew = 0.5, daysAgo = 0, readCount = 0, status = 'active', source = 'chat' }) {
-    return Number(db.prepare(`INSERT INTO memory_fragments (type, entity, content, emotional_weight, source, status, created_at, read_count)
-        VALUES ('event', 'X', ?, ?, ?, ?, ?, ?)`).run(content, ew, source, status, iso(daysAgo), readCount).lastInsertRowid);
+    // G1：novelty 看 injected_count（舊資料庫由 v113 以 read_count 初始化），測試沿用 readCount 語意兩欄同步
+    return Number(db.prepare(`INSERT INTO memory_fragments (type, entity, content, emotional_weight, source, status, created_at, read_count, injected_count)
+        VALUES ('event', 'X', ?, ?, ?, ?, ?, ?, ?)`).run(content, ew, source, status, iso(daysAgo), readCount, readCount).lastInsertRowid);
 }
 
 // 與 librarian.js 內部公式一致的參考實作（內部函式未 export，這裡照抄以驗證數值）

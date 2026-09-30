@@ -813,7 +813,9 @@
     "chat_mode": "default",
     "insight": null,
     "quote": null,
-    "evidence_count": 1
+    "evidence_count": 1,
+    "injected_count": 0,
+    "cited_count": 0
    },
    {
     "id": 8,
@@ -842,7 +844,9 @@
     "chat_mode": "default",
     "insight": null,
     "quote": null,
-    "evidence_count": 1
+    "evidence_count": 1,
+    "injected_count": 0,
+    "cited_count": 0
    },
    {
     "id": 9,
@@ -871,7 +875,9 @@
     "chat_mode": "default",
     "insight": null,
     "quote": null,
-    "evidence_count": 1
+    "evidence_count": 1,
+    "injected_count": 0,
+    "cited_count": 0
    },
    {
     "id": 10,
@@ -900,7 +906,9 @@
     "chat_mode": "default",
     "insight": null,
     "quote": null,
-    "evidence_count": 1
+    "evidence_count": 1,
+    "injected_count": 0,
+    "cited_count": 0
    },
    {
     "id": 11,
@@ -929,7 +937,9 @@
     "chat_mode": "default",
     "insight": null,
     "quote": null,
-    "evidence_count": 1
+    "evidence_count": 1,
+    "injected_count": 0,
+    "cited_count": 0
    },
    {
     "id": 12,
@@ -958,7 +968,9 @@
     "chat_mode": "default",
     "insight": null,
     "quote": null,
-    "evidence_count": 1
+    "evidence_count": 1,
+    "injected_count": 0,
+    "cited_count": 0
    },
    {
     "id": 13,
@@ -987,7 +999,9 @@
     "chat_mode": "default",
     "insight": null,
     "quote": null,
-    "evidence_count": 1
+    "evidence_count": 1,
+    "injected_count": 0,
+    "cited_count": 0
    },
    {
     "id": 14,
@@ -1016,7 +1030,9 @@
     "chat_mode": "default",
     "insight": null,
     "quote": null,
-    "evidence_count": 1
+    "evidence_count": 1,
+    "injected_count": 0,
+    "cited_count": 0
    }
   ],
   "entity_profiles": [

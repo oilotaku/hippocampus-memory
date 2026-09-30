@@ -4,6 +4,7 @@ const { fragmentsMatchQuery, memoriesMatchQuery } = require('./memoryCrypto');
 const { AI } = require('./nameResolver');
 const { toQueryTokens } = require('../utils/cjkTokenize');
 const { toTraditionalChars } = require('../utils/zhNormalize');
+const { getRecallConfig } = require('./recallGate');
 
 // ── 檢索排除源（從 memory_config.json 讀取）──
 const EXCLUDED_SOURCES = (() => {
@@ -310,7 +311,7 @@ function formatForContext(fragments) {
   if (!fragments || fragments.length === 0) return null;
 
   const db = getDb();
-  const incRead = db.prepare("UPDATE memory_fragments SET read_count = COALESCE(read_count, 0) + 1, last_accessed_at = datetime('now') WHERE id = ?");
+  const incRead = db.prepare("UPDATE memory_fragments SET read_count = COALESCE(read_count, 0) + 1, injected_count = COALESCE(injected_count, 0) + 1, last_accessed_at = datetime('now') WHERE id = ?");
   const touchMemory = db.prepare("UPDATE memories SET last_accessed_at = datetime('now') WHERE id = ?");
 
   const lines = fragments.map(f => {
@@ -336,6 +337,8 @@ function formatForContext(fragments) {
 // =================================================================
 
 // opts.random：隨機浮現的亂數來源（預設 Math.random，測試可注入）
+// opts.surface：'random'（預設，原行為：結果 <3 條時 40% 機率隨機浮現）｜'none'（不在這裡浮現；
+//   recall.gate 開啟時 buildSmartContext 改用 recallGate.pickSurface 依情境浮現）
 async function searchHybrid(userMessage, limit = 6, opts = {}) {
   const random = typeof opts.random === 'function' ? opts.random : Math.random;
   if (!userMessage || userMessage.trim().length === 0) return [];
@@ -500,6 +503,19 @@ async function searchHybrid(userMessage, limit = 6, opts = {}) {
       return { ...item, _rrf: rrf, _confidence: confidence, _source: source };
     });
 
+  // 新穎度看「被注入的次數」（injected_count），不是 read_count：recall.gate 開啟時才切換，關閉則沿用 read_count。
+  // （被引用與否由 cited_count 記錄，那是 lifecycle 續命用的，兩個角色分開。）
+  const injectedById = new Map();
+  if (getRecallConfig().gate) {
+    const fragIds = ranked.filter(r => r.source_table === 'fragment').map(r => r.id);
+    if (fragIds.length > 0) {
+      try {
+        const rows = getDb().prepare(`SELECT id, injected_count FROM memory_fragments WHERE id IN (${fragIds.map(() => '?').join(',')})`).all(...fragIds);
+        for (const r of rows) injectedById.set(r.id, r.injected_count || 0);
+      } catch (e) { console.error('Hybrid: injected_count 讀取失敗，novelty 退回 read_count:', e.message); }
+    }
+  }
+
   // 時間衰減（分段：前3天新鮮度主導，3天後情緒主導）+ 重要性 + 新穎度
   const decayed = ranked.map(item => {
     const dateForDecay = item._created_at || item.date_label;
@@ -508,7 +524,7 @@ async function searchHybrid(userMessage, limit = 6, opts = {}) {
     const actualDays = intent === 'long_term' ? days * 0.4 : days;  // long_term 意圖下時間走得慢
     const decay = segmentedDecay(actualDays, ew);
     const importance = 0.4 + ew * 0.6;
-    const novelty = noveltyPenalty(item._read_count || 0);
+    const novelty = noveltyPenalty(injectedById.has(item.id) && item.source_table === 'fragment' ? injectedById.get(item.id) : (item._read_count || 0));
     const wmBoost = boostMap.get(`${item.source_table}-${item.id}`) || 1.0;
     // 時效加權：語義相近時，新記憶優先。≤1天的×1.3，≤3天×1.15，≤7天×1.05，之後無加成
     const recencyBoost = days <= 1 ? 1.3 : days <= 3 ? 1.15 : days <= 7 ? 1.05 : 1.0;
@@ -523,7 +539,7 @@ async function searchHybrid(userMessage, limit = 6, opts = {}) {
 
   // 隨機浮現（Ombre Brain 啟發）：檢索結果太少時，偶爾「突然想起」無關的舊事
   // 讓從未被召回過的記憶也有機會浮出水面，模擬真人沒來由的聯想
-  if (finalResults.length < 3 && random() < 0.4) {
+  if (opts.surface !== 'none' && finalResults.length < 3 && random() < 0.4) {
     try {
       const db = getDb();
       const floatCount = Math.min(3 - finalResults.length, 3);
@@ -598,11 +614,13 @@ function computePermission(f) {
   return '需謹慎';
 }
 
-function formatHybridContext(fragments) {
+// opts.count=false：只格式化、不累加注入計數（沿用工作記憶時用，同一批碎片不重複計次）
+function formatHybridContext(fragments, opts = {}) {
   if (!fragments || fragments.length === 0) return null;
+  const countInjection = opts.count !== false;
 
   const db = getDb();
-  const incRead = db.prepare("UPDATE memory_fragments SET read_count = COALESCE(read_count, 0) + 1, last_accessed_at = datetime('now') WHERE id = ?");
+  const incRead = db.prepare("UPDATE memory_fragments SET read_count = COALESCE(read_count, 0) + 1, injected_count = COALESCE(injected_count, 0) + 1, last_accessed_at = datetime('now') WHERE id = ?");
   const touchMemory = db.prepare("UPDATE memories SET last_accessed_at = datetime('now') WHERE id = ?");
 
   // v5.5: 先處理全部碎片（日誌+解密+read_count），同時收集 entity 歸屬
@@ -625,9 +643,9 @@ function formatHybridContext(fragments) {
     console.log(`Hybrid命中: [#${f.id}/${f.source_table}] ${srcTag} ew=${ew} ${daysStr} [${permission}] ${preview}...`);
 
     if (f.source_table === 'fragment') {
-      try { incRead.run(f.id); } catch (e) { console.error(`Librarian: read_count更新失敗 #${f.id}:`, e.message); }
+      if (countInjection) { try { incRead.run(f.id); } catch (e) { console.error(`Librarian: read_count更新失敗 #${f.id}:`, e.message); } }
     } else if (f.source_table === 'memory') {
-      try { touchMemory.run(f.id); } catch (e) { console.error(`Librarian: last_accessed更新失敗 #${f.id}:`, e.message); }
+      if (countInjection) { try { touchMemory.run(f.id); } catch (e) { console.error(`Librarian: last_accessed更新失敗 #${f.id}:`, e.message); } }
       try { f.content = encryption.decryptForDisplay(f.content); } catch (_) {}
     }
 

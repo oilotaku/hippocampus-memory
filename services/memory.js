@@ -36,8 +36,32 @@ async function queryMultiCollections(queries) {
 // 硬觸發檢索：檢查使用者訊息是否包含記憶庫中的標籤
 // =================================================================
 
-function searchMemoriesByHardTrigger(userMessage) {
+// recall.gate 開啟時（G1）：標籤改用「兩字組」比對（簡繁並存，標籤的每個兩字組都要出現在訊息裡），
+// 並最多回 recall.hard_trigger_max 條（預設 3；標籤越長＝越具體者優先，同長度新的優先）。
+// recall.gate=false：維持原行為（userMessage.includes(tag)，無上限）。
+// opts.cfg 可注入 getRecallConfig() 的結果（測試用）。
+function searchMemoriesByHardTrigger(userMessage, opts = {}) {
     if (!userMessage) return [];
+    const recall = require('./recallGate');
+    const cfg = opts.cfg || recall.getRecallConfig();
+    const useBigram = cfg.gate;
+    let msgTokens = null;
+    if (useBigram) {
+        const { toIndexTokenList } = require('../utils/cjkTokenize');
+        msgTokens = new Set(toIndexTokenList(userMessage));
+    }
+    // 回傳命中的最長標籤長度（0 = 未命中）
+    const matchedTagLen = (tags) => {
+        let best = 0;
+        for (const tag of tags) {
+            if (typeof tag !== 'string' || !tag) continue;
+            const { toIndexTokenList } = require('../utils/cjkTokenize');
+            const tt = toIndexTokenList(tag);
+            if (tt.length === 0) continue;
+            if (tt.every(t => msgTokens.has(t))) best = Math.max(best, tag.length);
+        }
+        return best;
+    };
 
     try {
         const db = getDb();
@@ -55,7 +79,8 @@ function searchMemoriesByHardTrigger(userMessage) {
             let tags = [];
             try { tags = JSON.parse(memory.tags); } catch (e) { continue; }
 
-            const isMatch = tags.some(tag => userMessage.includes(tag));
+            const tagLen = useBigram && Array.isArray(tags) ? matchedTagLen(tags) : 0;
+            const isMatch = useBigram ? tagLen > 0 : (Array.isArray(tags) && tags.some(tag => userMessage.includes(tag)));
 
             if (isMatch) {
                 if (memory.valid_from && memory.valid_from > today) continue;
@@ -64,10 +89,18 @@ function searchMemoriesByHardTrigger(userMessage) {
                     const dec = encryption.decrypt(memory.content);
                     if (dec === null) { console.error(`Memory ID ${memory.id} decryption failed，已跳過`); continue; }
                     memory.content = dec;
+                    if (useBigram) memory._tagLen = tagLen;
                     matchedMemories.push(memory);
                 } catch (err) {
                     console.error(`Memory ID ${memory.id} decryption failed`, err);
                 }
+            }
+        }
+        if (useBigram) {
+            matchedMemories.sort((x, y) => y._tagLen - x._tagLen || y.id - x.id);
+            if (cfg.hard_trigger_max >= 0 && matchedMemories.length > cfg.hard_trigger_max) {
+                console.log(`searchMemoriesByHardTrigger: 命中 ${matchedMemories.length} 條，依上限只留 ${cfg.hard_trigger_max} 條`);
+                matchedMemories.length = cfg.hard_trigger_max;
             }
         }
         return matchedMemories;

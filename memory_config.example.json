@@ -55,6 +55,33 @@
     "judgment_max_change": 0.4,
     "_comment_judgment": "An entity's judgment (the assistant's impression of a person) is updated incrementally: the previous version is the anchor, and a rewrite is kept only if it cites valid source fragments and changes at most this fraction of the text (character-level edit distance / longer length). Otherwise the old version is kept and the rejection is logged."
   },
+  "recall": {
+    "_comment": "Retrieval timing gate (G1). gate=false restores the old behaviour exactly (search 8 fragments on every message, random 40% surfacing, unlimited hard triggers, novelty by read_count). Word lists match Simplified and Traditional alike.",
+    "gate": true,
+    "candidate_k": 16,
+    "max_k": 8,
+    "relative_cutoff": 0.5,
+    "budget_share": { "core": 0.3, "retrieval": 0.5, "extra": 0.2 },
+    "min_chars": 4,
+    "command_max_chars": 14,
+    "smalltalk_words": ["好", "好的", "好啊", "嗯", "嗯嗯", "哦", "哈哈", "對", "是的", "行", "可以", "了解", "知道了", "收到", "謝謝", "謝了", "拜拜", "再見", "晚安", "早安", "午安", "嗨", "你好", "在嗎", "ok", "thanks", "hi", "bye"],
+    "command_prefixes": ["幫我", "請幫", "麻煩", "打開", "開啟", "關閉", "關掉", "開", "關", "播放", "暫停", "設定", "提醒我", "切換", "搜尋", "查一下"],
+    "cue_words": ["上次", "之前", "以前", "那次", "那個", "那天", "還記得", "記得", "曾經", "當時", "前陣子", "你說過", "我說過", "提過"],
+    "question_words": ["？", "?", "嗎", "呢", "什麼", "哪", "誰", "幾", "多少", "何時", "怎麼", "為什麼", "是不是", "有沒有"],
+    "topic_overlap": 0.3,
+    "continuation_minutes": 30,
+    "surface_idle_hours": 6,
+    "surface_cooldown_days": 7,
+    "surface_max": 2,
+    "surface_noise": 0.15,
+    "surface_min_age_days": 3,
+    "prospective_days": 7,
+    "prospective_max": 3,
+    "prospective_lookback_days": 120,
+    "hard_trigger_max": 3,
+    "cite_min_overlap": 0.3,
+    "cite_min_shared": 3
+  },
   "librarian": {
     "_comment": "Exclude specific fragment sources from search results.",
     "exclude_sources": []

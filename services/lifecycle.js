@@ -11,6 +11,7 @@ const { chromaDBOperation } = require('./memory');
 const { callLLM } = require('./llm');
 const { USER, AI } = require('./nameResolver');
 const { sqlNow, sqlDaysAgo } = require('../utils/time');
+const { getRecallConfig } = require('./recallGate');
 
 const CONFIG = {
     FRAGMENT_COOLING_DAYS: 14,     // 14天無人訪問 → 冷卻
@@ -33,14 +34,20 @@ async function runFragmentGC() {
     const now = sqlNow();
     const stats = { cooled: 0, resurrected: 0, frozen: 0, tombstoned: 0 };
 
+    // G1：read_count 原本同時是 novelty 的懲罰與這裡的續命，角色相反。recall.gate 開啟時，
+    // 「被讀過」改看 cited_count（真的被引用）或近期 last_accessed_at（被注入也會更新它，
+    // 但只算 14 天內，不再是「曾被讀過一次就永遠免疫」）；關閉時維持 read_count。
+    const gateOn = getRecallConfig().gate;
+
     // 1. 活躍 → 冷卻：14天以上沒人看過
     const coolingCutoff = sqlDaysAgo(CONFIG.FRAGMENT_COOLING_DAYS);
     const toCool = db.prepare(`
         SELECT id, chroma_id FROM memory_fragments
         WHERE status = 'active'
-          AND read_count = 0
+          AND ${gateOn ? `COALESCE(cited_count, 0) = 0
+          AND (last_accessed_at IS NULL OR last_accessed_at < ?)` : 'read_count = 0'}
           AND created_at < ?
-    `).all(coolingCutoff);
+    `).all(...(gateOn ? [coolingCutoff, coolingCutoff] : [coolingCutoff]));
 
     for (const f of toCool) {
         db.prepare(`UPDATE memory_fragments SET status = 'cooling', lifecycle_updated_at = ? WHERE id = ?`)
@@ -52,7 +59,8 @@ async function runFragmentGC() {
     const resurrected = db.prepare(`
         SELECT id FROM memory_fragments
         WHERE status = 'cooling'
-          AND read_count > 0
+          AND ${gateOn ? `(COALESCE(cited_count, 0) > 0
+               OR (last_accessed_at IS NOT NULL AND lifecycle_updated_at IS NOT NULL AND last_accessed_at > lifecycle_updated_at))` : 'read_count > 0'}
     `).all();
 
     for (const f of resurrected) {

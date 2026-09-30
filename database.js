@@ -1355,6 +1355,29 @@ function initDatabase() {
         return stmts.join('\n');
     })());
 
+    // v113（G1）：取記憶時機閘門。
+    //  - injected_count：被注入 prompt 的次數（novelty 懲罰用）；以既有 read_count 初始化，
+    //    因為舊的 read_count 就是「注入次數」。
+    //  - cited_count：真的被引用的次數（recall_memory 工具取用、或回覆後檢查用到）。
+    //  - recall_surface_log：情境浮現的冷卻紀錄（每條碎片一列，記最近一次浮現時間）。
+    //  - recall_state：閘門的小型鍵值狀態（例如上一則訊息時間，用來判斷閒置）。
+    runMigration(113, 'G1: injected_count／cited_count、浮現冷卻與閘門狀態', `
+        ALTER TABLE memory_fragments ADD COLUMN injected_count INTEGER DEFAULT 0;
+        ALTER TABLE memory_fragments ADD COLUMN cited_count INTEGER DEFAULT 0;
+        UPDATE memory_fragments SET injected_count = COALESCE(read_count, 0);
+        CREATE TABLE IF NOT EXISTS recall_surface_log (
+            source_table TEXT NOT NULL,
+            ref_id INTEGER NOT NULL,
+            surfaced_at DATETIME NOT NULL,
+            PRIMARY KEY (source_table, ref_id)
+        );
+        CREATE TABLE IF NOT EXISTS recall_state (
+            key TEXT PRIMARY KEY,
+            value TEXT,
+            updated_at DATETIME
+        );
+    `);
+
     // 種子資料：初始本體論類別（僅當表為空時插入）
     try {
         const existingRoots = db.prepare('SELECT COUNT(*) as c FROM memory_ontology WHERE parent_id IS NULL').get();

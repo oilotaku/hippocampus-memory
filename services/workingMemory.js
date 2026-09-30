@@ -181,4 +181,14 @@ function getRecentFragments() {
     return result;
 }
 
-module.exports = { getBoostMap, updatePool, getRecentFragments };
+// 話題延續、本則不重查時：只刷新工作記憶的存活時間（G1 閘門用），不改內容也不重算 embedding
+function touchPool() {
+  if (pool.size === 0) return 0;
+  const now = Date.now();
+  for (const item of pool.values()) item.lastBoostedAt = now;
+  lastAccessTime = now;
+  persistPool();
+  return pool.size;
+}
+
+module.exports = { getBoostMap, updatePool, getRecentFragments, touchPool };

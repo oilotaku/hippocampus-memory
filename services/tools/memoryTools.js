@@ -5,6 +5,7 @@ const { getDb } = require('../../database');
 const { encryption } = require('../../encryption');
 const { fetchSourceMessages } = require('../consolidator');
 const { searchHybrid, formatHybridContext, getEntityFragments } = require('../librarian');
+const { markCited } = require('../recallGate');
 const { processChatCorrection } = require('../correction');
 const { USER } = require('../memoryConfig');
 
@@ -198,10 +199,14 @@ ${USER.name} 想看當時的原話、或要你複述細節 → include_source=tr
     // 深度追溯：給定 ID → 那一條的完整內容 + 當時的原始對話（翻頁用 offset）
     if (args.memory_id) {
       let record = db.prepare('SELECT id, content, source_msg_ids, valid_from, layer FROM memories WHERE id = ?').get(args.memory_id);
+      let recordTable = 'memory';
       if (!record) {
         record = db.prepare('SELECT id, content, source_msg_ids, source_date AS valid_from, layer FROM memory_fragments WHERE id = ?').get(args.memory_id);
+        recordTable = 'fragment';
       }
       if (!record) return { success: false, formatted: `記憶庫中未找到ID為 ${args.memory_id} 的記憶。` };
+      // G1：特地追溯某一條＝真的在用它（cited_count）
+      try { markCited([{ id: record.id, source_table: recordTable }], db); } catch (_) {}
 
       let content = record.content;
       try { content = encryption.decryptForDisplay(content); } catch (_) {}
@@ -376,6 +381,8 @@ ${USER.name} 想看當時的原話、或要你複述細節 → include_source=tr
       if (memories.length > 0) {
         if (rawMessages.length > 0) formatted += '\n—— 記憶碎片 ——\n';
         formatted += formatHybridContext(memories);
+        // G1：工具取用＝真的要引用（cited_count），與「被注入」（injected_count）分開記
+        try { markCited(memories, db); } catch (_) {}
       }
 
       // 要原話：把命中記憶的原始對話帶出來（不需要 ID）

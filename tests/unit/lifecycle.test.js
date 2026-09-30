@@ -25,8 +25,9 @@ beforeEach(() => {
 });
 
 function frag({ status = 'active', readCount = 0, createdDaysAgo = 0, lifecycleDaysAgo = null, chromaId = null, content = 'c', ew = 0.5 }) {
-    return Number(db.prepare(`INSERT INTO memory_fragments (type, entity, content, emotional_weight, status, read_count, created_at, lifecycle_updated_at, chroma_id)
-        VALUES ('event','X',?,?,?,?,?,?,?)`).run(content, ew, status, readCount, sqlDaysAgo(createdDaysAgo),
+    // G1：續命看 cited_count（recall.gate 預設開），測試沿用 readCount 語意兩欄同步
+    return Number(db.prepare(`INSERT INTO memory_fragments (type, entity, content, emotional_weight, status, read_count, cited_count, created_at, lifecycle_updated_at, chroma_id)
+        VALUES ('event','X',?,?,?,?,?,?,?,?)`).run(content, ew, status, readCount, readCount, sqlDaysAgo(createdDaysAgo),
         lifecycleDaysAgo == null ? null : sqlDaysAgo(lifecycleDaysAgo), chromaId).lastInsertRowid);
 }
 const getF = (id) => db.prepare('SELECT * FROM memory_fragments WHERE id=?').get(id);

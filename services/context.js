@@ -9,6 +9,7 @@ const { fillPrompt, USER, AI } = require('./nameResolver');
 const { getTriggeredIntuition } = require('./intuition');
 const { getMemoryTokenBudget, estimateTokens, takeWithinBudget, splitEntityBlocks } = require('./memoryBudget');
 const { toTraditionalChars } = require('../utils/zhNormalize');
+const { getRecallConfig } = require('./recallGate');
 
 // =================================================================
 // 健康資料簡報生成器
@@ -100,6 +101,27 @@ function generateHealthSummary(fullHealthStatus) {
     }
 }
 
+// 記憶脈絡區塊的說明文字（舊流程與 recall.gate 流程共用）
+function wrapMemoryContext(libText) {
+    return `<memory_context>
+[已儲存記憶庫 — 以下是你自己的記憶，不是${USER.name}剛說的新資訊]
+
+每條記憶標註了「引用許可權」和「距今時間」：
+
+【可引用】→ 確定的事實，可以直接引用
+【需謹慎】→ 用"我印象裡""好像是……"開頭，留糾正空間
+【僅聯想】→ 僅供你自己聯想參考，不要當作確定事實告訴${USER.name}。如果想提，說"我好像突然想起……但不太確定"
+
+時間感覺：
+- 15天以內 → "最近"
+- 1-3個月 → "之前"或"有一陣了"
+- 超過3個月 → 別表現出剛發生的感覺
+
+關於糾正：如果${USER.name}說"不對"或"不是那次"，接受${USER.pronoun}的糾正，不要搬出記憶庫辯解——記憶庫本來就是碎片化的，${USER.pronoun}比你清楚。
+${libText}
+</memory_context>`;
+}
+
 // =================================================================
 // 極簡版Context構建 (v3.2 - 天氣快取 + 日曆快取)
 // =================================================================
@@ -123,8 +145,28 @@ async function buildSmartContext(userMessage, healthStatus, skipVectorMemory = f
     // 超出時整條丟棄（不切斷單條記憶）。見 services/memoryBudget.js。
     let memoryBudgetLeft = getMemoryTokenBudget();
 
+    // G1 取記憶時機閘門（memory_config.json 的 recall.gate，預設開）：
+    // 開 → 記憶區塊由 services/recallPipeline.js 組裝（要不要查／動態 k／情境浮現／前瞻／hard trigger 上限）；
+    // 關 → 走下面原本的舊流程（每則都查 8 條、隨機浮現），行為不變。
+    let gatedRecall = !!(userMessage && !skipVectorMemory && getRecallConfig().gate);
+    let injectedMemories = [];
+    if (gatedRecall) {
+        try {
+            const { buildGatedMemory } = require('./recallPipeline');
+            const g = await buildGatedMemory(userMessage, { wrapMemoryContext });
+            dynamicParts.push(...g.parts);
+            estimatedTokens += g.tokens;
+            injectedMemories = g.injected;
+        } catch (e) {
+            console.error('recall gate 失敗，退回舊流程:', e.message);
+            gatedRecall = false;
+            dynamicParts.length = 0;
+            estimatedTokens = Math.ceil(corePrompt.length / 4);
+        }
+    }
+
     // 硬觸發記憶
-    if (userMessage && !skipVectorMemory) {
+    if (!gatedRecall && userMessage && !skipVectorMemory) {
         let hardMatches = searchMemoriesByHardTrigger(userMessage);
         {
             const r = takeWithinBudget(hardMatches, memoryBudgetLeft, m => estimateTokens(m.content) + 8);
@@ -156,7 +198,7 @@ async function buildSmartContext(userMessage, healthStatus, skipVectorMemory = f
     }
 
     // Librarian：混合檢索（FTS5 + 向量語義）
-    if (userMessage && !skipVectorMemory) {
+    if (!gatedRecall && userMessage && !skipVectorMemory) {
         try {
             const { searchHybrid, formatHybridContext } = require('./librarian');
             const { getEntityContext } = require('./entityProfile');
@@ -170,23 +212,7 @@ async function buildSmartContext(userMessage, healthStatus, skipVectorMemory = f
             }
             const libText = formatHybridContext(libFragments);
             if (libText) {
-                dynamicParts.push(`<memory_context>
-[已儲存記憶庫 — 以下是你自己的記憶，不是${USER.name}剛說的新資訊]
-
-每條記憶標註了「引用許可權」和「距今時間」：
-
-【可引用】→ 確定的事實，可以直接引用
-【需謹慎】→ 用"我印象裡""好像是……"開頭，留糾正空間
-【僅聯想】→ 僅供你自己聯想參考，不要當作確定事實告訴${USER.name}。如果想提，說"我好像突然想起……但不太確定"
-
-時間感覺：
-- 15天以內 → "最近"
-- 1-3個月 → "之前"或"有一陣了"
-- 超過3個月 → 別表現出剛發生的感覺
-
-關於糾正：如果${USER.name}說"不對"或"不是那次"，接受${USER.pronoun}的糾正，不要搬出記憶庫辯解——記憶庫本來就是碎片化的，${USER.pronoun}比你清楚。
-${libText}
-</memory_context>`);
+                dynamicParts.push(wrapMemoryContext(libText));
                 estimatedTokens += Math.ceil(libText.length / 4);
                 console.log(`buildSmartContext: hybrid librarian injected ${libFragments.length} fragments`);
 
@@ -361,7 +387,10 @@ ${libText}
     return {
         stableContext: corePrompt,
         dynamicContext: dynamicParts.join('\n'),
-        tokenCount: estimatedTokens
+        tokenCount: estimatedTokens,
+        // 本則注入 prompt 的碎片（{id, source_table}）；宿主拿到助理回覆後可呼叫
+        // recallGate.markCitedFromReply(reply, injectedMemories) 累加 cited_count
+        injectedMemories,
     };
 }
 

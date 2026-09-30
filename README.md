@@ -24,6 +24,8 @@ A self-organizing long-term memory system for AI assistants and companions. It e
 | Stable traits (confidence ≥ 0.7) and the relationship layer injected into the chat prompt under their own small token budget | Working |
 | Entity `judgment` updated incrementally against the previous version (small edits with cited sources only) | Working |
 | Daily persona drift check against anchor answers, with automatic rollback of the relationship layer | Working (embedding channel needs ChromaDB; falls back to bigram Jaccard) |
+| Retrieval timing gate: skip memory lookup for greetings and commands, adaptive result count, context-triggered surfacing, upcoming-event reminders, capped hard triggers | Working (on by default; `recall.gate=false` restores the old behaviour) |
+| `injected_count` (put in the prompt) split from `cited_count` (actually used) | Working; `cited_count` is fed by the `recall_memory` tool, and by `recallGate.markCitedFromReply()` for hosts that can pass the assistant's reply |
 
 ---
 
@@ -185,6 +187,18 @@ Personalization lives here: user and assistant names, relationship, and colors. 
 | `persona.drift_threshold_jaccard` | 0.2 | Same, when embeddings are unavailable and bigram Jaccard is used instead |
 | `persona.drift_samples` | 1 | Answers averaged per probe question (temperature is always 0) |
 | `persona.judgment_max_change` | 0.4 | Largest allowed change ratio (edit distance / longer length) when an entity's `judgment` is rewritten; larger or uncited rewrites keep the old version |
+| `recall.gate` | true | Master switch for the retrieval timing gate. `false` restores the old behaviour exactly: search 8 fragments on every message, random 40% surfacing, unlimited hard triggers, novelty and lifecycle keyed on `read_count` |
+| `recall.candidate_k / max_k` | 16 / 8 | Candidates fetched, and the most fragments kept after the relative cutoff |
+| `recall.relative_cutoff` | 0.5 | Keep only results scoring at least this fraction of the top result, then trim to the token budget (whole fragments only) |
+| `recall.budget_share` | 0.3 / 0.5 / 0.2 | Split of `context.memory_token_budget` between core blocks (hard triggers, entity files), retrieval, and surfacing plus upcoming events; normalized to sum to 1 |
+| `recall.min_chars / command_max_chars` | 4 / 14 | Very short messages, and short command-style messages, skip lookup unless they name a known entity, contain a cue word, or are questions |
+| `recall.smalltalk_words / command_prefixes / cue_words / question_words` | see example file | Word lists (Simplified and Traditional both match). Smalltalk and commands skip lookup; cue words ("last time", "remember", ...), question words, known entity names or aliases, and long-term/summary/fact intents force it |
+| `recall.topic_overlap / continuation_minutes` | 0.3 / 30 | If a message shares this fraction of two-character tokens with the previous one within this many minutes, reuse working memory instead of searching again |
+| `recall.surface_idle_hours` | 6 | Idle hours before the next message may bring up an old, never-injected fragment; fragments created on the same month and day in an earlier year also surface |
+| `recall.surface_cooldown_days / surface_max / surface_noise` | 7 / 2 / 0.15 | Cooldown after a fragment surfaces, how many may surface at once, and the Gaussian jitter used when choosing among candidates |
+| `recall.prospective_days / prospective_max` | 7 / 3 | Events dated within this many days are added to an upcoming-events block even if the message did not match them. Dates are parsed from fragment text (`M月D日`, `M/D`, `下週X`, `週X`, `明天`, ...) relative to when the fragment was written; an `event_at` column is used if present |
+| `recall.hard_trigger_max` | 3 | Most hard-trigger memories injected per message; tags now match on two-character tokens instead of raw substrings |
+| `recall.cite_min_overlap / cite_min_shared` | 0.3 / 3 | How much of a fragment's two-character tokens must appear in a reply for `markCitedFromReply()` to count it as cited |
 
 ---
 

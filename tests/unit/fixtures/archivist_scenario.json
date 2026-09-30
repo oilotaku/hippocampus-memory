@@ -1508,7 +1508,9 @@
     "chat_mode": "default",
     "insight": null,
     "quote": null,
-    "evidence_count": 1
+    "evidence_count": 1,
+    "injected_count": 0,
+    "cited_count": 0
    },
    {
     "id": 2,
@@ -1537,7 +1539,9 @@
     "chat_mode": "default",
     "insight": null,
     "quote": null,
-    "evidence_count": 1
+    "evidence_count": 1,
+    "injected_count": 0,
+    "cited_count": 0
    },
    {
     "id": 3,
@@ -1566,7 +1570,9 @@
     "chat_mode": "default",
     "insight": null,
     "quote": null,
-    "evidence_count": 1
+    "evidence_count": 1,
+    "injected_count": 0,
+    "cited_count": 0
    },
    {
     "id": 4,
@@ -1595,7 +1601,9 @@
     "chat_mode": "default",
     "insight": null,
     "quote": null,
-    "evidence_count": 1
+    "evidence_count": 1,
+    "injected_count": 0,
+    "cited_count": 0
    },
    {
     "id": 5,
@@ -1624,7 +1632,9 @@
     "chat_mode": "default",
     "insight": null,
     "quote": null,
-    "evidence_count": 1
+    "evidence_count": 1,
+    "injected_count": 0,
+    "cited_count": 0
    },
    {
     "id": 6,
@@ -1653,7 +1663,9 @@
     "chat_mode": "default",
     "insight": null,
     "quote": null,
-    "evidence_count": 1
+    "evidence_count": 1,
+    "injected_count": 0,
+    "cited_count": 0
    },
    {
     "id": 7,
@@ -1682,7 +1694,9 @@
     "chat_mode": "default",
     "insight": null,
     "quote": null,
-    "evidence_count": 1
+    "evidence_count": 1,
+    "injected_count": 0,
+    "cited_count": 0
    },
    {
     "id": 8,
@@ -1711,7 +1725,9 @@
     "chat_mode": "default",
     "insight": null,
     "quote": null,
-    "evidence_count": 1
+    "evidence_count": 1,
+    "injected_count": 0,
+    "cited_count": 0
    }
   ],
   "memories": [
