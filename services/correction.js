@@ -52,8 +52,10 @@ function recordCorrection({ targetType, targetId, wrongSummary, correctSummary, 
         console.log(`[Correction] 記憶 #${targetId} 已降權 ×0.3`);
     }
     if (targetType === 'fragment' && targetId) {
-        db.prepare("UPDATE memory_fragments SET status = 'consolidated' WHERE id = ?").run(targetId);
-        console.log(`[Correction] 碎片 #${targetId} 已標記 consolidated`);
+        // 聊天修正路徑已先把來源設為 cooling（回覆也告知使用者「已標記為降溫」），
+        // 這裡不可再蓋回 consolidated；其餘呼叫端維持原行為。
+        db.prepare("UPDATE memory_fragments SET status = 'consolidated' WHERE id = ? AND status != 'cooling'").run(targetId);
+        console.log(`[Correction] 碎片 #${targetId} 已標記 consolidated（cooling 者保留）`);
     }
 
     // 檢查是否需要合併
@@ -120,9 +122,9 @@ async function mergeGuidelines() {
         merged_from: rows.length
     }));
 
-    // 標記已合併
-    const mark = db.prepare("UPDATE correction_log SET status='merged' WHERE status='active'");
-    mark.run();
+    // 標記已合併：只標「送進 LLM 的那批 id」，LLM 呼叫期間新進的修正保持 active
+    const mark = db.prepare("UPDATE correction_log SET status='merged' WHERE status='active' AND id = ?");
+    db.transaction((ids) => { for (const id of ids) mark.run(id); })(rows.map(r => r.id));
 
     console.log(`[Correction] 合併完成：${rows.length}條 → ${guidelines.length}條長期準則`);
     return guidelines;
@@ -235,7 +237,29 @@ ${candLines || '（無候選記憶）'}`;
     }
 }
 
-async function processChatCorrection({ wrongStatement, correction, memoryId, chatId }) {
+// 解析呼叫端指定的記憶：memoryType 明確指定 'episode'|'memory'（memories 表）或 'fragment'（碎片表）；
+// memoryId 也可帶前綴（'memory_5'、'episode_5'、'fragment_12'，與 Chroma id 同格式）。
+// 未指定型別時：兩表都有該 id 就兩筆都列為候選（由 LLM 依內容判斷，並以 source_table 回報），
+// 只有一表有就取那一筆。
+function resolveMemoryRefs(db, memoryId, memoryType) {
+    let id = memoryId;
+    let type = memoryType || null;
+    if (typeof id === 'string') {
+        const m = id.trim().match(/^(memory|episode|fragment)_(\d+)$/i);
+        if (m) { type = type || m[1].toLowerCase(); id = m[2]; }
+        else if (/^\d+$/.test(id.trim())) id = id.trim();
+    }
+    id = Number(id);
+    if (!Number.isInteger(id) || id <= 0) return [];
+    if (type === 'episode') type = 'memory';
+    const getMem = () => db.prepare("SELECT id, content, 'memory' AS source_table FROM memories WHERE id = ?").get(id);
+    const getFrag = () => db.prepare("SELECT id, content, 'fragment' AS source_table FROM memory_fragments WHERE id = ?").get(id);
+    if (type === 'memory') return [getMem()].filter(Boolean);
+    if (type === 'fragment') return [getFrag()].filter(Boolean);
+    return [getMem(), getFrag()].filter(Boolean);
+}
+
+async function processChatCorrection({ wrongStatement, correction, memoryId, memoryType, chatId }) {
     // 引數護欄：缺引數時直接把話說回去。否則下面的 wrongStatement.slice 會拋
     // TypeError，工具結果喂不回上下文，表現為{{ai.name}}「說完就沉默」。
     if (!wrongStatement || !correction) {
@@ -248,13 +272,7 @@ async function processChatCorrection({ wrongStatement, correction, memoryId, cha
     // 1. 收集候選記憶
     // 1a. 傳了 memoryId → 查 DB
     if (memoryId) {
-        let record = db.prepare('SELECT id, content, \'memory\' AS source_table FROM memories WHERE id = ?').get(memoryId);
-        if (!record) {
-            record = db.prepare('SELECT id, content, \'fragment\' AS source_table FROM memory_fragments WHERE id = ?').get(memoryId);
-        }
-        if (record) {
-            candidates.push(record);
-        }
+        candidates.push(...resolveMemoryRefs(db, memoryId, memoryType));
     }
 
     // 1b. 工作記憶池
@@ -309,8 +327,22 @@ async function processChatCorrection({ wrongStatement, correction, memoryId, cha
     const judgment = await judgeCorrectionSource(wrongStatement, correction, candidates);
     console.log(`[Correction] 判斷結果: matched=${judgment.matched} id=${judgment.memory_id} ${judgment.explanation}`);
 
+    // 只接受候選清單內的 id：LLM 編造或指向不存在的 id 一律走幻聽路徑。
+    // source_table 有給就必須與候選吻合；沒給則以 id 唯一比對候選（撞號無法判定 → 幻聽）。
+    let matchedCand = null;
     if (judgment.matched && judgment.memory_id) {
-        const sourceTable = judgment.source_table === 'memory' ? 'memory' : 'fragment';
+        const same = candidates.filter(c => String(c.id) === String(judgment.memory_id));
+        if (judgment.source_table === 'memory' || judgment.source_table === 'fragment') {
+            matchedCand = same.find(c => c.source_table === judgment.source_table) || null;
+        } else if (same.length === 1) {
+            matchedCand = same[0];
+        }
+        if (!matchedCand) console.warn(`[Correction] LLM 回傳的 memory_id=${judgment.memory_id}(${judgment.source_table}) 不在候選清單內，按幻聽處理`);
+    }
+
+    if (matchedCand) {
+        const sourceTable = matchedCand.source_table;
+        judgment.memory_id = matchedCand.id;
         if (sourceTable === 'fragment') {
             db.prepare(`UPDATE memory_fragments SET status = 'cooling', lifecycle_updated_at = datetime('now') WHERE id = ?`).run(judgment.memory_id);
         } else {

@@ -117,6 +117,19 @@ describe('getActiveCorrections / 合併門檻', () => {
         assert.equal(setting.guidelines[0], 'w0 → c0');
     });
 
+    test('mergeGuidelines：LLM 呼叫期間新進的修正不被誤標 merged（只標送進 LLM 的那批）', async () => {
+        for (let i = 0; i < 10; i++) db.prepare("INSERT INTO correction_log (target_type, wrong_summary, correct_summary, source, status) VALUES ('hallucination', ?, 'c', 'manual', 'active')").run(`w${i}`);
+        llmImpl = async () => {
+            db.prepare("INSERT INTO correction_log (target_type, wrong_summary, correct_summary, source, status) VALUES ('hallucination', '中途新進', 'c', 'manual', 'active')").run();
+            return { reply: '{"guidelines":["g"]}' };
+        };
+        await cor.mergeGuidelines();
+        assert.equal(rows('correction_log', "WHERE status='merged'").length, 10);
+        const active = rows('correction_log', "WHERE status='active'");
+        assert.equal(active.length, 1);
+        assert.equal(active[0].wrong_summary, '中途新進');
+    });
+
     test('mergeGuidelines 直接呼叫：不足 10 條 → null 且不呼叫 LLM', async () => {
         for (let i = 0; i < 3; i++) cor.recordCorrection({ targetType: 'hallucination', wrongSummary: 'w', correctSummary: 'c' });
         assert.equal(await cor.mergeGuidelines(), null);
@@ -171,17 +184,18 @@ describe('processChatCorrection', () => {
         assert.equal(rows('correction_log').length, 1);
     });
 
-    test('來自已存記憶（fragment，經 memoryId 取得候選）：記 target=fragment，寫入修正碎片；現況：來源碎片最終是 consolidated 而非 cooling', async () => {
+    test('來自已存記憶（fragment，經 memoryId 取得候選）：記 target=fragment，寫入修正碎片；來源碎片維持 cooling（與回覆「已標記為降溫」一致）', async () => {
         const src = addFrag('你養了貓');
         llmImpl = judged({ matched: true, memory_id: src, source_table: 'fragment', corrected_content: '他沒有養貓', explanation: '來自碎片' });
         // memoryId 先查 memories 表；用不會撞號的做法：此測試 memories 表為空
         const r = await cor.processChatCorrection({ wrongStatement: '你養了貓', correction: '我沒有養貓', memoryId: src, chatId: 7 });
         assert.equal(r.success, true);
         assert.match(r.formatted, new RegExp(`#${src}`));
-        // 步驟 1：correction.js 先把來源設為 cooling；步驟 2：recordCorrection(target=fragment) 又覆蓋成 consolidated
+        // correction.js 把來源設為 cooling；recordCorrection(target=fragment) 不可再蓋成 consolidated
         const s = db.prepare('SELECT status, lifecycle_updated_at FROM memory_fragments WHERE id=?').get(src);
-        assert.equal(s.status, 'consolidated');
-        assert.ok(s.lifecycle_updated_at, 'cooling 那一步有寫 lifecycle_updated_at，之後沒被清掉');
+        assert.equal(s.status, 'cooling');
+        assert.match(r.formatted, /降溫/);
+        assert.ok(s.lifecycle_updated_at);
         const fixed = rows('memory_fragments', 'WHERE id != ' + src)[0];
         assert.equal(fixed.content, '他沒有養貓');
         assert.equal(fixed.type, 'correction');
@@ -206,13 +220,56 @@ describe('processChatCorrection', () => {
         assert.match(r.formatted, /內容有誤/);   // explanation 為空時的預設文字
     });
 
-    test('memoryId 同時存在於 memories 與 fragments 時，現況優先取 memories', async () => {
+    test('memoryId 同時存在於 memories 與 fragments 且未指定型別 → 兩筆都列為候選', async () => {
         const f = addFrag('碎片內容');
         const m = addMem();
         assert.equal(f, m); // 兩張表 id 皆從 1 起算
-        llmImpl = async (msgs) => { assert.match(msgs[0].parts[0].text, /source_table=memory/); return { reply: '{"matched":false}' }; };
+        llmImpl = async () => ({ reply: '{"matched":false}' });
         await cor.processChatCorrection({ wrongStatement: 'w', correction: 'c', memoryId: m });
-        assert.equal(llmCalls.length, 1);
+        const prompt = llmCalls[0][0][0].parts[0].text;
+        assert.match(prompt, /id=1 source_table=memory/);
+        assert.match(prompt, /id=1 source_table=fragment/);
+    });
+
+    test('memoryType 明確指定時只取該表（fragment / episode），撞號不再指錯', async () => {
+        addFrag('碎片內容'); addMem();
+        llmImpl = async () => ({ reply: '{"matched":false}' });
+        await cor.processChatCorrection({ wrongStatement: 'w', correction: 'c', memoryId: 1, memoryType: 'fragment' });
+        let prompt = llmCalls[0][0][0].parts[0].text;
+        assert.match(prompt, /source_table=fragment/);
+        assert.doesNotMatch(prompt, /source_table=memory/);
+        await cor.processChatCorrection({ wrongStatement: 'w', correction: 'c', memoryId: 1, memoryType: 'episode' });
+        prompt = llmCalls[1][0][0].parts[0].text;
+        assert.match(prompt, /source_table=memory/);
+        assert.doesNotMatch(prompt, /source_table=fragment/);
+    });
+
+    test('memoryId 可帶前綴（fragment_1 / memory_1 / episode_1），前綴優先於缺省行為', async () => {
+        addFrag('碎片內容'); addMem();
+        llmImpl = async () => ({ reply: '{"matched":false}' });
+        await cor.processChatCorrection({ wrongStatement: 'w', correction: 'c', memoryId: 'fragment_1' });
+        const p1 = llmCalls[0][0][0].parts[0].text;
+        assert.match(p1, /source_table=fragment/); assert.doesNotMatch(p1, /source_table=memory/);
+        await cor.processChatCorrection({ wrongStatement: 'w', correction: 'c', memoryId: 'episode_1' });
+        const p2 = llmCalls[1][0][0].parts[0].text;
+        assert.match(p2, /source_table=memory/); assert.doesNotMatch(p2, /source_table=fragment/);
+    });
+
+    test('撞號時 LLM 回 source_table=fragment → 修的是碎片，不動同號的 memory', async () => {
+        addFrag('碎片內容'); const m = addMem(5);
+        llmImpl = judged({ matched: true, memory_id: 1, source_table: 'fragment', corrected_content: 'x' });
+        await cor.processChatCorrection({ wrongStatement: 'w', correction: 'c', memoryId: 1 });
+        assert.equal(db.prepare('SELECT status FROM memory_fragments WHERE id=1').get().status, 'cooling');
+        const row = db.prepare('SELECT layer, weight FROM memories WHERE id=?').get(m);
+        assert.notEqual(row.layer, 'cooling');
+        assert.equal(row.weight, 5);
+    });
+
+    test('LLM 沒給 source_table 且兩表撞號無法判定 → 按幻聽處理', async () => {
+        addFrag('碎片內容'); addMem();
+        llmImpl = judged({ matched: true, memory_id: 1, source_table: null, corrected_content: 'x' });
+        await cor.processChatCorrection({ wrongStatement: 'w', correction: 'c', memoryId: 1 });
+        assert.equal(rows('correction_log')[0].target_type, 'hallucination');
     });
 
     test('候選也來自工作記憶池與向量搜尋（去重），一併交給 LLM', async () => {
@@ -263,14 +320,17 @@ describe('processChatCorrection', () => {
         assert.match(r.formatted, /解析失敗，按幻聽處理/);
     });
 
-    test('現況：LLM 回傳的 memory_id 不在候選內也照做（不驗證），對不存在的 id 記 target 並 success', async () => {
-        addFrag('候選');
-        llmImpl = judged({ matched: true, memory_id: 999, source_table: 'fragment', corrected_content: 'x', explanation: '亂編' });
-        const r = await cor.processChatCorrection({ wrongStatement: 'w', correction: 'c', memoryId: 1 });
-        assert.equal(r.success, true);
-        const log = rows('correction_log')[0];
-        assert.equal(log.target_type, 'fragment');
-        assert.equal(log.target_id, 999);
+    test('LLM 回傳的 memory_id 不在候選內 → 走幻聽路徑，不對該 id 動手、target 不記假 id', async () => {
+        const c = addFrag('候選');
+        const other = addFrag('存在但不是候選');
+        for (const bad of [999, other]) {
+            llmImpl = judged({ matched: true, memory_id: bad, source_table: 'fragment', corrected_content: 'x', explanation: '亂編' });
+            const r = await cor.processChatCorrection({ wrongStatement: 'w', correction: 'c', memoryId: c });
+            assert.equal(r.success, true);
+            assert.match(r.formatted, /編造或混淆/);
+        }
+        assert.ok(rows('correction_log').every(l => l.target_type === 'hallucination' && l.target_id === null));
+        assert.equal(db.prepare('SELECT status FROM memory_fragments WHERE id=?').get(other).status, 'active');
     });
 
     test('source_table 非 memory 一律當 fragment（含 null）', async () => {

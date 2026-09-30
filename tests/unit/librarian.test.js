@@ -234,6 +234,49 @@ describe('lookupEntityIds / getEntityFragments', () => {
 });
 
 // ─────────────────────────────────────────────
+describe('daysAgo：DB 的 UTC 時間字串', () => {
+    const pad = (n) => String(n).padStart(2, '0');
+    const dbStr = (ms) => { const d = new Date(ms); return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`; };
+    test('datetime("now") 格式在非 UTC 時區（UTC+8）也以 UTC 解析：1 天前 ≈ 1 天', () => {
+        const oldTz = process.env.TZ;
+        process.env.TZ = 'Asia/Taipei';
+        try {
+            const d = lib.daysAgo(dbStr(Date.now() - DAY));
+            assert.ok(Math.abs(d - 1) < 0.01, `got ${d}`);
+            assert.ok(Math.abs(lib.daysAgo(dbStr(Date.now())) - 0) < 0.01);
+        } finally {
+            if (oldTz === undefined) delete process.env.TZ; else process.env.TZ = oldTz;
+        }
+    });
+    test('ISO（帶 Z）、純日期、空值、亂碼維持原行為', () => {
+        assert.ok(Math.abs(lib.daysAgo(iso(2)) - 2) < 0.01);
+        assert.equal(lib.daysAgo(null), 365);
+        assert.equal(lib.daysAgo('不是日期'), 365);
+        assert.ok(lib.daysAgo('2020-01-01') > 365);
+    });
+});
+
+describe('searchHybrid：隨機浮現', () => {
+    test('三路皆無候選也照規則浮現：注入 random<0.4 → 撈出 >3 天未讀的舊碎片', async () => {
+        const old = addFrag({ content: '很久以前的事', daysAgo: 10 });
+        addFrag({ content: '已讀過', daysAgo: 10, readCount: 3 });
+        const r = await lib.searchHybrid('沒有匹配的zzz', 6, { random: () => 0.1 });
+        assert.deepEqual(r.map(x => x.id), [old]);
+        assert.equal(r[0]._isFloated, true);
+        assert.equal(r[0]._source, 'FLOAT');
+    });
+    test('隨機數超過門檻（>=0.4）→ 無候選時仍回 []', async () => {
+        addFrag({ content: '很久以前的事', daysAgo: 10 });
+        assert.deepEqual(await lib.searchHybrid('沒有匹配的zzz', 6, { random: () => 0.5 }), []);
+    });
+    test('結果已有 3 條以上就不浮現', async () => {
+        for (let i = 0; i < 3; i++) addFrag({ content: `蘋果 ${i}`, ew: 0.9, daysAgo: 0.5 });
+        addFrag({ content: '舊事', daysAgo: 10 });
+        const r = await lib.searchHybrid('蘋果', 6, { random: () => 0.1 });
+        assert.ok(r.every(x => !x._isFloated));
+    });
+});
+
 describe('searchHybrid：RRF 與 combined 分數', () => {
     test('空查詢 → []', async () => assert.deepEqual(await lib.searchHybrid('  '), []));
 
@@ -392,14 +435,17 @@ describe('searchHybrid：RRF 與 combined 分數', () => {
         for (let i = 1; i < r.length; i++) assert.ok(r[i - 1]._rrf >= r[i]._rrf);
     });
 
-    test('沒有任何 FTS5／向量／實體候選 → 直接回 []，不會走隨機浮現（即使 random<0.4）', async () => {
-        addFrag({ content: '完全無關的舊事', daysAgo: 30, readCount: 0 });
+    test('沒有任何 FTS5／向量／實體候選：random<0.4 時照規則浮現（Math.random 亦可）；random>=0.4 則回 []', async () => {
+        const old = addFrag({ content: '完全無關的舊事', daysAgo: 30, readCount: 0 });
         Math.random = () => 0.1;
         try {
-            assert.deepEqual(await lib.searchHybrid('沒有匹配的zzz'), []);
+            const r = await lib.searchHybrid('沒有匹配的zzz');
+            assert.deepEqual(r.map(x => x.id), [old]);
+            assert.equal(r[0]._isFloated, true);
         } finally {
             Math.random = () => 0.99;
         }
+        assert.deepEqual(await lib.searchHybrid('沒有匹配的zzz'), []);
     });
 
     test('隨機浮現：有候選但被分數底線濾光（結果 <3）且 random<0.4 → 補入從未被讀過、>3 天的舊碎片（FLOAT、_rrf=0.002）', async () => {

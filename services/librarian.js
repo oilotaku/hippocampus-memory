@@ -71,10 +71,20 @@ function noveltyPenalty(readCount) {
   return 1 / (1 + Math.log10(readCount + 1));
 }
 
+// DB 的 datetime('now') 字串（'YYYY-MM-DD HH:MM:SS'，無時區）是 UTC；
+// 直接 new Date() 會被當本地時間，非 UTC 時區天數偏差。無時區標記者一律補 Z 以 UTC 解析。
+function parseDbTime(label) {
+  if (typeof label === 'string') {
+    const m = label.trim().match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)$/);
+    if (m) return new Date(`${m[1]}T${m[2]}Z`);
+  }
+  return new Date(label);
+}
+
 function daysAgo(dateLabel) {
   if (!dateLabel) return 365;
   try {
-    const d = new Date(dateLabel);
+    const d = parseDbTime(dateLabel);
     if (isNaN(d.getTime())) return 365;
     return Math.max(0, (Date.now() - d.getTime()) / (1000 * 60 * 60 * 24));
   } catch { return 365; }
@@ -325,7 +335,9 @@ function formatForContext(fragments) {
 // 混合檢索：FTS5（關鍵詞）+ 向量（語義），RRF 融合
 // =================================================================
 
-async function searchHybrid(userMessage, limit = 6) {
+// opts.random：隨機浮現的亂數來源（預設 Math.random，測試可注入）
+async function searchHybrid(userMessage, limit = 6, opts = {}) {
+  const random = typeof opts.random === 'function' ? opts.random : Math.random;
   if (!userMessage || userMessage.trim().length === 0) return [];
 
   // 話題工作記憶 Boost
@@ -449,10 +461,10 @@ async function searchHybrid(userMessage, limit = 6) {
     }
   });
 
-  // 如果沒有任何結果通過質量關卡，返回空（YantrikDB思路——寧可空返回）
+  // 沒有任何候選時不提前返回：後面的排序/過濾對空集合自然得到 []，
+  // 「檢索結果太少（含 0 條）時偶爾隨機浮現」仍要照規則執行（結果 <3 條且機率門檻）。
   if (rrfScores.size === 0) {
-    console.log('Hybrid: 無結果通過質量關卡，返回空');
-    return [];
+    console.log('Hybrid: 無候選結果通過質量關卡（仍會依規則嘗試隨機浮現）');
   }
 
   // 按 RRF 分數降序排列
@@ -511,7 +523,7 @@ async function searchHybrid(userMessage, limit = 6) {
 
   // 隨機浮現（Ombre Brain 啟發）：檢索結果太少時，偶爾「突然想起」無關的舊事
   // 讓從未被召回過的記憶也有機會浮出水面，模擬真人沒來由的聯想
-  if (finalResults.length < 3 && Math.random() < 0.4) {
+  if (finalResults.length < 3 && random() < 0.4) {
     try {
       const db = getDb();
       const floatCount = Math.min(3 - finalResults.length, 3);
@@ -703,4 +715,4 @@ function formatHybridContext(fragments) {
   return output.join('\n');
 }
 
-module.exports = { tokenizeCJK, searchFragments, formatForContext, searchHybrid, formatHybridContext, classifyIntent, lookupEntityIds, getEntityFragments };
+module.exports = { daysAgo, tokenizeCJK, searchFragments, formatForContext, searchHybrid, formatHybridContext, classifyIntent, lookupEntityIds, getEntityFragments };

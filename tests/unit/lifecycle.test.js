@@ -126,12 +126,12 @@ describe('runFragmentGC：碎片生命週期', () => {
 });
 
 describe('runEpisodeDecay：episode 衰減', () => {
-    test('標準 episode：>180 天未存取且未更新 → mature，weight 整數除以 2（下限 1）；現況：5 → 2（SQLite 整數除法，無 2.5）', async () => {
+    test('標準 episode：>180 天未存取且未更新 → mature，weight 減半（浮點除法，下限 1）：5 → 2.5', async () => {
         const a = mem({ weight: 5, updatedDaysAgo: 181 });
         const b = mem({ weight: 1, updatedDaysAgo: 181 });
         const stats = await lc.runEpisodeDecay();
         assert.equal(getM(a).status, 'mature');
-        assert.equal(getM(a).weight, 2);
+        assert.equal(getM(a).weight, 2.5);
         assert.equal(getM(b).weight, 1);
         assert.equal(stats.matured, 2);
     });
@@ -217,7 +217,7 @@ describe('recalculateMemoryWeights：每日權重重算（範圍 2–8）', () =
         lc.recalculateMemoryWeights();
         assert.equal(w(id), 2);
     });
-    test('現況：上限 8 在實際輸入下打不到（最高 7），但 SQL 內有 clamp', () => {
+    test('上限 8 是保護性 clamp：實際輸入最高只到 7（5+2），公式不改', () => {
         const id = memSql({ createdDays: 0, accessedDays: 1 });
         lc.recalculateMemoryWeights();
         assert.equal(w(id), 7);

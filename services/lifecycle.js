@@ -137,9 +137,11 @@ async function runEpisodeDecay() {
 
     const toMature = [...toMatureStandard, ...toMatureFlash];
 
+    // 「權重減半」用 2.0 做浮點除法（INTEGER 欄位遇到非整數會保留 REAL，correction 的 ×0.3 也是如此）；
+    // 原本 weight / 2 是 SQLite 整數除法，5 會變 2 而不是 2.5。
     for (const m of toMature) {
         db.prepare(`
-            UPDATE memories SET status = 'mature', weight = MAX(1, weight / 2), updated_at = ?
+            UPDATE memories SET status = 'mature', weight = MAX(1, weight / 2.0), updated_at = ?
             WHERE id = ?
         `).run(now, m.id);
     }
@@ -455,6 +457,8 @@ function recalculateMemoryWeights() {
     const db = getDb();
 
     // memories: 時間衰減 (-0.5/30天) + 訪問加成 (7天內+2, 30天內+1), clamp[2,8]
+    // 註：以目前公式輸入最高只到 5+2=7，上限 8 實際碰不到；它是保護性 clamp
+    //（日後調高基準或加成時不會超出 weight 的合法範圍），刻意保留、不改公式。
     const memResult = db.prepare(`
         UPDATE memories SET weight = CASE
             WHEN 5

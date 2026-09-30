@@ -419,6 +419,14 @@ const correctMemory = {
             type: 'STRING',
             description: `${USER.name}給出的正確版本`,
           },
+          memory_id: {
+            type: 'STRING',
+            description: '（選填）已知錯誤來源的記憶 ID，可帶前綴如 memory_5 / fragment_12 以明確指定型別。',
+          },
+          memory_type: {
+            type: 'STRING',
+            description: '（選填）memory_id 的型別：episode（記憶）或 fragment（碎片）。未指定且兩表都有該 ID 時，兩筆都會列為候選。',
+          },
         },
         required: ['wrong_statement', 'correction'],
       },
@@ -430,6 +438,7 @@ const correctMemory = {
       wrongStatement: args.wrong_statement,
       correction: args.correction,
       memoryId: args.memory_id || null,
+      memoryType: args.memory_type || null,
       chatId: context.chatId,
     });
   },
