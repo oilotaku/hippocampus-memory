@@ -22,7 +22,7 @@ async function extractFragmentInsights(batchSize = INSIGHT_BATCH_MAX) {
         WHERE mf.insight IS NULL
           AND mf.status = 'active'
           AND mf.content IS NOT NULL
-          AND length(mf.content) > 10
+          AND mem_len('memory_fragments:content', mf.content) > 10
         ORDER BY mf.created_at DESC
         LIMIT ?
     `).all(batchSize);

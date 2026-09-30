@@ -5,6 +5,7 @@ const { getDb } = require('../database');
 const { callLLM } = require('./llm');
 const { fillPrompt, USER, AI } = require('./nameResolver');
 const { encryption } = require('../encryption');
+const { sealField } = require('./memoryCrypto');
 const { resolveEntityIds } = require('./entityResolver');
 // 纠正反馈模块是可选的——如果不存在则返回空
 let getActiveCorrections, getMergedGuidelines;
@@ -868,7 +869,7 @@ async function runScribe(messages, since) {
             if (hashDup) {
                 hashDedupCount++;
                 if (hashDup.source_msg_ids !== sourceMsgIds) {  // 同一批消息重跑不算新证据
-                    bumpStmt.run(String(entry.quote || '').trim(), hashDup.id);
+                    bumpStmt.run(sealField('memory_fragments', 'quote', String(entry.quote || '').trim()), hashDup.id);
                     evidenceMerged++;
                 }
                 console.log(`[Scribe] 去重: "${String(entry.content).slice(0, 40)}" = 既有片段 #${hashDup.id}，证据+1`);
@@ -879,7 +880,7 @@ async function runScribe(messages, since) {
             const info = insert.run(
                 entry.type || 'observation',
                 primaryEntity,
-                entry.content,
+                sealField('memory_fragments', 'content', entry.content),
                 entry.emotional_weight ?? 0.3,
                 fragmentSource,
                 sourceDate,
@@ -889,7 +890,7 @@ async function runScribe(messages, since) {
                 valueTags,
                 priority,
                 contentHash,
-                String(entry.quote || '').trim()
+                sealField('memory_fragments', 'quote', String(entry.quote || '').trim())
             );
             const fragId = info.lastInsertRowid;
             newFragmentIds.push(fragId);

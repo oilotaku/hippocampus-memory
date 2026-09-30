@@ -6,7 +6,7 @@
 // 「db is not defined」、classify 的 SQL 語法錯）——那些是既有行為，不是這次要修的。
 const { test, describe, before, after } = require('node:test');
 const assert = require('node:assert/strict');
-const { setupEnv, cleanupDb } = require('./_helpers');
+const { setupEnv, cleanupDb, rawMemoryPlaintext } = require('./_helpers');
 const { captureConsole, llmRecord, dumpTables, checkFingerprint, normValue, hash } = require('./_fingerprint');
 
 const dbPath = setupEnv('archivist-char');
@@ -34,6 +34,10 @@ before(() => {
 });
 after(() => { try { a.stop(); } catch (_) {} restore(); cleanupDb(dbPath); });
 
+// W3：播種經 sealField（MEMORY_ENCRYPTION=on 時存密文），模擬真實加密庫；
+// 指紋由 dumpTables 經透明解密層取得，所以與加密前錄的指紋相同 = 差異只來自加密。
+const seal = (t, c, v) => require('../../services/memoryCrypto').sealField(t, c, v);
+
 function seed() {
     const ins = db.prepare(`INSERT INTO entity_profiles (name, category, status, aliases, tags, fragment_count, relationship_to_user, current_status, created_at, updated_at, last_mentioned_date)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now', ?), datetime('now', ?), date('now', ?))`);
@@ -48,7 +52,7 @@ function seed() {
         ['三月', 'event', 'seed', '[]', '[]', 1, null, null, '-8 days', '-8 days', '-8 days'],
         ['冬季', 'event', 'seed', '[]', '[]', 1, null, null, '-8 days', '-8 days', '-8 days'],
     ];
-    for (const r of rows) ent[r[0]] = Number(ins.run(...r).lastInsertRowid);
+    for (const r of rows) ent[r[0]] = Number(ins.run(...r.slice(0, 7), seal('entity_profiles', 'current_status', r[7]), ...r.slice(8)).lastInsertRowid);
 
     const frag = db.prepare(`INSERT INTO memory_fragments (type, entity, content, emotional_weight, created_at, source_msg_ids, value_tags, source_date)
         VALUES (?, ?, ?, ?, datetime('now', ?), ?, ?, date('now', ?))`);
@@ -65,14 +69,15 @@ function seed() {
         ['f8', 'event', USER.name, '三月的時候天氣很冷', 0.2, '-7 days', '[9]', '[]', () => {}],
     ];
     for (const [k, type, entity, content, ew, ago, msgs, tags, links] of frs) {
-        const id = Number(frag.run(type, entity, content, ew, ago, msgs, tags, ago).lastInsertRowid);
+        const id = Number(frag.run(type, entity, seal('memory_fragments', 'content', content), ew, ago, msgs, tags, ago).lastInsertRowid);
         fr[k] = id;
         links((eid, rel) => link.run(id, eid, rel, 0.8, 'test_seed'));
     }
     db.prepare("INSERT OR IGNORE INTO chats (id, name) VALUES (1, 'w7')").run();
     const msg = db.prepare(`INSERT INTO messages (chat_id, sender, content, timestamp, is_encrypted) VALUES (1, ?, ?, datetime('now', ?), 0)`);
     for (let i = 0; i < 12; i++) msg.run(i % 2 ? 'ai' : 'user', `第${i}句：今天和阿明吃拉麵，聊了很多工作的事`, `-${2 + i} days`);
-    db.prepare(`INSERT INTO memories (title, content, tags, weight, status, entity_id, created_at) VALUES ('拉麵宵夜', '和阿明吃一蘭', '[]', 5, 'permanent', ?, datetime('now','-1 days'))`).run(ent['阿明']);
+    db.prepare(`INSERT INTO memories (title, content, tags, weight, status, entity_id, created_at) VALUES (?, ?, '[]', 5, 'permanent', ?, datetime('now','-1 days'))`)
+        .run(seal('memories', 'title', '拉麵宵夜'), seal('memories', 'content', '和阿明吃一蘭'), ent['阿明']);
     db.prepare(`INSERT INTO user_patterns (content, category, evidence_count, first_seen, last_seen, confidence) VALUES ('壓力大時會吃拉麵', 'behavior', 3, datetime('now','-20 days'), datetime('now','-3 days'), 0.5)`).run();
     return { ent, fr };
 }
@@ -224,5 +229,6 @@ describe('archivist 固定情境指紋（拆分前後必須完全相同）', () 
             'memory_fragments', 'memories', 'entity_timeline', 'user_patterns', 'user_model', 'ontology_changelog',
             'user_settings', 'archivist_skills', 'memory_sagas']);
         checkFingerprint('archivist_scenario', fp);
+        if (require('../../services/memoryCrypto').isEnabled()) assert.deepEqual(rawMemoryPlaintext(db), [], 'W3：記憶本體欄位不應有明文');
     });
 });

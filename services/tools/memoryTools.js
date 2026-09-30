@@ -268,7 +268,9 @@ ${USER.name} 想看当时的原话、或要你复述细节 → include_source=tr
         return true;
       }), 'ENTITY');
     } else if (dateFrom) {
-      const dateSql = args.query ? 'AND (content LIKE ? OR content LIKE ?)' : '';
+      // W3：content／title 可能是密文，SQL 的 LIKE 看不到明文 → 用 mem_like（JS 端解密后比对，语义同 LIKE）
+      const fragDateSql = args.query ? "AND (mem_like('memory_fragments:content', mf.content, ?) OR mem_like('memory_fragments:content', mf.content, ?))" : '';
+      const epDateSql = args.query ? "AND (mem_like('memories:title', m.title, ?) OR mem_like('memories:title', m.title, ?))" : '';
       const dateParams = args.query ? [`%${args.query}%`, `%${args.query}%`] : [];
 
       // 记忆碎片
@@ -278,7 +280,7 @@ ${USER.name} 想看当时的原话、或要你复述细节 → include_source=tr
         FROM memory_fragments mf
         WHERE mf.source_date >= ? AND mf.source_date <= ?
           AND mf.status = 'active'
-          ${dateSql}
+          ${fragDateSql}
         ORDER BY mf.source_date DESC, mf.emotional_weight DESC
         LIMIT 15
       `).all(dateFrom, dateTo, ...dateParams);
@@ -291,7 +293,7 @@ ${USER.name} 想看当时的原话、或要你复述细节 → include_source=tr
         FROM memories m
         WHERE m.valid_from >= ? AND m.valid_from <= ?
           AND m.layer = 'episode' AND m.status = 'permanent'
-          ${dateSql ? dateSql.replace(/content/g, 'm.title') : ''}
+          ${epDateSql}
         ORDER BY m.valid_from DESC
         LIMIT 10
       `).all(dateFrom, dateTo, ...dateParams);

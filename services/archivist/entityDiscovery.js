@@ -160,7 +160,7 @@ async function scanContentForNewEntities() {
     for (const [name, info] of sorted) {
         const contextFrags = db.prepare(`
             SELECT content FROM memory_fragments
-            WHERE status = 'active' AND content LIKE ?
+            WHERE status = 'active' AND mem_like('memory_fragments:content', content, ?)
             ORDER BY id DESC LIMIT 5
         `).all(`%${name}%`);
 
@@ -356,7 +356,7 @@ async function discoverEntityRelationships(options = {}) {
             if (cand.discoveryMethod === 'content_scan') {
                 fragments = db.prepare(`
                     SELECT id, content, source_date FROM memory_fragments
-                    WHERE status = 'active' AND content LIKE ?
+                    WHERE status = 'active' AND mem_like('memory_fragments:content', content, ?)
                     ORDER BY source_date
                 `).all(`%${cand.name}%`);
             } else if (cand.isNew) {

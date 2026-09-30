@@ -4,6 +4,7 @@
 // =================================================================
 
 const { getDb } = require('../../database');
+const { sealField } = require('../memoryCrypto');
 const { callLLM } = require('../llm');
 const { USER } = require('../memoryConfig');
 const { ARCHIVIST_LLM_CONFIG_ID } = require('./constants');
@@ -99,7 +100,7 @@ async function generateDailyEntityStatus(targetDate) {
         const oldLines = lines.filter(l => !l.startsWith(datePrefix));
         const newStatus = [noChangeLine, ...oldLines.slice(0, DAILY_STATUS_MAX_LINES - 1)].join('\n');
         db.prepare(`UPDATE entity_profiles SET current_status = ?, updated_at = datetime('now') WHERE id = ?`)
-            .run(newStatus, ent.id);
+            .run(sealField('entity_profiles', 'current_status', newStatus), ent.id);
         console.log('[DailyStatus] 无明显变化');
         return { updated: 1 };
     }
@@ -187,7 +188,7 @@ ${examplesBlock}
         const newStatus = [statusText, ...oldLines.slice(0, DAILY_STATUS_MAX_LINES - 1)].join('\n');
 
         db.prepare(`UPDATE entity_profiles SET current_status = ?, updated_at = datetime('now') WHERE id = ?`)
-            .run(newStatus, ent.id);
+            .run(sealField('entity_profiles', 'current_status', newStatus), ent.id);
         console.log(`[DailyStatus] ${statusText.slice(0, 100)}`);
         return { updated: 1 };
     } catch (e) {

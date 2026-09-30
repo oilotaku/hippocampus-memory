@@ -11,6 +11,7 @@
 // 与 recall_memory / browse_memories 共享同一个设置开关
 
 const { getDb } = require('../../database');
+const { sealField } = require('../memoryCrypto');
 const { sqlNow, sqlTimeAhead, DAY_MS } = require('../../utils/time');
 
 const SETTINGS_KEY = 'tool-memory-search-enabled';
@@ -284,7 +285,7 @@ const manageUserState = {
                 }
 
                 db.prepare(`UPDATE entity_profiles SET facts = ?, overview_updated_at = datetime('now'),
-                    updated_at = datetime('now') WHERE id = ?`).run(newOverview, entity.id);
+                    updated_at = datetime('now') WHERE id = ?`).run(sealField('entity_profiles', 'facts', newOverview), entity.id);
                 db.prepare(`INSERT INTO ontology_changelog (action, category_path, detail, confidence, status)
                     VALUES ('overview_updated', ?, ?, 0.90, 'completed')`)
                     .run(entity.name, JSON.stringify({name: entity.name, updated_by: 'chat_companion', reason: 'Companion在聊天中了解到新情况'}));

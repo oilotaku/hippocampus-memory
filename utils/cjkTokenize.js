@@ -25,6 +25,25 @@ function toIndexTokens(text) {
     return s.replace(CJK_RUN_RE, run => ' ' + bigrams(run).join(' ') + ' ').toLowerCase();
 }
 
+// 索引用（token 陣列版）：与 toIndexTokens 的输出再经 FTS5 unicode61 断词后的结果一致
+// （CJK 两字组 + 非 CJK 词转小写），保留重复与出现顺序（bm25 需要词频）。
+// 盲索引（utils/blindIndex.js）用它逐个 token 做 HMAC；查询侧仍用 toQueryTokens，两边切法相同。
+function toIndexTokenList(text) {
+    if (text === null || text === undefined) return [];
+    const s = String(text);
+    if (!s) return [];
+    const out = [];
+    let last = 0;
+    const words = (seg) => { for (const w of seg.toLowerCase().match(WORD_RE) || []) out.push(w); };
+    for (const m of s.matchAll(CJK_RUN_RE)) {
+        words(s.slice(last, m.index));
+        out.push(...bigrams(m[0]));
+        last = m.index + m[0].length;
+    }
+    words(s.slice(last));
+    return out;
+}
+
 // 查询用：文本 → token 陣列（去重、保序）
 // opts.stopChars: Set，整个 token 由停用字组成时丢弃（单字停用字、或两字都是停用字的 bigram）
 // opts.minWordLen: 非 CJK 词的最短长度（预设 1）
@@ -61,4 +80,4 @@ function toMatchQuery(text, opts = {}) {
     return tokens.map(t => `"${t.replace(/"/g, '""')}"`).join(' OR ');
 }
 
-module.exports = { toIndexTokens, toQueryTokens, toMatchQuery };
+module.exports = { toIndexTokens, toIndexTokenList, toQueryTokens, toMatchQuery };

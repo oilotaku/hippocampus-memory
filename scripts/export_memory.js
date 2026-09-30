@@ -42,6 +42,7 @@ function main() {
     console.log(`   输出文件: ${outFile}`);
     for (const t of TABLES) console.log(`   ${t}: ${counts[t]} 条`);
     console.log(`   合计: ${total} 条记录`);
+    console.log('⚠️  导出档是**明文**（加密栏位已由透明解密层还原，方便换金钥／换机器导入），请妥善保管，用完删除。');
     console.log('\n迁移到新机器后，用 `node scripts/import_memory.js ' + outFile + '` 导入。');
     process.exit(0);
 }

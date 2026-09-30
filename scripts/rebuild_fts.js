@@ -8,7 +8,10 @@
 //   2. 索引里的文本是 splitCJK 展开过的（中文按重叠两字组切），而 FTS5 自带的 'rebuild' 指令
 //      是拿内容表**原文**重新分词——跑一次，两字组索引整条失效，而且零报错。
 //
-// 所以本脚本不用 'rebuild' 指令，而是 DROP + CREATE + 按 splitCJK（两字组）回补，最后用 _docsize 验证。
+// 所以本脚本不用 'rebuild' 指令，而是 DROP + CREATE + 回补，最后用 _docsize 验证。
+// W3：回补与触发器都走 services/memoryCrypto.js——内容栏／标题栏依 MEMORY_ENCRYPTION 产生
+//     盲 token（on，HMAC 两字组，JS 端先解密）或明文两字组（off）；entity／tags 维持明文两字组。
+//     跑完会把索引指纹写进 memory_crypto_meta，下次启动不会再重建一次。
 //
 // 什么时候要跑：检索结果对不上、搜旧词还能命中已删的记忆、数据库损坏恢复之后。
 //
@@ -18,15 +21,12 @@
 
 require('dotenv').config();
 const { initDatabase, getDb } = require('../database');
-const { toIndexTokens } = require('../utils/cjkTokenize');
+const memoryCrypto = require('../services/memoryCrypto');
 
 const CHECK_ONLY = process.argv.includes('--check');
 
 initDatabase();
 const db = getDb();
-
-// 两字组切分（与 database.js 里注册的 splitCJK SQL 函数共用同一实作）
-const splitCJK = toIndexTokens;
 
 // ── 体检：用 _docsize 影子表，而不是 COUNT(*) ──
 function health() {
@@ -41,8 +41,11 @@ function health() {
     console.log(`  memories_fts 已索引 ${memIndexed} 条（源表 ${memTotal}）${memIndexed === memTotal ? ' ✅' : ' ❌ 不一致'}`);
     console.log(`  触发器 ${triggers} 个（应为 6）${triggers === 6 ? ' ✅' : ' ❌'}`);
     console.log('  （注：COUNT(*) 查 FTS 表会委托到内容表，量不到不一致——所以这里必须看 _docsize）');
+    const fp = memoryCrypto.getMeta(db, 'fts_index_fingerprint');
+    const fpOk = fp === memoryCrypto.indexFingerprint();
+    console.log(`  索引模式 ${memoryCrypto.isEnabled() ? 'on（盲索引）' : 'off（明文两字组）'}，指纹${fpOk ? '相符 ✅' : '不符 ❌（金钥或模式换过）'}`);
 
-    return fragIndexed === fragActive && memIndexed === memTotal && triggers === 6;
+    return fragIndexed === fragActive && memIndexed === memTotal && triggers === 6 && fpOk;
 }
 
 if (CHECK_ONLY) {
@@ -52,87 +55,29 @@ if (CHECK_ONLY) {
 }
 
 // ── 重建 ──
-console.log('开始重建 FTS 索引……\n');
+console.log(`开始重建 FTS 索引（模式 ${memoryCrypto.isEnabled() ? 'on：盲索引' : 'off：明文两字组'}）……\n`);
 
-// 1. 清掉旧的触发器和表
-db.exec(`
-    DROP TRIGGER IF EXISTS mf_fts_insert;
-    DROP TRIGGER IF EXISTS mf_fts_update;
-    DROP TRIGGER IF EXISTS mf_fts_delete;
-    DROP TRIGGER IF EXISTS memories_fts_insert;
-    DROP TRIGGER IF EXISTS memories_fts_update;
-    DROP TRIGGER IF EXISTS memories_fts_delete;
-    DROP TABLE IF EXISTS memory_fragments_fts;
-    DROP TABLE IF EXISTS memories_fts;
-`);
+memoryCrypto.withSecureDelete(db, () => db.transaction(() => {
+    // 1. 清掉旧的触发器和表（连同可能损坏的影子表）
+    memoryCrypto.dropTriggers(db);
+    db.exec(`
+        DROP TABLE IF EXISTS memory_fragments_fts;
+        DROP TABLE IF EXISTS memories_fts;
+        CREATE VIRTUAL TABLE memory_fragments_fts
+            USING fts5(content, entity, content='memory_fragments', content_rowid='id');
+        CREATE VIRTUAL TABLE memories_fts
+            USING fts5(title, tags_text);
+    `);
+    // 2. 回补两个 FTS 表（与触发器同一套 mem_fts／splitCJK）
+    memoryCrypto.rebuildFts(db);
+    // 3. 装回 6 个触发器 + 记索引指纹
+    memoryCrypto.installTriggers(db);
+    memoryCrypto.ensureMetaTable(db);
+    memoryCrypto.setMeta(db, 'fts_index_fingerprint', memoryCrypto.indexFingerprint());
+})());
 
-// 2. 建表
-db.exec(`
-    CREATE VIRTUAL TABLE memory_fragments_fts
-        USING fts5(content, entity, content='memory_fragments', content_rowid='id');
-    CREATE VIRTUAL TABLE memories_fts
-        USING fts5(title, tags_text);
-`);
-
-// 3. 回补 memory_fragments_fts（全部碎片 + CJK 两字组）
-const frags = db.prepare(
-    "SELECT id, content, COALESCE(entity, '') AS entity FROM memory_fragments"
-).all();
-const insFrag = db.prepare('INSERT INTO memory_fragments_fts(rowid, content, entity) VALUES (?, ?, ?)');
-db.transaction((rows) => {
-    for (const r of rows) insFrag.run(r.id, splitCJK(r.content), splitCJK(r.entity));
-})(frags);
-console.log(`  回补 memory_fragments_fts: ${frags.length} 条`);
-
-// 4. 回补 memories_fts（title + tags 展开，与触发器逻辑一致）
-const mems = db.prepare("SELECT id, COALESCE(title, '') AS title, COALESCE(tags, '') AS tags FROM memories").all();
-const insMem = db.prepare('INSERT INTO memories_fts(rowid, title, tags_text) VALUES (?, ?, ?)');
-db.transaction((rows) => {
-    for (const r of rows) {
-        const tagsText = r.tags.replace(/\["/g, '').replace(/"\]/g, '').replace(/","/g, ' ').replace(/"/g, '');
-        insMem.run(r.id, splitCJK(r.title), splitCJK(tagsText));
-    }
-})(mems);
-console.log(`  回补 memories_fts: ${mems.length} 条`);
-
-// 5. 重建 6 个触发器（与 database.js 里的一致）
-db.exec(`
-    CREATE TRIGGER mf_fts_insert
-        AFTER INSERT ON memory_fragments BEGIN
-            INSERT INTO memory_fragments_fts(rowid, content, entity)
-            VALUES (new.id, splitCJK(new.content), splitCJK(COALESCE(new.entity, '')));
-        END;
-    CREATE TRIGGER mf_fts_delete
-        AFTER DELETE ON memory_fragments BEGIN
-            INSERT INTO memory_fragments_fts(memory_fragments_fts, rowid, content, entity)
-            VALUES ('delete', old.id, splitCJK(old.content), splitCJK(COALESCE(old.entity, '')));
-        END;
-    CREATE TRIGGER mf_fts_update
-        AFTER UPDATE ON memory_fragments BEGIN
-            INSERT INTO memory_fragments_fts(memory_fragments_fts, rowid, content, entity)
-            VALUES ('delete', old.id, splitCJK(old.content), splitCJK(COALESCE(old.entity, '')));
-            INSERT INTO memory_fragments_fts(rowid, content, entity)
-            VALUES (new.id, splitCJK(new.content), splitCJK(COALESCE(new.entity, '')));
-        END;
-    CREATE TRIGGER memories_fts_insert
-        AFTER INSERT ON memories BEGIN
-            INSERT INTO memories_fts(rowid, title, tags_text)
-            VALUES (new.id, splitCJK(COALESCE(new.title, '')),
-                splitCJK(COALESCE(REPLACE(REPLACE(REPLACE(REPLACE(new.tags, '["', ''), '"]', ''), '","', ' '), '"', ''), '')));
-        END;
-    CREATE TRIGGER memories_fts_delete
-        AFTER DELETE ON memories BEGIN
-            DELETE FROM memories_fts WHERE rowid = old.id;
-        END;
-    CREATE TRIGGER memories_fts_update
-        AFTER UPDATE ON memories BEGIN
-            UPDATE memories_fts
-            SET title = splitCJK(COALESCE(new.title, '')),
-                tags_text = splitCJK(COALESCE(REPLACE(REPLACE(REPLACE(REPLACE(new.tags, '["', ''), '"]', ''), '","', ' '), '"', ''), ''))
-            WHERE rowid = new.id;
-        END;
-`);
-
+console.log(`  回补 memory_fragments_fts: ${db.prepare('SELECT COUNT(*) c FROM memory_fragments').get().c} 条`);
+console.log(`  回补 memories_fts: ${db.prepare('SELECT COUNT(*) c FROM memories').get().c} 条`);
 console.log('');
-health();
-process.exit(0);
+const ok = health();
+process.exit(ok ? 0 : 1);

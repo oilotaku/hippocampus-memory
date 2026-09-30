@@ -4,6 +4,7 @@
 // =================================================================
 
 const { getDb } = require('../../database');
+const { sealField } = require('../memoryCrypto');
 const { callLLM } = require('../llm');
 const { WORLD_CONTEXT } = require('../worldContext');
 const { SKIP_NAMES, USER, AI } = require('../memoryConfig');
@@ -430,7 +431,7 @@ JSON格式：
                 ];
                 const updateVals = [JSON.stringify(aliases), JSON.stringify(tags), entityType];
 
-                if (factsText) { updateCols.push('facts = ?'); updateVals.push(factsText); }
+                if (factsText) { updateCols.push('facts = ?'); updateVals.push(sealField('entity_profiles', 'facts', factsText)); }
                 if (statusText) {
                     if (ent.name === USER.name) {
                         // v5.11: USER 日志模式 — 今天条目前置到已有行之上
@@ -444,16 +445,16 @@ JSON格式：
                             const todayPrefix = statusText.split('：')[0] + '：';
                             const oldLines = lines.filter(l => !l.startsWith(todayPrefix));
                             const newStatus = statusText + '\n' + oldLines.slice(0, 9).join('\n');
-                            updateCols.push('current_status = ?'); updateVals.push(newStatus);
+                            updateCols.push('current_status = ?'); updateVals.push(sealField('entity_profiles', 'current_status', newStatus));
                         }
                     } else if (isNoChangeSentinel(statusText)) {
                         // 哨兵（"无明显变化"）不落库——保住上一次的有效近况
                         console.log(`[Archivist] ⏭️ ${ent.name}: 近况无变化，保留旧值`);
                     } else {
-                        updateCols.push('current_status = ?'); updateVals.push(statusText);
+                        updateCols.push('current_status = ?'); updateVals.push(sealField('entity_profiles', 'current_status', statusText));
                     }
                 }
-                if (judgmentText) { updateCols.push('judgment = ?'); updateVals.push(judgmentText); }
+                if (judgmentText) { updateCols.push('judgment = ?'); updateVals.push(sealField('entity_profiles', 'judgment', judgmentText)); }
                 if (talkingPoints.length > 0) { updateCols.push('talking_points = ?'); updateVals.push(JSON.stringify(talkingPoints)); }
 
                 updateCols.push('last_eval_frag_count = ?'); updateVals.push(ent.currentCount);
@@ -479,7 +480,7 @@ JSON格式：
                             SELECT mf.id, mf.content FROM memory_fragments mf
                             WHERE mf.status = 'active'
                               AND mf.id NOT IN (SELECT fragment_id FROM fragment_entities WHERE entity_id = ?)
-                              AND (${shortKeys.map(() => "mf.content LIKE '%' || ? || '%'").join(' OR ')})
+                              AND (${shortKeys.map(() => "mem_like('memory_fragments:content', mf.content, '%' || ? || '%')").join(' OR ')})
                             ORDER BY mf.created_at DESC
                             LIMIT 15
                         `).all(ent.id, ...shortKeys);

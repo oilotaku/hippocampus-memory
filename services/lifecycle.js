@@ -6,6 +6,7 @@
 // =================================================================
 
 const { getDb } = require('../database');
+const { sealField } = require('./memoryCrypto');
 const { chromaDBOperation } = require('./memory');
 const { callLLM } = require('./llm');
 const { USER, AI } = require('./nameResolver');
@@ -90,8 +91,8 @@ async function runFragmentGC() {
     `).all(tombstoneCutoff);
 
     for (const f of toTombstone) {
-        db.prepare(`UPDATE memory_fragments SET status = 'tombstone', content = '[expired]', lifecycle_updated_at = ? WHERE id = ?`)
-            .run(now, f.id);
+        db.prepare(`UPDATE memory_fragments SET status = 'tombstone', content = ?, lifecycle_updated_at = ? WHERE id = ?`)
+            .run(sealField('memory_fragments', 'content', '[expired]'), now, f.id);
     }
     stats.tombstoned = toTombstone.length;
 
@@ -286,7 +287,7 @@ async function runEntityExtraction() {
                         status_since = date('now'),
                         source_fragment_ids = excluded.source_fragment_ids,
                         updated_at = excluded.updated_at
-                `).run(entity, result.current_status, sourceFragIds, now);
+                `).run(entity, sealField('entity_profiles', 'current_status', result.current_status), sourceFragIds, now);
 
                 console.log(`[Lifecycle] 实体更新: ${entity} → ${result.current_status.slice(0, 60)}`);
                 stats.extracted++;

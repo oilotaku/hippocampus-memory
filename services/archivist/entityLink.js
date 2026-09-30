@@ -105,7 +105,7 @@ function autoLinkLiteralMentions({ dryRun = false } = {}) {
     const owners = _entityMentionOwners(db);
     const countHits = db.prepare(`
         SELECT COUNT(*) n FROM memory_fragments mf
-        WHERE mf.content LIKE ? AND mf.status = 'active'
+        WHERE mem_like('memory_fragments:content', mf.content, ?) AND mf.status = 'active'
           AND mf.source NOT IN ('music', 'book')
           AND mf.id NOT IN (SELECT fragment_id FROM fragment_entities WHERE entity_id = ?)
     `);
@@ -133,7 +133,7 @@ function autoLinkLiteralMentions({ dryRun = false } = {}) {
     const updateFc = db.prepare('UPDATE entity_profiles SET fragment_count = (SELECT COUNT(*) FROM fragment_entities WHERE entity_id = ?) WHERE id = ?');
     const findFrags = db.prepare(`
         SELECT mf.id FROM memory_fragments mf
-        WHERE mf.content LIKE ? AND mf.status = 'active'
+        WHERE mem_like('memory_fragments:content', mf.content, ?) AND mf.status = 'active'
           AND mf.source NOT IN ('music', 'book')
           AND mf.id NOT IN (SELECT fragment_id FROM fragment_entities WHERE entity_id = ?)
         ORDER BY mf.id DESC

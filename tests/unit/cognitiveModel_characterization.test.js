@@ -5,7 +5,7 @@
 //    tests/unit/fixtures/cognitiveModel_scenario.json 比對（拆分前錄製）。
 const { test, describe, before, after, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
-const { setupEnv, cleanupDb } = require('./_helpers');
+const { setupEnv, cleanupDb, rawMemoryPlaintext } = require('./_helpers');
 const { captureConsole, llmRecord, dumpTables, checkFingerprint, normValue } = require('./_fingerprint');
 
 const dbPath = setupEnv('cogmodel-char');
@@ -29,8 +29,10 @@ before(() => {
 after(() => { restore(); cleanupDb(dbPath); });
 
 const getE = (id) => db.prepare('SELECT * FROM user_model WHERE id = ?').get(id);
+// W3：播種經 sealField（on 時存密文）；指紋經透明解密層取得，與加密前錄的指紋相同 = 差異只來自加密
+const seal = (t, c, v) => require('../../services/memoryCrypto').sealField(t, c, v);
 const frag = (content, ago = '-1 days', msgs = '[]') => Number(db.prepare(
-    "INSERT INTO memory_fragments (type, entity, content, created_at, source_msg_ids) VALUES ('event', 'X', ?, datetime('now', ?), ?)").run(content, ago, msgs).lastInsertRowid);
+    "INSERT INTO memory_fragments (type, entity, content, created_at, source_msg_ids) VALUES ('event', 'X', ?, datetime('now', ?), ?)").run(seal('memory_fragments', 'content', content), ago, msgs).lastInsertRowid);
 
 describe('cognitiveModel 明確規則', () => {
     beforeEach(() => { db.exec('DELETE FROM user_model; DELETE FROM memory_fragments;'); });
@@ -84,7 +86,7 @@ describe('cognitiveModel 固定情境指紋（拆分前後必須完全相同）'
         const msg = db.prepare("INSERT INTO messages (chat_id, sender, content, timestamp, is_encrypted) VALUES (1, ?, ?, datetime('now', ?), 0)");
         for (let i = 0; i < 60; i++) msg.run(i % 3 === 2 ? 'ai' : 'user', `第${i}句：最近工作很累，週末想去吃拉麵放鬆`, `-${(i + 1) * 10} minutes`);
         for (const [n, c] of [[USER.name, 'person'], [AI.name, 'person'], ['阿明', 'person'], ['一蘭拉麵', 'place']]) {
-            db.prepare("INSERT INTO entity_profiles (name, category, status, fragment_count, current_status) VALUES (?, ?, 'active', 3, '最近在忙專案')").run(n, c);
+            db.prepare("INSERT INTO entity_profiles (name, category, status, fragment_count, current_status) VALUES (?, ?, 'active', 3, ?)").run(n, c, seal('entity_profiles', 'current_status', '最近在忙專案'));
         }
         const fids = [];
         for (let i = 0; i < 8; i++) fids.push(frag(['最近工作很累', '週末去吃拉麵', '阿明說專案上線了', '睡不好覺', '喜歡豚骨湯頭', '準備考證照', '每天讀書兩小時', '考試快到了'][i], `-${i + 1} days`, `[${i + 1}]`));
@@ -143,5 +145,6 @@ describe('cognitiveModel 固定情境指紋（拆分前後必須完全相同）'
 
         fp.db = dumpTables(db, ['user_model', 'memory_fragments', 'entity_profiles', 'user_settings', 'user_patterns']);
         checkFingerprint('cognitiveModel_scenario', fp);
+        if (require('../../services/memoryCrypto').isEnabled()) assert.deepEqual(rawMemoryPlaintext(db), [], 'W3：記憶本體欄位不應有明文');
     });
 });

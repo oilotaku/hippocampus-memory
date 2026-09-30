@@ -10,6 +10,7 @@
 
 const fs = require('fs');
 const { initDatabase, getDb } = require('../database');
+const { isEncryptedField, sealField } = require('../services/memoryCrypto');
 
 // 白名单：只允许导入这些表，防止恶意导出文件执行任意 SQL
 const ALLOWED_TABLES = new Set(['entity_profiles', 'memory_fragments', 'fragment_entities', 'memories']);
@@ -42,7 +43,13 @@ function main() {
 
             const cols = Object.keys(row);
             const placeholders = cols.map(() => '?').join(',');
-            const values = cols.map(c => row[c]);
+            // W3：记忆本体栏位写入前加密（MEMORY_ENCRYPTION=off 时原样）。
+            // 导出档里已经是 enc: 的值（旧版导出的密文）原样保留，不重复加密。
+            const values = cols.map(c => {
+                const v = row[c];
+                if (!isEncryptedField(table, c) || (typeof v === 'string' && v.startsWith('enc:'))) return v;
+                return sealField(table, c, v);
+            });
 
             if (merge) {
                 // 覆盖更新：REPLACE INTO（按主键 id 替换）

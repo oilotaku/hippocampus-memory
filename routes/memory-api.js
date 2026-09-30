@@ -5,6 +5,8 @@
 const express = require('express');
 const { getDb } = require('../database');
 const { encryption } = require('../encryption');
+const memoryCrypto = require('../services/memoryCrypto');
+const { sealField } = memoryCrypto;
 const { requireAuth } = require('./auth');
 const { getEmbedding, getEmbeddingAPIKey } = require('../services/llm');
 const { chromaDBOperation } = require('../services/memory');
@@ -38,14 +40,16 @@ router.post('/api/memory', requireAuth, async (req, res) => {
             return res.status(400).json({ error: "Title and content are required" });
         }
         
-        const encryptedContent = encryption.encrypt(content);
+        // W3：on → AAD 绑「memories:content」；off → 维持上线前的行为（无 AAD 加密 content、title 明文）
+        const encryptedContent = memoryCrypto.isEnabled() ? sealField('memories', 'content', content) : encryption.encrypt(content);
+        const storedTitle = sealField('memories', 'title', title);
         const tagsJSON = JSON.stringify(tags || []);
         
         const stmt = db.prepare(
             `INSERT INTO memories (title, content, tags, status, valid_from, valid_to, created_at, updated_at)
              VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`
         );
-        const result = stmt.run(title, encryptedContent, tagsJSON, status || 'permanent', valid_from || null, valid_to || null);
+        const result = stmt.run(storedTitle, encryptedContent, tagsJSON, status || 'permanent', valid_from || null, valid_to || null);
         
         const memoryId = result.lastInsertRowid;
         console.log(`📝 Memory saved to DB: id=${memoryId}`);
@@ -118,18 +122,19 @@ router.put('/api/memory/:id', requireAuth, async (req, res) => {
             return res.status(404).json({ error: "Memory not found" });
         }
         
-        const oldContent = encryption.decrypt(oldMemory.content); // 无法解密时为 null，视为内容已变更
+        // oldMemory 经透明解密已是明文（解不开时为 null，视为内容已变更）
+        const oldContent = oldMemory.content === null ? null : encryption.decrypt(oldMemory.content);
         const oldTitle = oldMemory.title;
         const contentChanged = (oldContent !== content) || (oldTitle !== title);
         
-        const encryptedContent = encryption.encrypt(content);
+        const encryptedContent = memoryCrypto.isEnabled() ? sealField('memories', 'content', content) : encryption.encrypt(content);
         const tagsJSON = JSON.stringify(tags || []);
         
         db.prepare(
             `UPDATE memories 
              SET title = ?, content = ?, tags = ?, status = ?, valid_from = ?, valid_to = ?, updated_at = datetime('now')
              WHERE id = ?`
-        ).run(title, encryptedContent, tagsJSON, status || 'permanent', valid_from || null, valid_to || null, memoryId);
+        ).run(sealField('memories', 'title', title), encryptedContent, tagsJSON, status || 'permanent', valid_from || null, valid_to || null, memoryId);
         
         console.log(`📝 Memory updated in DB: id=${memoryId}`);
         
@@ -360,7 +365,7 @@ router.get('/api/memory/universe', requireAuth, (req, res) => {
 
         const constellations = normalEntities.map(ent => {
             const frags = db.prepare(`
-                SELECT mf.id, COALESCE(mf.content, '') AS title, mf.content,
+                SELECT mf.id, mf.content AS title, mf.content,
                        mf.emotional_weight, mf.created_at AS date, mf.status AS lifecycle,
                        CAST(julianday('now') - julianday(COALESCE(mf.last_accessed_at, mf.created_at)) AS REAL) AS days_since_access,
                        mf.read_count,
@@ -1369,7 +1374,7 @@ router.put('/api/fragment/:id', requireAuth, (req, res) => {
         }
         if (content !== undefined) {
             updates.push('content = ?');
-            params.push(content);
+            params.push(sealField('memory_fragments', 'content', content));
         }
         if (entity !== undefined) {
             updates.push('entity = ?');

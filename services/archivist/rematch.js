@@ -29,7 +29,7 @@ async function rematchFragmentsForSeeds() {
         SELECT * FROM (
             SELECT ep.id, ep.name, ep.category, ep.fragment_count,
                 (SELECT COUNT(*) FROM memory_fragments mf
-                 WHERE mf.content LIKE '%' || ep.name || '%'
+                 WHERE mem_like('memory_fragments:content', mf.content, '%' || ep.name || '%')
                    AND mf.status = 'active'
                    AND mf.source NOT IN ('music', 'book')
                    AND mf.id NOT IN (SELECT fragment_id FROM fragment_entities WHERE entity_id = ep.id)
@@ -63,7 +63,7 @@ async function rematchFragmentsForSeeds() {
         for (const s of batch) {
             const frags = db.prepare(`
                 SELECT id, content, created_at FROM memory_fragments
-                WHERE content LIKE ? AND status = 'active'
+                WHERE mem_like('memory_fragments:content', content, ?) AND status = 'active'
                   AND source NOT IN ('music', 'book')
                   AND id NOT IN (SELECT fragment_id FROM fragment_entities WHERE entity_id = ?)
                 ORDER BY created_at DESC

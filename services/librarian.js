@@ -1,5 +1,6 @@
 const { getDb } = require('../database');
 const { encryption } = require('../encryption');
+const { fragmentsMatchQuery, memoriesMatchQuery } = require('./memoryCrypto');
 const { AI } = require('./nameResolver');
 const { toQueryTokens } = require('../utils/cjkTokenize');
 
@@ -223,7 +224,8 @@ function searchFragments(userMessage, limit = 8) {
     const cjkTokens = tokenizeCJK(userMessage);
     if (cjkTokens.length > 0) {
       try {
-        const matchStr = cjkTokens.map(t => `"${t.replace(/"/g, '""')}"`).join(' OR ');
+        // W3：on → 内容栏用盲 token（HMAC）查、entity 栏用明文两字组；off → 与原本相同
+        const matchStr = fragmentsMatchQuery(cjkTokens);
         const rows = db.prepare(`
           SELECT mf.id, mf.content, mf.emotional_weight AS weight,
                  mf.source_date AS date_label, mf.created_at,
@@ -250,7 +252,7 @@ function searchFragments(userMessage, limit = 8) {
     // memories_fts 同样是两字组索引（v104），与碎片通道共用 token
     if (cjkTokens.length > 0) {
       try {
-        const matchStr = cjkTokens.map(t => `"${t.replace(/"/g, '""')}"`).join(' OR ');
+        const matchStr = memoriesMatchQuery(cjkTokens);
         const rows = db.prepare(`
           SELECT m.id, m.title AS content, (m.weight / 10.0) AS weight,
                  m.valid_from AS date_label, m.created_at,
@@ -290,6 +292,8 @@ function searchFragments(userMessage, limit = 8) {
 }
 
 function formatForContext(fragments) {
+  // W3：解密失败的碎片 content 为 null——略过，不把 null／密文送进 prompt
+  if (fragments) fragments = fragments.filter(f => f && f.content !== null && f.content !== undefined);
   if (!fragments || fragments.length === 0) return null;
 
   const db = getDb();

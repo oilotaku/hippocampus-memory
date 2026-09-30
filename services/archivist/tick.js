@@ -537,7 +537,7 @@ async function assessTreeHealth() {
     const needsInsight = db.prepare(`
         SELECT COUNT(*) as c FROM memory_fragments
         WHERE insight IS NULL AND status = 'active'
-          AND content IS NOT NULL AND length(content) > 10
+          AND content IS NOT NULL AND mem_len('memory_fragments:content', content) > 10
     `).get()?.c || 0;
 
     // Entity overviews needing update

@@ -4,6 +4,7 @@
 // =================================================================
 
 const { getDb } = require('../../database');
+const { sealField } = require('../memoryCrypto');
 const { callLLM } = require('../llm');
 const { chromaDBOperation } = require('../memory');
 const { WORLD_CONTEXT } = require('../worldContext');
@@ -287,8 +288,8 @@ ${buildLandscapeIndex()}
                     VALUES (?, ?, ?, ?, 'permanent', ?, ?, 'episode', 'standard', datetime('now'), datetime('now'))
                 `);
                 const info = insert.run(
-                    title,
-                    cluster.merged_memory,
+                    sealField('memories', 'title', title),
+                    sealField('memories', 'content', cluster.merged_memory),
                     mergedWeight,
                     finalDate,
                     JSON.stringify([...allMsgIds]),

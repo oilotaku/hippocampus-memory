@@ -6,6 +6,7 @@ const Database = require('better-sqlite3');
 const { encryption } = require('./encryption');
 const { sqlNow } = require('./utils/time');
 const { toIndexTokens } = require('./utils/cjkTokenize');
+const memoryCrypto = require('./services/memoryCrypto');
 
 let db;
 let _initialized = false;
@@ -41,6 +42,12 @@ function initDatabase() {
     db = new Database(process.env.DB_PATH || 'sanctuary.db');
     db.pragma('journal_mode = WAL');
     db.pragma('busy_timeout = 5000');
+
+    // ── W3：记忆本体加密 ──
+    // 透明解密（db.prepare 包一层）+ 注册 mem_fts / mem_like / mem_len。
+    // 必须在任何 migration 之前：v107 起 FTS 触发器呼叫 mem_fts，没注册就写不进去。
+    memoryCrypto.wrapDatabase(db);
+    db.function('splitCJK', (text) => toIndexTokens(text));
 
     // ── v5.15: 命名统一——表/列/设置键 全部收敛到 user_* / companion_* ──
     // 早期版本沿用了旧项目的内部标识符（clara_* / draco_*）。新库直接按新名建表；
@@ -280,8 +287,7 @@ function initDatabase() {
     // INSERT 每次都失败并打一行报错；而且本仓库没有任何地方读 chat_id=2
     // （ingest 的默认频道是 1）。已移除。
 
-    // ── CJK 函数（每次注册，幂等） ──
-    db.function('splitCJK', (text) => toIndexTokens(text));
+    // ── CJK 函数：已在开库后立即注册（见上方 W3 区块） ──
 
     // ═══════════════════════════════════════════════════════════
     // 版本化迁移 — 每条只跑一次
@@ -1169,7 +1175,8 @@ function initDatabase() {
     // splitCJK 现在产出重叠两字组；memories_fts 触发器也改走 splitCJK（原先未切分，
     // 中文整串成一个 token，只能靠前缀匹配）。存量索引全部重建。
     // 触发器对所有碎片建索引（与 insert/update/delete 触发器一致，不看 status）。
-    if (!db.prepare('SELECT 1 FROM schema_version WHERE version = 104').get()) {
+    const v104Pending = !db.prepare('SELECT 1 FROM schema_version WHERE version = 104').get();
+    if (v104Pending) {
         try {
             const tagsExpr = (c) => `COALESCE(REPLACE(REPLACE(REPLACE(REPLACE(${c}, '["', ''), '"]', ''), '","', ' '), '"', ''), '')`;
             db.transaction(() => {
@@ -1216,6 +1223,17 @@ function initDatabase() {
     // v106: memory_fragments.evidence_count — 跨天重复出现时累加证据，而不是丢弃
     runMigration(106, 'memory_fragments.evidence_count — 重复证据累计',
         `ALTER TABLE memory_fragments ADD COLUMN evidence_count INTEGER DEFAULT 1;`);
+
+    // v107: 记忆本体静态加密 + FTS 盲索引（W3，见 services/memoryCrypto.js）。
+    // MEMORY_ENCRYPTION=on（预设）：既有明文加密（AAD=表:栏）、旧的无 AAD 密文改带 AAD、
+    // 两个 FTS 表以盲 token 重建、content_hash 改带金钥；off：只换触发器（输出与原本相同）。
+    // 整段一个交易，失败回滚、不记版本。之后每次启动若侦测到模式／金钥改变或还有明文，会自动再同步。
+    memoryCrypto.initMemoryCrypto(db, {
+        versionRecorded: !!db.prepare('SELECT 1 FROM schema_version WHERE version = 107').get(),
+        recordVersion: () => db.prepare('INSERT OR IGNORE INTO schema_version (version, name, applied_at) VALUES (?, ?, ?)')
+            .run(107, 'W3: 记忆本体加密 + FTS 盲索引', sqlNow()),
+        forceReindex: v104Pending,   // v104 刚重建过索引／触发器 → 要换回 mem_fts 版本
+    });
 
     // 种子数据：初始本体论类别（仅当表为空时插入）
     try {

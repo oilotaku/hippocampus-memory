@@ -4,7 +4,9 @@
 // 运行：node scripts/backfill_content_hash.js
 
 const { initDatabase, getDb } = require('../database');
-const { hashFragmentContent } = require('../utils/text');
+// W5 把 utils/text 的 hashFragmentContent 换成 scribeQuality.normalizedContentHash 时漏改这里（原本 require 不到而报错）。
+// W3：on 模式下 normalizedContentHash 是带金钥的 HMAC；content 由 database.js 的透明解密层读成明文。
+const { normalizedContentHash: hashFragmentContent } = require('../services/scribeQuality');
 
 initDatabase();
 const db = getDb();

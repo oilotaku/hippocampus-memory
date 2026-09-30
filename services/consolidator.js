@@ -11,6 +11,7 @@
 // =================================================================
 
 const { getDb } = require('../database');
+const { sealField } = require('./memoryCrypto');
 const { callLLM } = require('./llm');
 const { fillPrompt, USER, AI } = require('./nameResolver');
 const { chromaDBOperation, getLocalEmbedding } = require('./memory');
@@ -333,8 +334,8 @@ async function consolidateGroup(group) {
         VALUES (?, ?, ?, ?, 'permanent', ?, 'episode', ?, 'pending', datetime('now'), datetime('now'))
     `);
     const info = insert.run(
-        title,
-        result.merged_memory,
+        sealField('memories', 'title', title),
+        sealField('memories', 'content', result.merged_memory),
         mergedWeight,
         finalDate,
         JSON.stringify(mergedMsgIds),

@@ -4,6 +4,7 @@
 // =================================================================
 
 const { getDb } = require('../../database');
+const { sealField } = require('../memoryCrypto');
 const { callLLM } = require('../llm');
 const { WORLD_CONTEXT } = require('../worldContext');
 const { SKIP_NAMES } = require('../memoryConfig');
@@ -472,7 +473,7 @@ ${frags.map((f,i) => `[${i}] ${f.content.slice(0, 150).replace(/\n/g, ' ')}`).jo
                 // Promote with overview
                 const overview = (verdict.overview || '').trim();
                 if (overview) {
-                    db.prepare(`UPDATE entity_profiles SET status='active', overview=?, overview_updated_at=datetime('now'), updated_at=datetime('now') WHERE id=?`).run(overview, g.id);
+                    db.prepare(`UPDATE entity_profiles SET status='active', overview=?, overview_updated_at=datetime('now'), updated_at=datetime('now') WHERE id=?`).run(sealField('entity_profiles', 'overview', overview), g.id);
                 } else {
                     db.prepare(`UPDATE entity_profiles SET status='active', updated_at=datetime('now') WHERE id=?`).run(g.id);
                 }

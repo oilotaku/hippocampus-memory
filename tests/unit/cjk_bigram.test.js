@@ -5,6 +5,9 @@ const path = require('path');
 
 process.env.DB_PATH = path.join(os.tmpdir(), `mc-cjk-bigram-${process.pid}-${Date.now()}.db`);
 process.env.SANCTUARY_ENCRYPTION_KEY = '0'.repeat(64);
+// 本檔直接檢查明文兩字組索引的格式（MATCH '"動畫"'），所以固定在 off 模式；
+// on 模式（盲索引）的同組檢索斷言在 memory_encryption.test.js。
+process.env.MEMORY_ENCRYPTION = 'off';
 
 const { toIndexTokens, toQueryTokens, toMatchQuery } = require('../../utils/cjkTokenize');
 

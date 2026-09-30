@@ -57,16 +57,21 @@ async function main() {
     console.log('\n── 2. 碎片 ──');
     let fragId = null;
     test('写入碎片', () => {
+        // W3：比照产品写入点经 sealField（MEMORY_ENCRYPTION=on 时存密文）
+        const { sealField } = require('../services/memoryCrypto');
         const r = db.prepare(`INSERT INTO memory_fragments
             (type, entity, content, emotional_weight, source, source_date, status, created_at)
-            VALUES ('event', 'Test', '冒烟测试碎片——验证记忆管线。', 0.6, 'chat', '2026-01-01', 'active', datetime('now'))`).run();
+            VALUES ('event', 'Test', ?, 0.6, 'chat', '2026-01-01', 'active', datetime('now'))`)
+            .run(sealField('memory_fragments', 'content', '冒烟测试碎片——验证记忆管线。'));
         fragId = r.lastInsertRowid;
         if (!fragId) throw new Error('写入失败');
     });
     test('FTS5 索引同步', () => {
         // 索引侧是 splitCJK 展开的两字组形态，查整串「冒烟测试」永远查不到。
         // 这里必须按 librarian 的方式查：切成两字组再 OR。
-        const matchStr = require('../utils/cjkTokenize').toMatchQuery('冒烟测试');
+        // W3：MEMORY_ENCRYPTION=on 时内容栏是盲索引（HMAC token），查询也要经 fragmentsMatchQuery 转成盲 token。
+        const { toQueryTokens } = require('../utils/cjkTokenize');
+        const matchStr = require('../services/memoryCrypto').fragmentsMatchQuery(toQueryTokens('冒烟测试'));
         const r = db.prepare('SELECT COUNT(*) c FROM memory_fragments_fts WHERE memory_fragments_fts MATCH ?').get(matchStr);
         if (r.c === 0) throw new Error('FTS5 未索引（两字组检索无命中）');
     });

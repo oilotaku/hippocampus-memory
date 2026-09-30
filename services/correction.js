@@ -11,6 +11,7 @@
 //    另一方永远攒不到阈值）。见 README 的架构说明。
 
 const { getDb } = require('../database');
+const { sealField } = require('./memoryCrypto');
 const { callLLM } = require('./llm');
 const { chromaDBOperation } = require('./memory');
 const { fillPrompt, USER } = require('./nameResolver');
@@ -154,7 +155,7 @@ async function createCoreFragment(content, chatId) {
     `).run(
         'correction',
         USER.name,
-        content,
+        sealField('memory_fragments', 'content', content),
         0.7,
         'chat_correction',
         '[]',

@@ -3,6 +3,7 @@
 // =================================================================
 
 const { getDb } = require('../database');
+const { sealField } = require('./memoryCrypto');
 const { callLLM } = require('./llm');
 const { WORLD_CONTEXT } = require('./worldContext');
 const { USER, AI } = require('./nameResolver');
@@ -104,7 +105,7 @@ async function updateEntityProfiles(newEpisodes) {
             continue;
         }
 
-        upsert.run(u.entity, u.category || 'person', u.new_status, u.status_since || '');
+        upsert.run(u.entity, u.category || 'person', sealField('entity_profiles', 'current_status', u.new_status), u.status_since || '');
         updated.push(u.entity);
         console.log(`[EntityProfile] ${u.entity} → ${u.new_status}`);
     }

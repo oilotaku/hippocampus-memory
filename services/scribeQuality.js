@@ -61,10 +61,13 @@ function filterEntriesByQuote(entries, sources) {
 // ── 去重 ─────────────────────────────────────────────────────────
 
 // 正规化内容哈希（不含日期）。entity 参与，同一句话关于不同实体不合并。
+// W3：MEMORY_ENCRYPTION=on 时改用带金钥的 HMAC（金钥由主金钥 HKDF 衍生，见 utils/blindIndex.js）——
+// 内容加密后若还存明文的 SHA-256，短句可以被字典猜出来。off 时维持原本的 SHA-256。
+// 两种模式互换时，services/memoryCrypto.js 会在启动同步里重算既有碎片的 content_hash。
 function normalizedContentHash(entity, content) {
-    return crypto.createHash('sha256')
-        .update(`${normalizeText(entity)}\u0000${normalizeText(content)}`)
-        .digest('hex');
+    const input = `${normalizeText(entity)}\u0000${normalizeText(content)}`;
+    if (require('./memoryCrypto').isEnabled()) return require('../utils/blindIndex').keyedHash(input);
+    return crypto.createHash('sha256').update(input).digest('hex');
 }
 
 function bigrams(s) {
