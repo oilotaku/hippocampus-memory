@@ -3,7 +3,12 @@
 //   node eval/locomo_e2e.js extract <對話索引>            # 階段一：逐批 Scribe 抽取，DB 存於 %TEMP%\locomo-e2e-<id>.db
 //   node eval/locomo_e2e.js qa <對話索引> <名稱> [--vector] [--limit N] [--shift]
 //        # 階段二：對每題組裝記憶、生成答案、評分；--vector 加 bge-m3 向量通道；--shift 把碎片 created_at 平移到「現在」
+//   node eval/locomo_e2e.js longctx <對話索引> <名稱> [--limit N]
+//        # 對照組：不經記憶系統，整段對話直接放進系統提示詞作答，評分方式與 qa 相同
 //   環境變數 E2E_MODEL（預設 qwen3-8b-zh-8k）
+//            E2E_LLM_BASE（預設 http://127.0.0.1:11434/v1；接 eval/claude_shim.py 時設 http://127.0.0.1:18765/v1）
+//            E2E_TAG（資料庫與抽取檔名的標籤，讓不同模型的抽取結果並存；預設空）
+//   嵌入（--vector）固定走本機 Ollama 的 bge-m3。
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -15,15 +20,17 @@ const flag = (n) => args.includes(n);
 const optv = (n, d) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : d; };
 const MODEL = process.env.E2E_MODEL || 'qwen3-8b-zh-8k';
 const OLLAMA = 'http://127.0.0.1:11434';
+const LLM_BASE = (process.env.E2E_LLM_BASE || OLLAMA + '/v1').replace(/\/+$/, '');
+const TAG = process.env.E2E_TAG ? '_' + process.env.E2E_TAG : '';
 const { loadConversations } = require('./locomo_common');
 const conv = loadConversations()[IDX];
-const DB = path.join(os.tmpdir(), `locomo-e2e-${conv.id}.db`);
+const DB = path.join(os.tmpdir(), `locomo-e2e-${conv.id}${TAG}.db`);
 const OUT = path.join(__dirname, 'results');
 fs.mkdirSync(OUT, { recursive: true });
 process.env.DB_PATH = DB;
 process.env.MEMORY_ENCRYPTION = process.env.MEMORY_ENCRYPTION || 'on';
 process.env.SANCTUARY_ENCRYPTION_KEY = '0'.repeat(64);
-process.env.LLM_ENDPOINT_ALLOWLIST = process.env.LLM_ENDPOINT_ALLOWLIST || OLLAMA;
+process.env.LLM_ENDPOINT_ALLOWLIST = process.env.LLM_ENDPOINT_ALLOWLIST || [...new Set([OLLAMA, new URL(LLM_BASE).origin])].join(',');
 process.env.LLM_REQUEST_TIMEOUT_MS = process.env.LLM_REQUEST_TIMEOUT_MS || '1500000';
 
 // 把使用者／助理名稱設成兩位說話者（memory_config.json 已被 .gitignore；結束時刪除）
@@ -39,11 +46,11 @@ memory.chromaDBOperation = async () => { throw new Error('Chroma 未啟動（評
 const { initDatabase, getDb } = require('../database');
 initDatabase();
 const db = getDb();
-if (!db.prepare("SELECT 1 FROM api_configs WHERE name = '本機 Ollama'").get()) {
-    db.prepare('UPDATE api_configs SET is_default = 0').run();   // 與 scripts/setup_llm.js 相同：新庫預設有 Gemini 配置，要先取消
-    db.prepare(`INSERT INTO api_configs (name, provider, endpoint, api_key, model_name, is_default, supports_tools)
-                VALUES ('本機 Ollama', 'openai_compatible', ?, 'none', ?, 1, 1)`).run(`${OLLAMA}/v1`, MODEL);
-}
+// 評測用設定每次都重設成本次的端點與模型（同一個 DB 可能先抽取、後以別的模型作答）
+db.prepare('UPDATE api_configs SET is_default = 0').run();   // 與 scripts/setup_llm.js 相同：新庫預設有 Gemini 配置，要先取消
+db.prepare("DELETE FROM api_configs WHERE name = '評測 LLM'").run();
+db.prepare(`INSERT INTO api_configs (name, provider, endpoint, api_key, model_name, is_default, supports_tools)
+            VALUES ('評測 LLM', 'openai_compatible', ?, 'none', ?, 1, 1)`).run(LLM_BASE, MODEL);
 const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
 
 // ── 訊息時間：session 時間 + 每輪 10 秒（讓 Scribe 緩衝區的排序穩定）──
@@ -91,14 +98,16 @@ async function extract() {
         batches.push(rec);
         log(`批次 ${rec.batch}/${Math.ceil(msgs.length / BATCH)}  ${(ms / 1000).toFixed(0)}s  提出 ${proposed}  寫入 ${rec.written}  quote丟 ${rec.quoteDropped}  閒聊丟 ${rec.aiChitchatDropped} ${err ? 'ERR ' + err : ''}`);
         since = batch[batch.length - 1].timestamp;
-        fs.writeFileSync(path.join(OUT, `e2e_${conv.id}_extract.json`), JSON.stringify({ conv: conv.id, batches, total_ms: Date.now() - T0, idToDia }, null, 1));
+        fs.writeFileSync(path.join(OUT, `e2e_${conv.id}${TAG}_extract.json`), JSON.stringify({ conv: conv.id, batches, total_ms: Date.now() - T0, idToDia }, null, 1));
     }
-    fs.writeFileSync(path.join(OUT, `e2e_${conv.id}_extract.json`), JSON.stringify({ conv: conv.id, batches, total_ms: Date.now() - T0, idToDia, done: true }, null, 1));
+    fs.writeFileSync(path.join(OUT, `e2e_${conv.id}${TAG}_extract.json`), JSON.stringify({ conv: conv.id, batches, total_ms: Date.now() - T0, idToDia, done: true }, null, 1));
     log('抽取完成', ((Date.now() - T0) / 60000).toFixed(1), '分鐘');
 }
 
 // ── 評分工具 ──
-const norm = (s) => String(s).toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\b(a|an|the)\b/g, ' ').split(/\s+/).filter(Boolean);
+const CJK = /[\u3400-\u9fff\uf900-\ufaff]/;
+// 中文沒有空白分詞，F1 以單字為單位；英文照 LoCoMo 慣例以詞為單位
+const norm = (s) => { const t = String(s).toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' '); return CJK.test(t) ? [...t.replace(/\s+/g, '')] : t.replace(/\b(a|an|the)\b/g, ' ').split(/\s+/).filter(Boolean); };
 function f1(pred, gold) {
     const p = norm(pred), g = norm(gold);
     if (!p.length || !g.length) return p.length === g.length ? 1 : 0;
@@ -107,19 +116,78 @@ function f1(pred, gold) {
     if (!same) return 0;
     const pr = same / p.length, rc = same / g.length; return 2 * pr * rc / (pr + rc);
 }
-const REFUSAL = /not mentioned|not specified|no information|not stated|not provided|don't know|do not know|unknown|cannot be determined|not available|isn't mentioned|is not mentioned/i;
+const REFUSAL = /未提及|沒有提到|沒提到|無法確定|無法得知|不知道|不清楚|not mentioned|not specified|no information|not stated|not provided|don't know|do not know|unknown|cannot be determined|not available|isn't mentioned|is not mentioned/i;
 const stripThink = (s) => String(s || '').replace(/<think>[\s\S]*?<\/think>/g, '').trim();
 
-async function ask(system, user, maxTok) {
+const sysAns = (question, source = 'memory notes') => CJK.test(question)
+    ? `你根據提供的${source === 'memory notes' ? '記憶筆記' : '對話紀錄'}回答關於對話中人物的問題，只能使用其中的內容。用繁體中文簡短作答（最多 30 字），不要解釋。若其中沒有答案，只回答：未提及`
+    : `You answer questions about a person's conversations using ONLY the ${source} provided. Reply with a short answer (at most 15 words), in English, no explanation. If the ${source} do not contain the answer, reply exactly: Not mentioned`;
+const SYS_JUDGE_ALL = 'You are a strict but fair grader. Given a question, a gold answer and a model answer, reply with exactly one word: CORRECT if the model answer is semantically equivalent to the gold answer (different date formats or wording of the same fact count as CORRECT; extra harmless detail is fine; a missing or wrong key fact is WRONG), otherwise WRONG.';
+
+// 作答／評分可以固定走另一個端點（E2E_ANSWER_BASE/MODEL、E2E_JUDGE_BASE/MODEL），
+// 比較不同抽取模型時只讓「抽取」這一個變因不同。未設定時沿用產品 LLM 設定（callLLM）。
+const ROLE = {
+    answer: { base: process.env.E2E_ANSWER_BASE, model: process.env.E2E_ANSWER_MODEL || MODEL },
+    judge: { base: process.env.E2E_JUDGE_BASE || process.env.E2E_ANSWER_BASE, model: process.env.E2E_JUDGE_MODEL || process.env.E2E_ANSWER_MODEL || MODEL },
+};
+async function ask(system, user, maxTok, role = 'answer') {
+    const cfg = ROLE[role];
+    if (cfg.base) {
+        const r = await fetch(cfg.base.replace(/\/+$/, '') + '/chat/completions', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model: cfg.model, temperature: 0, max_tokens: maxTok, stream: false,
+                messages: [{ role: 'system', content: system }, { role: 'user', content: user }] }),
+            signal: AbortSignal.timeout(900000),
+        });
+        if (!r.ok) throw new Error(`${role} 端點 HTTP ${r.status}: ${(await r.text()).slice(0, 200)}`);
+        return stripThink((await r.json()).choices?.[0]?.message?.content);
+    }
     const r = await llm.callLLM([{ role: 'user', parts: [{ text: user }] }], system, null, { temperature: 0, maxOutputTokens: maxTok });
     return stripThink(r.reply);
+}
+
+// 對照組：整段對話直接放進系統提示詞（不經記憶系統），評分方式與 qa() 相同
+async function longctx() {
+    const name = optv('--name', args[0] && !args[0].startsWith('--') ? args[0] : 'longctx');
+    const limit = parseInt(optv('--limit', '0'), 10);
+    const zh = CJK.test(conv.qa[0]?.question || '');
+    const transcript = conv.turns.map(t => `[${t.dia_id} ${t.time}] ${t.speaker}: ${t.text}`).join('\n');
+    const system = sysAns(conv.qa[0]?.question || '', 'conversation transcript') + (zh ? '\n\n以下是完整對話紀錄：\n' : '\n\nFull conversation transcript:\n') + transcript;
+    const results = []; const T0 = Date.now();
+    const outFile = path.join(OUT, `e2e_${conv.id}${TAG}_${name}.json`);
+    const qas = limit ? conv.qa.slice(0, limit) : conv.qa;
+    for (const q of qas) {
+        const rec = { qi: q.qi, cat: q.category, question: q.question, gold: q.category === 5 ? null : q.answer, adversarial: q.adversarial, evidence: q.evidence };
+        try {
+            const t0 = Date.now();
+            rec.answer = await ask(system, `Question: ${q.question}\nShort answer:`, 100);
+            rec.gen_ms = Date.now() - t0;
+            await scoreInto(rec, q);
+        } catch (e) { rec.error = e.message; rec.judge = 'ERROR'; rec.f1 = 0; }
+        results.push(rec);
+        if (results.length % 5 === 0 || results.length === qas.length) {
+            fs.writeFileSync(outFile, JSON.stringify({ conv: conv.id, name, mode: 'longctx', transcript_chars: transcript.length, results, ms: Date.now() - T0 }, null, 1));
+            log(`長上下文 ${results.length}/${qas.length}  正確 ${results.filter(r => r.judge === 'CORRECT').length}`);
+        }
+    }
+}
+
+async function scoreInto(rec, q) {
+    const refused = REFUSAL.test(rec.answer);
+    if (q.category === 5) {
+        rec.f1 = refused ? 1 : 0; rec.judge = refused ? 'CORRECT' : 'WRONG'; rec.judge_method = 'refusal-rule';
+    } else {
+        rec.f1 = f1(rec.answer, q.answer);
+        const j = await ask(SYS_JUDGE_ALL, `Question: ${q.question}\nGold answer: ${q.answer}\nModel answer: ${rec.answer}\nVerdict:`, 10, 'judge');
+        rec.judge = /^\W*CORRECT/i.test(j) ? 'CORRECT' : 'WRONG'; rec.judge_method = 'llm';
+    }
 }
 
 async function qa() {
     const name = optv('--name', args[0] && !args[0].startsWith('--') ? args[0] : 'run');
     const limit = parseInt(optv('--limit', '0'), 10);
     const { buildGatedMemory, resetPipelineState } = require('../services/hippocampus/ca3/recallPipeline');
-    const ext = JSON.parse(fs.readFileSync(path.join(OUT, `e2e_${conv.id}_extract.json`), 'utf8'));
+    const ext = JSON.parse(fs.readFileSync(path.join(OUT, `e2e_${conv.id}${TAG}_extract.json`), 'utf8'));
     const idToDia = ext.idToDia;
     const turnByDia = new Map(conv.turns.map(t => [t.dia_id, t]));
 
@@ -168,11 +236,9 @@ async function qa() {
         log('已啟用 bge-m3 向量通道');
     }
 
-    const SYS_ANS = 'You answer questions about a person\'s conversations using ONLY the memory notes provided. Reply with a short answer (at most 15 words), in English, no explanation. If the memory does not contain the answer, reply exactly: Not mentioned';
-    const SYS_JUDGE = 'You are a strict but fair grader. Given a question, a gold answer and a model answer, reply with exactly one word: CORRECT if the model answer is semantically equivalent to the gold answer (different date formats or wording of the same fact count as CORRECT; extra harmless detail is fine; a missing or wrong key fact is WRONG), otherwise WRONG.';
 
     const results = [];
-    const outFile = path.join(OUT, `e2e_${conv.id}_${name}.json`);
+    const outFile = path.join(OUT, `e2e_${conv.id}${TAG}_${name}.json`);
     const qas = limit ? conv.qa.slice(0, limit) : conv.qa;
     const T0 = Date.now();
     for (const q of qas) {
@@ -190,16 +256,9 @@ async function qa() {
             rec.memory_chars = memText.length;
             rec.memory = memText.slice(0, 6000);
             t0 = Date.now();
-            rec.answer = await ask(SYS_ANS, `${memText || '(no memory retrieved)'}\n\nQuestion: ${q.question}\nShort answer:`, 100);
+            rec.answer = await ask(sysAns(q.question), `${memText || '(no memory retrieved)'}\n\nQuestion: ${q.question}\nShort answer:`, 100);
             rec.gen_ms = Date.now() - t0;
-            const refused = REFUSAL.test(rec.answer);
-            if (q.category === 5) {
-                rec.f1 = refused ? 1 : 0; rec.judge = refused ? 'CORRECT' : 'WRONG'; rec.judge_method = 'refusal-rule';
-            } else {
-                rec.f1 = f1(rec.answer, q.answer);
-                const j = await ask(SYS_JUDGE, `Question: ${q.question}\nGold answer: ${q.answer}\nModel answer: ${rec.answer}\nVerdict:`, 10);
-                rec.judge = /^\W*CORRECT/i.test(j) ? 'CORRECT' : 'WRONG'; rec.judge_method = 'llm';
-            }
+            await scoreInto(rec, q);
             const ev = q.evidence;
             rec.ev_extracted = ev.length ? ev.every(e => covered.has(e)) : null;
             rec.ev_extracted_any = ev.length ? ev.some(e => covered.has(e)) : null;
@@ -214,5 +273,5 @@ async function qa() {
     log('QA 完成', ((Date.now() - T0) / 60000).toFixed(1), '分鐘');
 }
 
-(MODE === 'extract' ? extract() : MODE === 'qa' ? qa() : Promise.reject(new Error('mode: extract|qa')))
+(MODE === 'extract' ? extract() : MODE === 'qa' ? qa() : MODE === 'longctx' ? longctx() : Promise.reject(new Error('mode: extract|qa|longctx')))
     .then(() => process.exit(0)).catch(e => { console.error('失敗:', e); process.exit(1); });
