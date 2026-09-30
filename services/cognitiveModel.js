@@ -17,6 +17,8 @@ const { fillPrompt, USER, AI } = require('./nameResolver');
 const { encryption } = require('../encryption');
 const { getCompanionPersonaBase } = require('./companionPersona');
 const { sqlNow, sqlTimeAhead, DAY_MS } = require('../utils/time');
+// ── W7 拆分進行中：以下名稱已搬到 services/cognitiveModel/ ──
+const { LLM_CONFIG_ID, HYPOTHESIS_UPGRADE_EVIDENCE, HYPOTHESIS_ABANDON_DAYS, TRAIT_CONTRADICTION_THRESHOLD, MIN_GAP_USER_MODEL } = require('./cognitiveModel/constants');
 
 // v5.10: 增强版 system prompt — Companion 人格 + User 画像
 // 供 detectNewTraits / readUserRawMessages 等需要深度理解 {{user.name}} 的 LLM 调用使用
@@ -64,19 +66,6 @@ function extractMessageText(rawContent) {
 
     return text.trim();
 }
-
-// ═══════════════════════════════════════════════════════
-// Constants
-// ═══════════════════════════════════════════════════════
-
-const LLM_CONFIG_ID = 52; // gemini-flash-lite 官key（隐私敏感：读用户原始消息）
-
-const HYPOTHESIS_UPGRADE_EVIDENCE = 3;   // 3次确认 → 升级为 trait
-const HYPOTHESIS_ABANDON_DAYS = 14;      // 14天无证据 → 放弃
-const STATE_HALF_LIFE_DAYS = 7;          // current_state 半衰期
-const STATE_AUTO_RESOLVE_DAYS = 14;      // 14天无证据 → 自动 resolved
-const TRAIT_CONTRADICTION_THRESHOLD = 3; // 矛盾≥3 → 降级重审
-const MIN_GAP_USER_MODEL = 4 * 60 * 60 * 1000; // 深循环冷却 4h
 
 // ═══════════════════════════════════════════════════════
 // CRUD
