@@ -22,7 +22,16 @@ const load = (p) => require(path.join(ROOT, p));
 
 // 舊路徑 → 新路徑（已搬的群）
 const MOVED = [
-    ['services/scribeQuality.js', 'services/hippocampus/dentate/scribeQuality.js']
+    ['services/scribeQuality.js', 'services/hippocampus/dentate/scribeQuality.js'],
+    ['services/emotion/config.js', 'services/hippocampus/amygdala/config.js'],
+    ['services/emotion/fading.js', 'services/hippocampus/amygdala/fading.js'],
+    ['services/emotion/index.js', 'services/hippocampus/amygdala/index.js'],
+    ['services/emotion/ou.js', 'services/hippocampus/amygdala/ou.js'],
+    ['services/emotion/prompt.js', 'services/hippocampus/amygdala/prompt.js'],
+    ['services/emotion/queries.js', 'services/hippocampus/amygdala/queries.js'],
+    ['services/emotion/scoring.js', 'services/hippocampus/amygdala/scoring.js'],
+    ['services/emotion/store.js', 'services/hippocampus/amygdala/store.js'],
+    ['services/emotion/time.js', 'services/hippocampus/amygdala/time.js']
 ];
 
 if (process.env.G5_RECORD === '1') {
