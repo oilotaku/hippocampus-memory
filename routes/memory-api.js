@@ -368,7 +368,7 @@ router.get('/api/memory/universe', requireAuth, (req, res) => {
                 SELECT mf.id, mf.content AS title, mf.content,
                        mf.emotional_weight, mf.created_at AS date, mf.status AS lifecycle,
                        CAST(julianday('now') - julianday(COALESCE(mf.last_accessed_at, mf.created_at)) AS REAL) AS days_since_access,
-                       mf.read_count,
+                       mf.read_count, mf.created_at, mf.last_accessed_at,
                        mf.entity_id, fe.confidence AS link_confidence, fe.relation
                 FROM memory_fragments mf
                 JOIN fragment_entities fe ON fe.fragment_id = mf.id
@@ -400,6 +400,10 @@ router.get('/api/memory/universe', requireAuth, (req, res) => {
                     mag,
                     lifecycle: f.lifecycle,
                     date: f.date?.slice(0, 10) || '',
+                    // G4（4D 星圖時間軸）新增欄位：完整時間戳（UTC）與被回憶次數，既有欄位語意不變
+                    createdAt: f.created_at || null,
+                    lastAccessedAt: f.last_accessed_at || null,
+                    readCount: f.read_count || 0,
                     entity_id: f.entity_id,
                     relation: f.relation || null,
                 };

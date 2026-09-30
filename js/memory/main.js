@@ -3,7 +3,7 @@
 // 初始化、互動事件、主 rAF 迴圈、定時重新整理
 // ========================================
 
-import { loadUniverse, universe, conById, bumpAccess, GALAXIES, OWN_GALAXY_ID } from './data.js';
+import { loadUniverse, universe, conById, GALAXIES, OWN_GALAXY_ID } from './data.js';
 import { view, onViewChange, gotoUniverse, gotoGalaxy, gotoConstellation, gotoStar, goUp } from './state.js';
 import {
     initRender, resizeRender, drawFrame, hitTest, onDataLoaded,
@@ -15,6 +15,7 @@ import {
     showTooltip, hideTooltip, renderArchlog, renderModelPanel, initPanelEvents,
     renderMergeProposals, renderCoreInsight,
 } from './panels.js';
+import { initViewModes, getMode, onDataLoaded as onViewDataLoaded, reducedMotion } from './viewmode.js';
 
 const mc = document.getElementById('mc');
 let hovered = null;
@@ -125,7 +126,7 @@ mc.addEventListener('click', e => {
         case 'star':
             gotoStar(hit.id, view.conId);
             showStarPanel(hit.star, view.conId);
-            bumpAccess(hit.id);
+            // G4：瀏覽不等於回憶，不再呼叫 bumpAccess（否則點一下就重置生命週期衰減）
             break;
     }
 });
@@ -189,6 +190,7 @@ async function refresh() {
     try {
         await loadUniverse();
         onDataLoaded();
+        onViewDataLoaded();
         renderTopCount();
         renderBreadcrumb();
         renderArchlog();
@@ -210,7 +212,10 @@ function loop() {
         frameSkip = !frameSkip;
         if (frameSkip) { requestAnimationFrame(loop); return; }
     }
-    T += 0.012;
+    // 4D 模式有自己的渲染迴圈；列表模式不需要畫布
+    if (getMode() !== '2d') { requestAnimationFrame(loop); return; }
+    // prefers-reduced-motion：停掉脈動／閃爍（T 不再前進，畫面靜止但仍可互動）
+    if (!reducedMotion()) T += 0.012;
     // 單幀異常不許殺掉 RAF 鏈：丟擲去就再也不會被排程，畫面靜默凍結在最後一幀，
     // 從外部看是「頁面點了沒反應」，極難往渲染迴圈上想。這裡吞掉異常、繼續下一幀，
     // 但連續拋錯說明不是偶發，前幾次打進控制台留線索。
@@ -403,6 +408,7 @@ initPanelEvents();
 initGalaxyPills();
 renderBreadcrumb();
 initStardustLens();
+initViewModes();
 window.addEventListener('resize', () => { markInteraction(); resizeRender(); });
 window.addEventListener('memory-refresh', () => refresh());
 refresh();
