@@ -10,7 +10,7 @@ const { toTraditionalChars } = require('./zhNormalize');
 
 // 斷詞版本：索引指紋（services/memoryCrypto.js）會納入它，斷詞規則變動時既有資料庫下次啟動自動重建索引。
 // v2-t：斷詞前先做逐字簡→繁正規化（簡體內容可被繁體查詢命中，反之亦然）。
-const TOKENIZER_VERSION = 'cjk-bigram-v2-t';
+const TOKENIZER_VERSION = 'cjk-bigram-v3-t';
 
 const CJK_RUN_RE = /[㐀-䶿一-鿿豈-﫿]+/g;
 const WORD_RE = /[\p{L}\p{N}_]+/gu;

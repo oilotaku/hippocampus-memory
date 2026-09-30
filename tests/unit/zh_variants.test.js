@@ -16,6 +16,24 @@ const guards = require('../../services/archivist/guards');
 after(() => { cleanupDb(dbPath); });
 
 describe('zhNormalize：逐字簡轉繁', () => {
+    test('正規化結果不含 CJK 相容表意字元（例如「六」不會變成 U+F9D1）', () => {
+        const isCompat = (ch) => { const c = ch.codePointAt(0); return (c >= 0xF900 && c <= 0xFAFF) || (c >= 0x2F800 && c <= 0x2FA1F); };
+        const { MAP_ENTRIES } = require('../../utils/zhNormalize');
+        for (const [from, to] of MAP_ENTRIES()) {
+            assert.ok(!isCompat(to), `對照表目標含相容字元：${from} → U+${to.codePointAt(0).toString(16)}`);
+        }
+        for (const s of ['週六', '六月', '流行', '調整', '亮度', '洞察', '禮物', '畫畫']) {
+            const out = toTraditionalChars(s);
+            assert.ok(![...out].some(isCompat), `${s} → ${out} 含相容字元`);
+            assert.equal(out, out.normalize('NFC'));
+        }
+        assert.equal(toTraditionalChars('周六'), toTraditionalChars('週六'));
+        assert.equal(toTraditionalChars('\uF9D1'), '六');
+    });
+    test('正規化後仍能被一般字寫成的關鍵字比對到', () => {
+        assert.ok(/週六|禮拜六|星期六/.test(toTraditionalChars('这周六要去看电影')));
+        assert.ok(/六月/.test(toTraditionalChars('六月份')));
+    });
     test('對照表夠大、null 安全、繁體字不變', () => {
         assert.ok(MAP_SIZE >= 3000, `對照表只有 ${MAP_SIZE} 字`);
         assert.equal(toTraditionalChars(null), '');
@@ -54,9 +72,9 @@ describe('cjkTokenize：斷詞前先簡轉繁', () => {
         assert.deepEqual(require('../../utils/cjkTokenize').toQueryTokens('们的', { stopChars: stop }), []);
     });
     test('斷詞版本字串（索引指紋的一部分）', () => {
-        assert.equal(TOKENIZER_VERSION, 'cjk-bigram-v2-t');
+        assert.equal(TOKENIZER_VERSION, 'cjk-bigram-v3-t');
         const mc = require('../../services/memoryCrypto');
-        assert.ok(mc.indexFingerprint().endsWith(':cjk-bigram-v2-t'));
+        assert.ok(mc.indexFingerprint().endsWith(':cjk-bigram-v3-t'));
     });
 });
 

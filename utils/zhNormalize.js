@@ -155,22 +155,30 @@ const TO =
     '絪綎綄綪綝綧縯纆纕蔄䓣虉蝀訏詝諓詪諲諟譓軝輶鄩醲釴錀鋹釿鉥鉮鑪鉊鉧鋐錞鍭鎓鏏鏚䥕鏻鐩闉隑隮隤頔頠駓駉駪駼騑騞驎鮈鮀鮠鮡鯻' +
     '鰊鱀鰶鱚鵏鶠鸑鶱鷟鷭鷿齘齮齼繐菕譅鋂鑀';
 
+// OpenCC 產生的對照中，約 460 個目標字是 CJK 相容表意字元（U+F900–U+FAFF、U+2F800–U+2FA1F），
+// 例如「六」被對到 U+F9D1。它們外觀相同但編碼不同，會讓正規化後的文字比對不到用一般字寫的
+// 關鍵字與正規表示式（例如「週六」）。建表時 key 與 value 都先做 NFC（把相容字元換回統一字），
+// NFC 後相同的對應就略過；輸入與輸出也各做一次 NFC，確保正規化結果不含相容字元。
 const MAP = new Map();
 {
     const f = Array.from(FROM);
     const t = Array.from(TO);
-    for (let i = 0; i < f.length; i++) MAP.set(f[i], t[i]);
+    for (let i = 0; i < f.length; i++) {
+        const from = f[i].normalize('NFC');
+        const to = t[i].normalize('NFC');
+        if (from !== to) MAP.set(from, to);
+    }
 }
 
 function toTraditionalChars(text) {
     if (text === null || text === undefined) return '';
-    const s = String(text);
+    const s = String(text).normalize('NFC');
     let out = '';
     for (const ch of s) {
         const r = MAP.get(ch);
         out += r === undefined ? ch : r;
     }
-    return out;
+    return out.normalize('NFC');
 }
 
-module.exports = { toTraditionalChars, MAP_SIZE: MAP.size };
+module.exports = { toTraditionalChars, MAP_SIZE: MAP.size, MAP_ENTRIES: () => MAP.entries() };

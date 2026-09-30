@@ -279,7 +279,7 @@ describe('遷移（子程式）', () => {
             assert.deepEqual(again.raw, on.raw);
             // 切回 off：資料維持密文（讀取端照樣解密），索引改回明文兩字組、檢索一樣
             const back = child('open', { DB_PATH: p, MEMORY_ENCRYPTION: 'off' }, {});
-            assert.match(back.fingerprint, /^plain:cjk-bigram-v2-t$/);
+            assert.match(back.fingerprint, /^plain:cjk-bigram-v3-t$/);
             assert.deepEqual(back.top, off.top);
             assert.deepEqual(back.raw, on.raw);
         } finally { cleanupDb(p); }
@@ -291,7 +291,7 @@ describe('遷移（子程式）', () => {
             const off = child('seed', { DB_PATH: p, MEMORY_ENCRYPTION: 'off' });
             const failed = child('open', { DB_PATH: p, MEMORY_ENCRYPTION: 'on' }, { failEncryptAfter: 3, noSearch: true });
             assert.deepEqual(failed.raw, off.raw, '應完全回滾');
-            assert.match(failed.fingerprint, /^plain:cjk-bigram-v2-t$/);
+            assert.match(failed.fingerprint, /^plain:cjk-bigram-v3-t$/);
             assert.equal(failed.triggers.length, 6);
             // 下次正常啟動就會完成
             const ok = child('open', { DB_PATH: p, MEMORY_ENCRYPTION: 'on' }, {});
