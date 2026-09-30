@@ -9,6 +9,7 @@ const { SKIP_NAMES } = require('../memoryConfig');
 const { DIMS, analyzeEmotions, parseEventAt, floored } = require('./scoring');
 const { SLOTS, parseUtc, toSqlUtc, localParts, slotOfHour } = require('./time');
 const { estimate, kalmanStep, zScore, robustResidualSq } = require('./ou');
+const { parseEventDateFromText } = require('../../utils/dateParse');
 
 const DAY_MS = 86400000;
 const TIMELESS_TYPES = new Set(['preference', 'fact', 'entity_new', 'reflection']);
@@ -27,14 +28,36 @@ function resolveRaisedAt(quote, msgs) {
     return toSqlUtc(earliest.d);
 }
 
+// 事件日期：由程式從 quote（原話）依「來源訊息時間」確定性換算，模型輸出只當備援。
+// 8B 模型的 event_at 不可靠：常把日常狀態填成訊息當天，「下個月十五號」也會算錯月份。
+//   1. 沒有時間性的類型 → null
+//   2. quote 解析得到日期 → 以程式結果為準（不看模型）
+//   3. 解析不到 → 採用模型輸出，但若它等於訊息當天（當地或 UTC 日期）就視為不可信 → null
+//      （quote 已確認沒有日期片語；連「今天」都沒說，卻標成今天多半是拿訊息日期充數）
+function resolveEventAt(entry, raisedUtc, tz) {
+    if (TIMELESS_TYPES.has(entry?.type)) return null;
+    const lp = localParts(raisedUtc, tz);
+    if (lp) {
+        const ref = new Date(Date.UTC(lp.year, lp.month - 1, lp.day));   // 以當地日曆日為「今天」
+        const fromQuote = parseEventDateFromText(entry?.quote, ref);
+        if (fromQuote) return fromQuote;
+    }
+    const model = parseEventAt(entry?.event_at);
+    if (!model) return null;
+    if (model.length === 10) {
+        const local = lp ? `${lp.year}-${String(lp.month).padStart(2, '0')}-${String(lp.day).padStart(2, '0')}` : null;
+        if (model === local || model === String(raisedUtc).slice(0, 10)) return null;
+    }
+    return model;
+}
+
 // 寫入情緒欄位與時間欄位；emotion.enabled=false 時什麼都不做。回傳分析結果（或 null）
 function applyScribeEmotion(db, fragId, entry, { raisedAt } = {}) {
     const cfg = getEmotionConfig();
     if (!cfg.enabled) return null;
     const an = analyzeEmotions(entry?.emotions, cfg);
-    // 沒有時間性的類型（偏好、個人資料、反思）不會有「事件日期」；模型偶爾拿訊息日期充數，這裡擋掉
-    const eventAt = TIMELESS_TYPES.has(entry?.type) ? null : parseEventAt(entry?.event_at);
     const raised = raisedAt || toSqlUtc(new Date());
+    const eventAt = resolveEventAt(entry, raised, cfg.timezone);
     const lp = localParts(raised, cfg.timezone);
     const sets = ['raised_at = ?', 'event_at = ?', 'raised_slot = ?', 'weekday = ?', 'tz = ?'];
     const vals = [raised, eventAt, lp ? slotOfHour(lp.hour) : null, lp ? lp.weekday : null, cfg.timezone];
@@ -216,4 +239,4 @@ function rebuildEmotionState(db) {
     return processFragments(db);
 }
 
-module.exports = { resolveRaisedAt, applyScribeEmotion, processFragments, rebuildEmotionState, accumulate, decayFactor, loadStats, loadStates, SLOTS };
+module.exports = { resolveRaisedAt, resolveEventAt, applyScribeEmotion, processFragments, rebuildEmotionState, accumulate, decayFactor, loadStats, loadStates, SLOTS };

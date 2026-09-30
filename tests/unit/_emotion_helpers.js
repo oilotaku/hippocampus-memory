@@ -25,6 +25,9 @@ function boot(tag) {
             VALUES ('observation', ?, ?, 0.3, 'chat', ?, ?)`).run(entities[0] || 'X', sealField('memory_fragments', 'content', text), (raisedAt || '').slice(0, 10) || null, quote ? sealField('memory_fragments', 'quote', quote) : null).lastInsertRowid);
         const base = Object.fromEntries(emotion.DIMS.map(d => [d, 0.15]));
         emotion.applyScribeEmotion(db, id, { emotions: { ...base, ...(emotions || {}) }, event_at: eventAt }, { raisedAt });
+        // 這些測試檢查的是「已存在 event_at 之後」的查詢；F4 起 Scribe 會把「等於訊息當天、quote 又沒日期片語」的
+        // 模型 event_at 視為不可信，所以直接寫入欄位，繞過寫入端的正規化。
+        if (eventAt) db.prepare('UPDATE memory_fragments SET event_at = ? WHERE id = ?').run(eventAt, id);
         for (const name of entities) {
             db.prepare('INSERT OR IGNORE INTO fragment_entities (fragment_id, entity_id, relation) VALUES (?, ?, ?)').run(id, ent(name), 'related_to');
         }

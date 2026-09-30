@@ -33,7 +33,7 @@ const entry = (over = {}) => {
     seq++;
     return {
         type: 'observation', entities: [{ name: `G2實體${seq}`, relation: 'related_to' }],
-        content: `G2實體${seq}的事`, emotional_weight: 0.4, value_tags: [], source: 'chat', quote: '今天主管當眾罵我', ...over,
+        content: `G2實體${seq}的事`, emotional_weight: 0.4, value_tags: [], source: 'chat', quote: '主管當眾罵我', ...over,
     };
 };
 const EIGHT = (o = {}) => ({ joy: 0.1, trust: 0.1, fear: 0.3, surprise: 0.2, sadness: 0.5, disgust: 0.2, anger: 0.9, anticipation: 0.1, ...o });
@@ -109,12 +109,12 @@ test('稀疏輸出：只列高於底噪的維度，{} = 沒有明顯情緒（全
 
 test('event_at：沒有時間性的類型（偏好、個人資料、反思）即使模型填了日期也丟掉；事件類保留', async () => {
     for (const type of ['preference', 'fact', 'entity_new', 'reflection']) {
-        await run([entry({ type, emotions: EIGHT(), event_at: '2026-05-01' })], M());
+        await run([entry({ type, emotions: EIGHT(), event_at: '2026-04-20' })], M());
         assert.equal(lastRow().event_at, null, type);
     }
     for (const type of ['event', 'intention', 'state']) {
-        await run([entry({ type, emotions: EIGHT(), event_at: '2026-05-01' })], M());
-        assert.equal(lastRow().event_at, '2026-05-01', type);
+        await run([entry({ type, emotions: EIGHT(), event_at: '2026-04-20' })], M());
+        assert.equal(lastRow().event_at, '2026-04-20', type);
     }
 });
 
@@ -207,4 +207,25 @@ test('emotion.enabled=false：prompt 不含情緒段落、不寫情緒／時間�
     assert.equal(db.prepare('SELECT COUNT(*) c FROM emotion_events WHERE fragment_id = ?').get(f.id).c, 0);
     assert.equal(emotion.getBaselineStatus(db).samples, before);
     assert.equal(emotion.processFragments(db).length, 0);
+});
+
+test('F4：event_at 由程式從 quote 依訊息時間換算，覆蓋模型的錯誤輸出', async () => {
+    // 訊息 2026-05-01（台北）說「下個月十五號」→ 2026-06-15；模型算成 05-15 也不採用
+    const m = [msg('user', '我下個月十五號要去面試，好緊張', '2026-05-01 15:30:00')];
+    await run([entry({ type: 'event', emotions: EIGHT(), quote: '我下個月十五號要去面試', event_at: '2026-05-15' })], m);
+    assert.equal(lastRow().event_at, '2026-06-15');
+});
+
+test('F4：日常狀態句子沒有 event_at；模型填成訊息當天視為不可信', async () => {
+    const m = [msg('user', '最近睡不好，覺得有點焦慮', '2026-05-01 15:30:00')];
+    await run([entry({ type: 'state', emotions: EIGHT(), quote: '最近睡不好', event_at: '2026-05-01' })], m);
+    assert.equal(lastRow().event_at, null);
+    await run([entry({ type: 'state', emotions: EIGHT(), quote: '最近睡不好', event_at: null })], m);
+    assert.equal(lastRow().event_at, null);
+});
+
+test('F4：quote 沒日期時，模型給的其他日期仍保留（備援）', async () => {
+    const m = [msg('user', '去年的東京旅行真的很棒', '2026-05-01 15:30:00')];
+    await run([entry({ type: 'event', emotions: EIGHT(), quote: '東京旅行真的很棒', event_at: '2025-04' })], m);
+    assert.equal(lastRow().event_at, '2025-04');
 });

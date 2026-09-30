@@ -15,6 +15,7 @@
 
 const { toTraditionalChars } = require('../utils/zhNormalize');
 const { parseDbTime } = require('../utils/time');
+const { parseDatesFromText } = require('../utils/dateParse');
 const { toIndexTokenList } = require('../utils/cjkTokenize');
 
 // ── 預設設定與詞表（簡繁並存；比對前一律逐字轉繁體，所以這裡寫繁體即可） ──
@@ -426,72 +427,7 @@ function recordSurfaced(items, db, now = Date.now()) {
 
 // ── 5. 前瞻記憶 ────────────────────────────────────────────
 
-const WEEKDAY = { '一': 0, '二': 1, '三': 2, '四': 3, '五': 4, '六': 5, '日': 6, '天': 6 };
-const WK = '(?:週|周|星期|禮拜|礼拜)';
-
-/**
- * 從文字解析日期，回傳 Date（UTC 零點）陣列。ref 為文字寫下的時間（碎片 created_at），
- * 未寫年份的日期取「ref 之後（含當天）第一個出現」的那一天（跨年會進位）。
- * 支援：YYYY-M-D、YYYY年M月D日、M月D日／M月D號／M/D、
- *       下週X／下星期X／下禮拜X、這週X／本週X、週X（ref 起下一個）、明天／後天／大後天。
- * 簡繁並存（週/周、禮/礼）。
- */
-function parseDatesFromText(text, ref) {
-    // toTraditionalChars 會把「六」等字換成 CJK 相容字元（U+F9D1），NFC 換回一般字元，日期正規式才對得上
-    const t = toTraditionalChars(String(text || '')).normalize('NFC');
-    const refDay = utcDay(ref);
-    const out = [];
-    const push = (ms) => { if (!out.some(x => x.getTime() === ms)) out.push(new Date(ms)); };
-    const validMD = (y, m, d) => {
-        const dt = new Date(Date.UTC(y, m - 1, d));
-        return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
-    };
-    const nextOccurrence = (m, d) => {
-        const y0 = ref.getUTCFullYear();
-        for (const y of [y0, y0 + 1, y0 + 2, y0 + 3, y0 + 4]) {   // 跳過不存在的日子（2/29）
-            if (!validMD(y, m, d)) continue;
-            const ms = Date.UTC(y, m - 1, d);
-            if (ms >= refDay) return ms;
-        }
-        return null;
-    };
-    let rest = t;
-    const eat = (re, fn) => {
-        rest = rest.replace(re, (...a) => { fn(a); return ' '.repeat(a[0].length); });
-    };
-
-    // 完整年月日
-    eat(/(\d{4})\s*[-/.年]\s*(\d{1,2})\s*[-/.月]\s*(\d{1,2})\s*[日號号]?/g, a => {
-        const [y, m, d] = [+a[1], +a[2], +a[3]];
-        if (validMD(y, m, d)) push(Date.UTC(y, m - 1, d));
-    });
-    // M月D日／M月D號
-    eat(/(\d{1,2})\s*月\s*(\d{1,2})\s*[日號号]/g, a => {
-        const [m, d] = [+a[1], +a[2]];
-        if (m >= 1 && m <= 12) { const ms = nextOccurrence(m, d); if (ms != null) push(ms); }
-    });
-    // M/D（前後不可再接數字，避開分數與年份片段）
-    eat(/(?<![\d/])(\d{1,2})\/(\d{1,2})(?![\d/])/g, a => {
-        const [m, d] = [+a[1], +a[2]];
-        if (m >= 1 && m <= 12) { const ms = nextOccurrence(m, d); if (ms != null) push(ms); }
-    });
-
-    // 週幾（以週一為一週起點）
-    const monday = refDay - ((new Date(refDay).getUTCDay() + 6) % 7) * DAY_MS;
-    eat(new RegExp(`下(?:個)?${WK}([一二三四五六日天])`, 'g'), a => push(monday + (7 + WEEKDAY[a[1]]) * DAY_MS));
-    eat(new RegExp(`(?:這|本)(?:個)?${WK}([一二三四五六日天])`, 'g'), a => push(monday + WEEKDAY[a[1]] * DAY_MS));
-    eat(new RegExp(`${WK}([一二三四五六日天])`, 'g'), a => {
-        const off = (WEEKDAY[a[1]] - ((new Date(refDay).getUTCDay() + 6) % 7) + 7) % 7;   // 含當天
-        push(refDay + off * DAY_MS);
-    });
-
-    // 相對日
-    eat(/大後天|大后天/g, () => push(refDay + 3 * DAY_MS));
-    eat(/後天|后天/g, () => push(refDay + 2 * DAY_MS));
-    eat(/明天|明日/g, () => push(refDay + 1 * DAY_MS));
-    return out;
-}
-
+// 日期解析已抽到 utils/dateParse.js（與 Scribe 寫 event_at 共用）
 /**
  * 取得一條碎片的事件日期（可替換）：G2 若加了 event_at 欄位就直接用，
  * 否則從內容解析（相對於碎片寫下的時間）。回傳 Date[]（可能多個）。
