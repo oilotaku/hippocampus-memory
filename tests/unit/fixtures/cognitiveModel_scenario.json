@@ -454,7 +454,6 @@
    "L [UserModel] 證據回填: N 條孤立條目 → bigram錨定",
    "L [UserModel] 🦴 種子錨定: N 條孤立條目 → 搜尋全量碎片",
    "L [UserModel] readUserRawMessages: 無法解析JSON響應",
-   "E [UserModel] autoSpotCheck error: Cannot find module 'spotCheckModel'",
    "L [UserModel] 週期完成: observation=false decay=N validate=N detected=N reviewed=N proactive=N crossref=N dedup=N insight=false spotcheck=N"
   ]
  },

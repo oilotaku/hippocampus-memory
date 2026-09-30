@@ -6,7 +6,7 @@
 //   2. ★ 向量聯想：embed fragment → ChromaDB 查相似碎片 → 聚合已有 entity 關聯 →
 //                候選實體投票
 //   3. LLM 指代消解：結合候選實體列表 + 描述，做單選判斷（一條碎片一個直接歸屬）
-//   4. ★ 派生關聯：從直接實體出發，沿 related_entity_ids 自動派生二級連結，
+//   4. ★ 派生關聯：從直接實體出發，沿 related_entities 自動派生二級連結，
 //                標記為 derived_from，供 Librarian/overview 做輔助參考
 //
 // 寫入目標：fragment_entities 多對多表（+ 相容 memory_fragments.entity_id 舊欄位）
@@ -27,6 +27,21 @@ const VECTOR_HINT_MAX_CANDIDATES = 5;
 // 派生關聯置信度（低於直接關聯，供下游區分權重）
 const DERIVED_CONFIDENCE = 0.45;
 
+// entity_profiles.related_entities 是 Archivist 維護的 JSON：[{id,name,relation,shared_count,...}]。
+// （過去這裡查一個從來沒被任何 migration 建立的 related_entity_ids 欄位，整條解析管線因
+//  「no such column」而失效；現在改讀既有欄位，取出其中的 id。）
+function parseRelatedIds(json) {
+    let list = [];
+    try { list = JSON.parse(json || '[]'); } catch (_) { return []; }
+    if (!Array.isArray(list)) return [];
+    const ids = [];
+    for (const r of list) {
+        const id = (r && typeof r === 'object') ? Number(r.id) : Number(r);
+        if (Number.isInteger(id) && id > 0 && !ids.includes(id)) ids.push(id);
+    }
+    return ids;
+}
+
 // 記憶體快取，5分鐘重新整理
 let _aliasCache = null;
 let _cacheAge = 0;
@@ -37,7 +52,7 @@ function getAliasData() {
 
     const db = getDb();
     const rows = db.prepare(`
-        SELECT id, name, category, aliases, facts, related_entity_ids FROM entity_profiles
+        SELECT id, name, category, aliases, facts, related_entities FROM entity_profiles
         WHERE name IS NOT NULL AND category != 'term'
     `).all();
 
@@ -48,9 +63,9 @@ function getAliasData() {
     const relationGraph = new Map();
 
     for (const row of rows) {
-        let aliasList = [], relatedIds = [];
+        let aliasList = [];
         try { aliasList = JSON.parse(row.aliases || '[]'); } catch (_) {}
-        try { relatedIds = JSON.parse(row.related_entity_ids || '[]'); } catch (_) {}
+        const relatedIds = parseRelatedIds(row.related_entities);
 
         knownEntities.push({ id: row.id, name: row.name, aliases: aliasList });
 
@@ -103,7 +118,7 @@ function linkFragmentToEntity(fragmentId, entityId, relation, confidence, classi
 }
 
 // ── 內部：從直接實體派生二級關聯 ──
-// 讀取 entity 的 related_entity_ids，寫入 fragment_entities（標記 derived_from）
+// 讀取 entity 的 related_entities（取其中 id），寫入 fragment_entities（標記 derived_from）
 function deriveEntityLinks(fragmentId, directEntityId) {
     const db = getDb();
     const { relationGraph, entityDescriptors } = _aliasCache;  // 可能在當前 tick 內已過期，fallback 到實查
@@ -111,10 +126,10 @@ function deriveEntityLinks(fragmentId, directEntityId) {
     // 先查快取，快取沒有則查 DB
     let relatedIds = relationGraph?.get(directEntityId);
     if (!relatedIds) {
-        const row = db.prepare('SELECT related_entity_ids FROM entity_profiles WHERE id = ?').get(directEntityId);
-        if (!row?.related_entity_ids) return 0;
-        try { relatedIds = JSON.parse(row.related_entity_ids); } catch (_) { return 0; }
-        if (!relatedIds?.length) return 0;
+        const row = db.prepare('SELECT related_entities FROM entity_profiles WHERE id = ?').get(directEntityId);
+        if (!row?.related_entities) return 0;
+        relatedIds = parseRelatedIds(row.related_entities);
+        if (!relatedIds.length) return 0;
     }
 
     let derived = 0;

@@ -47,13 +47,14 @@ async function classifyFragments(opts = {}) {
     // Exclude music listening logs and book reading logs — they're data exhaust,
     // not memory fragments about people/places/events/works. Harvested separately
     // by musicMemoryExtractor / bookMemoryExtractor. Not classified into entity graph.
+    // ⚠️ 入口含 consolidated/cooling：整合跑完會把碎片改成 'consolidated'，
+    // 而另一條管線也在搶同一批碎片——誰先到誰說了算。碎片一旦被寫成 episode
+    // 就永久退出分類，fragment_entities 的連結再也不會建立。
+    // 配套是通的：實體概述讀碎片時本來就認這三個狀態。
+    // （這段說明原本用 JS 的 // 寫在 SQL 字串裡，SQLite 直接報語法錯，整個分類從未執行過。）
     const unclassified = db.prepare(`
         SELECT mf.id, mf.content, mf.emotional_weight, mf.created_at
         FROM memory_fragments mf
-        // ⚠️ 入口含 consolidated/cooling：整合跑完會把碎片改成 'consolidated'，
-        // 而另一條管線也在搶同一批碎片——誰先到誰說了算。碎片一旦被寫成 episode
-        // 就永久退出分類，fragment_entities 的連結再也不會建立。
-        // 配套是通的：實體概述讀碎片時本來就認這三個狀態。
         WHERE mf.status IN ('active', 'consolidated', 'cooling')
           AND mf.source NOT IN ('music', 'book')
           AND mf.id NOT IN (SELECT DISTINCT fragment_id FROM fragment_entities)

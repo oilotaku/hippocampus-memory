@@ -478,7 +478,7 @@ async function discoverRelatedEntities() {
               AND ((ea.category IN ('event','place') AND eb.category IN ('event','place','person'))
                 OR (eb.category IN ('event','place') AND ea.category IN ('event','place','person')))
             LIMIT 50
-        `).all();
+        `).all(...SKIP_NAMES, ...SKIP_NAMES);
 
         const alreadySeen = new Set(pairs.map(p => `${p.a_id}-${p.b_id}`));
         const semanticCandidates = [];

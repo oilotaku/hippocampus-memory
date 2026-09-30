@@ -154,13 +154,29 @@
  },
  "classifyFragments": {
   "result": {
-   "threw": {
-    "error": "near \"/\": syntax error"
+   "ok": {
+    "classified": 0
    }
   },
-  "llm": [],
+  "llm": [
+   {
+    "cfg": 36,
+    "gen": {
+     "temperature": 0.2,
+     "maxOutputTokens": 4000,
+     "thinkingConfig": {
+      "thinkingBudget": 0
+     }
+    },
+    "h": "1c073e0eb28d",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"你是 Companion 的實體分類助手。Compa"
+   }
+  ],
   "chroma": [],
-  "logs": []
+  "logs": [
+   "L [Archivist] 待分類碎片: N 條 (實體星系)",
+   "L [Archivist] 深迴圈分類: N/N 條 (Companion+flash-lite, 新種子=N)"
+  ]
  },
  "rematchFragmentsForSeeds": {
   "result": {
@@ -251,11 +267,24 @@
  },
  "discoverRelatedEntities": {
   "result": {
-   "threw": {
-    "error": "Too few parameter values were provided"
+   "ok": {
+    "discovered": 0
    }
   },
-  "llm": [],
+  "llm": [
+   {
+    "cfg": 36,
+    "gen": {
+     "temperature": 0.1,
+     "maxOutputTokens": 150,
+     "thinkingConfig": {
+      "thinkingBudget": 0
+     }
+    },
+    "h": "b31c4af2a259",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"記憶星系中有兩個星座，它們的時間線有交集（日期：<D"
+   }
+  ],
   "chroma": [],
   "logs": []
  },
@@ -576,7 +605,7 @@
     "running": "true",
     "companionActive": "false",
     "inTick": "false",
-    "dailyLLMCalls": 3,
+    "dailyLLMCalls": 4,
     "totalClassified": 0,
     "totalTasksRun": 0,
     "lastTick": "pending",
@@ -615,9 +644,9 @@
     "running": "true",
     "companionActive": "false",
     "inTick": "false",
-    "dailyLLMCalls": 4,
+    "dailyLLMCalls": 5,
     "totalClassified": 0,
-    "totalTasksRun": 13,
+    "totalTasksRun": 14,
     "lastTick": "pending",
     "tools": [
      "classify_fragments",
@@ -684,6 +713,18 @@
    {
     "cfg": 36,
     "gen": {
+     "temperature": 0.2,
+     "maxOutputTokens": 4000,
+     "thinkingConfig": {
+      "thinkingBudget": 0
+     }
+    },
+    "h": "1a16e3636588",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"你是 Companion 的實體分類助手。Compa"
+   },
+   {
+    "cfg": 36,
+    "gen": {
      "temperature": 0.1,
      "maxOutputTokens": 100,
      "thinkingConfig": {
@@ -723,18 +764,17 @@
    "L [Archivist Agent] Tick [🌙深度整合] 新碎片=N 未分類=N user空閒=Nmin",
    "L [Archivist] 🔗 字面自動連結: N 條 (N conf, 零LLM；其中靠別名 N 條)",
    "L [Archivist Agent]   autoLink: linked=N",
-   "E [Archivist] aggregateLink 失敗: db is not defined",
    "L [Archivist] 📝 輕量概述更新: N 個實體概述需更新",
    "L [Archivist Agent]   entity_overviews: assessed=N needed=N",
    "L [Archivist Agent] 🦉 進入深度整合週期",
    "L [Archivist] 🌿 決策解析失敗，預設順序",
    "L [UserModel] 🧠 認知模型維護週期開始",
    "L [UserModel] readUserRawMessages: 僅 N 條非RP訊息，跳過 (需≥N)",
-   "E [UserModel] autoSpotCheck error: Cannot find module 'spotCheckModel'",
    "L [UserModel] 週期完成: observation=false decay=N validate=N detected=N reviewed=N proactive=NaN crossref=N dedup=N insight=false spotcheck=N",
    "L [Archivist Agent]   userModel: observation={\"skipped\":true,\"reason\":\"too few messages (N < N)\"} decay={\"decayed\":N,\"resolved\":N,\"abandoned\":N,\"flagged\":N,\"dormant\":N,\"revived\":N} validate={\"validated\":N} detect={\"detected\":N} reviewed={\"reviewed\":N} crossref={\"entityFlags\":N,\"traitFlags\":N,\"stateConflicts\":N} dedup={\"merged\":N} insight={\"synthesized\":false} spotCheck={\"checked\":N}",
    "L [Archivist] 🌿 ▶ classify...",
-   "E [Archivist Agent] classify 失敗: near \"/\": syntax error",
+   "L [Archivist] 待分類碎片: N 條 (實體星系)",
+   "L [Archivist] 深迴圈分類: N/N 條 (Companion+flash-lite, 新種子=N)",
    "L [Archivist] 🌿 ✓ classify (Ns): done",
    "L [Archivist] 🌿 ▶ rematch...",
    "L [Archivist] 回補: 沒有需要補分的種子",
@@ -752,9 +792,9 @@
     "running": "true",
     "companionActive": "false",
     "inTick": "false",
-    "dailyLLMCalls": 4,
+    "dailyLLMCalls": 5,
     "totalClassified": 0,
-    "totalTasksRun": 13,
+    "totalTasksRun": 14,
     "lastTick": "pending",
     "tools": [
      "classify_fragments",
@@ -781,9 +821,9 @@
     "running": "true",
     "companionActive": "false",
     "inTick": "false",
-    "dailyLLMCalls": 4,
+    "dailyLLMCalls": 5,
     "totalClassified": 0,
-    "totalTasksRun": 13,
+    "totalTasksRun": 14,
     "lastTick": "pending",
     "tools": [
      "classify_fragments",
@@ -810,9 +850,9 @@
     "running": "false",
     "companionActive": "false",
     "inTick": "false",
-    "dailyLLMCalls": 4,
+    "dailyLLMCalls": 5,
     "totalClassified": 0,
-    "totalTasksRun": 13,
+    "totalTasksRun": 14,
     "lastTick": "pending",
     "tools": [
      "classify_fragments",

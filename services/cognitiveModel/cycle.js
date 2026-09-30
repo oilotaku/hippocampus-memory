@@ -89,9 +89,18 @@ async function runUserModelCycle() {
 
     // Phase 8: Auto spot-check — verify up to 3 recent inferred entries against source messages
     let spotCheckResult = { checked: 0 };
+    // scripts/spotCheckModel.js 在這個 repo 從未存在過（git 歷史查無），屬選用的外掛腳本：
+    // 找不到就安靜略過；腳本存在但執行出錯才記錄錯誤。
     try {
-        const { autoSpotCheck } = require('../../scripts/spotCheckModel');
-        spotCheckResult = await autoSpotCheck([]);
+        let spotCheckMod = null;
+        try {
+            spotCheckMod = require('../../scripts/spotCheckModel');
+        } catch (e) {
+            if (e.code !== 'MODULE_NOT_FOUND' || !/spotCheckModel/.test(e.message)) throw e;
+        }
+        if (spotCheckMod && typeof spotCheckMod.autoSpotCheck === 'function') {
+            spotCheckResult = await spotCheckMod.autoSpotCheck([]);
+        }
     } catch (e) {
         console.error('[UserModel] autoSpotCheck error:', e.message);
     }

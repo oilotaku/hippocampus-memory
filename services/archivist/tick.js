@@ -297,7 +297,7 @@ async function agentTick() {
             try {
                 // 按值標路由的那幾顆也跟著補鏈（正常情況下提取時已經鏈好了，
                 // 這裡兜住"星座後建/當初寫庫失敗"的尾巴以及存量）
-                linkTaggedFragments(db);
+                linkTaggedFragments(getDb());
                 return linkAggregateFragments();
             } catch (e) {
                 console.error('[Archivist] aggregateLink 失敗:', e.message);
