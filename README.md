@@ -19,6 +19,7 @@ A self-organizing long-term memory system for AI assistants and companions. It e
 | SSRF protection for user-supplied endpoints | Working |
 | Encryption of memory content with a blind search index | Working (on by default) |
 | Archivist and cognitive model split into focused modules | Done |
+| Memory modules regrouped by hippocampal region (`services/hippocampus/`, old paths kept as forwarders) | Done |
 | All Chinese text in code, prompts, and UI in Traditional Chinese (Simplified input still matches) | Done |
 | Three-layer persona (core / relationship / situational) with versioned, reviewable, rollback-able relationship proposals | Working |
 | Stable traits (confidence ≥ 0.7) and the relationship layer injected into the chat prompt under their own small token budget | Working |
@@ -59,6 +60,8 @@ Librarian ── at chat time
 System prompt ── relevant memories, entity profiles, and user state,
                  kept within a configurable token budget
 ```
+
+The code is organized after the hippocampal memory system: input encoding (`entorhinal/`), pattern separation (`dentate/`), comparison (`ca1/`), pattern completion (`ca3/`), emotional modulation (`amygdala/`), sleep-time consolidation (`consolidation/`), forgetting (`homeostasis/`), and long-term semantic memory (`cortex/`), all under `services/hippocampus/`. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the region map, the write and recall data flow, and how the old module paths still resolve.
 
 ### Memory layers
 
@@ -217,7 +220,7 @@ Personalization lives here: user and assistant names, relationship, and colors. 
 | `emotion.attribution_half_life_days` | 30 | Decay of the entity x emotion and topic x time-of-day statistics |
 | `emotion.fade_half_life_neg_days` / `fade_half_life_pos_days` | 60 / 120 | Fading affect bias for ranking (negative fades faster); raw scores are never changed |
 
-Scribe emits the eight scores (joy, trust, fear, surprise, sadness, disgust, anger, anticipation, each 0-1) and an `event_at` date for every fact in the same LLM call. Each fragment stores `raised_at` (earliest source message), `event_at`, `created_at`, plus local `raised_slot` and `weekday`. Read-only API (login required): `GET /api/emotion/baseline`, `/entities`, `/topic-slots`, `/anniversaries`, `/events`. Library entry points are in `services/emotion/` (`getAnniversaries(db, date)`, `effectiveIntensity(fragment, now)`).
+Scribe emits the eight scores (joy, trust, fear, surprise, sadness, disgust, anger, anticipation, each 0-1) and an `event_at` date for every fact in the same LLM call. Each fragment stores `raised_at` (earliest source message), `event_at`, `created_at`, plus local `raised_slot` and `weekday`. Read-only API (login required): `GET /api/emotion/baseline`, `/entities`, `/topic-slots`, `/anniversaries`, `/events`. Library entry points are in `services/hippocampus/amygdala/` (also reachable as `services/emotion/`) (`getAnniversaries(db, date)`, `effectiveIntensity(fragment, now)`).
 
 ---
 
@@ -250,7 +253,7 @@ node scripts/e2e_ollama.js    # end-to-end run against a real local Ollama
 - **Entity resolution is broken upstream.** `entityResolver.js` reads a column `related_entity_ids` that no migration creates.
 - **The vector channel needs ChromaDB.** Without it, search falls back to full text and entities only.
 - **The blind index leaks frequency.** The same two-character token always hashes to the same value within a column, so token frequencies and shared tokens between rows are visible to someone holding the database file.
-- **Persona drift checks are subjective and noisy.** The probe questions (`services/persona/probes.json`) are a proxy for character, and a small local model answers differently from run to run. Mitigations: temperature 0, optional `persona.drift_samples` averaging, and a confirmation re-run before any rollback. A rollback only touches the relationship layer, not the raw stable traits that are also injected into the prompt.
+- **Persona drift checks are subjective and noisy.** The probe questions (`services/hippocampus/cortex/persona/probes.json`) are a proxy for character, and a small local model answers differently from run to run. Mitigations: temperature 0, optional `persona.drift_samples` averaging, and a confirmation re-run before any rollback. A rollback only touches the relationship layer, not the raw stable traits that are also injected into the prompt.
 - **Foreign keys are off.** Some child tables lack `ON DELETE` rules, so enabling them would break existing deletes.
 
 ---
