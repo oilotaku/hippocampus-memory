@@ -510,6 +510,17 @@ describe('buildSmartContext：gate 開／關', () => {
         assert.match(off.dynamicContext, /睡眠/);
         assert.deepEqual(off.injectedMemories, []);
     });
+    test('G3 人格關係區塊不受閘門影響：寒暄不查記憶時仍每輪注入', async () => {
+        const persona = require('../../services/persona');
+        const orig = persona.buildRelationshipContext;
+        persona.buildRelationshipContext = () => '<relationship_context>測試關係層</relationship_context>';
+        try {
+            const { buildSmartContext } = require('../../services/context');
+            const r = await buildSmartContext('晚安', '');
+            assert.doesNotMatch(r.dynamicContext, /<memory_context>/);
+            assert.match(r.dynamicContext, /<relationship_context>測試關係層/);
+        } finally { persona.buildRelationshipContext = orig; }
+    });
     test('gate 開：問句照常查並回報 injectedMemories', async () => {
         const id = addFrag({ content: '阿明去京都旅遊訂了旅館', created: daysBefore(2), ew: 0.8 });
         const { buildSmartContext } = require('../../services/context');
