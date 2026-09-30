@@ -39,8 +39,12 @@ after(() => { try { a.stop(); } catch (_) {} restore(); cleanupDb(dbPath); });
 const seal = (t, c, v) => require('../../services/memoryCrypto').sealField(t, c, v);
 
 function seed() {
+    // 偶發失敗根因：各列各自呼叫 datetime('now')，播種跨過秒界時，原本同一天（同秒）的兩列
+    // （f1/f6 都是 -1 days）created_at 差 1 秒，extractFragmentInsights 的 ORDER BY created_at DESC
+    // 順序翻轉 → prompt 雜湊不同。播種只取一次基準時間，所有列共用。
+    const NOW = db.prepare("SELECT datetime('now') AS n").get().n;
     const ins = db.prepare(`INSERT INTO entity_profiles (name, category, status, aliases, tags, fragment_count, relationship_to_user, current_status, created_at, updated_at, last_mentioned_date)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now', ?), datetime('now', ?), date('now', ?))`);
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('${NOW}', ?), datetime('${NOW}', ?), date('${NOW}', ?))`);
     const ent = {};
     const rows = [
         [USER.name, 'person', 'active', '[]', '[]', 6, null, '', '-60 days', '-3 days', '-1 days'],
@@ -55,7 +59,7 @@ function seed() {
     for (const r of rows) ent[r[0]] = Number(ins.run(...r.slice(0, 7), seal('entity_profiles', 'current_status', r[7]), ...r.slice(8)).lastInsertRowid);
 
     const frag = db.prepare(`INSERT INTO memory_fragments (type, entity, content, emotional_weight, created_at, source_msg_ids, value_tags, source_date)
-        VALUES (?, ?, ?, ?, datetime('now', ?), ?, ?, date('now', ?))`);
+        VALUES (?, ?, ?, ?, datetime('${NOW}', ?), ?, ?, date('${NOW}', ?))`);
     const link = db.prepare(`INSERT INTO fragment_entities (fragment_id, entity_id, relation, confidence, classified_by) VALUES (?, ?, ?, ?, ?)`);
     const fr = {};
     const frs = [
@@ -74,11 +78,11 @@ function seed() {
         links((eid, rel) => link.run(id, eid, rel, 0.8, 'test_seed'));
     }
     db.prepare("INSERT OR IGNORE INTO chats (id, name) VALUES (1, 'w7')").run();
-    const msg = db.prepare(`INSERT INTO messages (chat_id, sender, content, timestamp, is_encrypted) VALUES (1, ?, ?, datetime('now', ?), 0)`);
+    const msg = db.prepare(`INSERT INTO messages (chat_id, sender, content, timestamp, is_encrypted) VALUES (1, ?, ?, datetime('${NOW}', ?), 0)`);
     for (let i = 0; i < 12; i++) msg.run(i % 2 ? 'ai' : 'user', `第${i}句：今天和阿明吃拉麵，聊了很多工作的事`, `-${2 + i} days`);
-    db.prepare(`INSERT INTO memories (title, content, tags, weight, status, entity_id, created_at) VALUES (?, ?, '[]', 5, 'permanent', ?, datetime('now','-1 days'))`)
+    db.prepare(`INSERT INTO memories (title, content, tags, weight, status, entity_id, created_at) VALUES (?, ?, '[]', 5, 'permanent', ?, datetime('${NOW}','-1 days'))`)
         .run(seal('memories', 'title', '拉麵宵夜'), seal('memories', 'content', '和阿明吃一蘭'), ent['阿明']);
-    db.prepare(`INSERT INTO user_patterns (content, category, evidence_count, first_seen, last_seen, confidence) VALUES ('壓力大時會吃拉麵', 'behavior', 3, datetime('now','-20 days'), datetime('now','-3 days'), 0.5)`).run();
+    db.prepare(`INSERT INTO user_patterns (content, category, evidence_count, first_seen, last_seen, confidence) VALUES ('壓力大時會吃拉麵', 'behavior', 3, datetime('${NOW}','-20 days'), datetime('${NOW}','-3 days'), 0.5)`).run();
     return { ent, fr };
 }
 

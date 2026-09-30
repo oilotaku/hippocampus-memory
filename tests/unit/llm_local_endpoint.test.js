@@ -25,11 +25,14 @@ test.before(async () => {
             res.end(JSON.stringify({ choices: [{ message: { content: ' 你好 ' }, finish_reason: 'stop' }], usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } }));
         });
     });
+    // 整套並行、機器吃緊時，undici 會重用閒置的 keep-alive 連線；伺服器預設 5 秒就關閒置連線，
+    // 兩邊剛好錯身會多一次重試（2 秒）而讓 seen 內容順序不可預期。拉長閒置時限、並以路徑挑紀錄。
+    server.keepAliveTimeout = 60000;
     await new Promise(r => server.listen(0, '127.0.0.1', r));
     base = `http://127.0.0.1:${server.address().port}`;
     process.env.LLM_ENDPOINT_ALLOWLIST = base;
 });
-test.after(() => server.close());
+test.after(() => { server.closeAllConnections(); server.close(); });
 
 function addConfig(name, key, isDefault) {
     return db.prepare(`INSERT INTO api_configs (name, provider, endpoint, api_key, model_name, is_default, supports_tools)
@@ -71,7 +74,8 @@ test('embedding：名稱含 embedding 的配置被選用，無 key 不送 Author
     seen = [];
     const v = await llm.getEmbedding('我住在三重');
     assert.deepStrictEqual(v, [0.1, 0.2]);
-    assert.strictEqual(seen[0].url, '/v1/embeddings');
-    assert.strictEqual(seen[0].auth, undefined);
-    assert.strictEqual(seen[0].body.model, 'bge-m3');
+    const emb = seen.filter(x => x.url === '/v1/embeddings');
+    assert.ok(emb.length >= 1, `應打到 /v1/embeddings，實際 ${JSON.stringify(seen.map(x => x.url))}`);
+    assert.strictEqual(emb[0].auth, undefined);
+    assert.strictEqual(emb[0].body.model, 'bge-m3');
 });
