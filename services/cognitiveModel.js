@@ -10,80 +10,9 @@
 // 职责：CRUD、证据管理、衰减处理、假设验证、新特质检测、上下文注入
 // =================================================================
 
-const { getDb } = require('../database');
-const { callLLM } = require('./llm');
-const { WORLD_CONTEXT } = require('./worldContext');
-const { fillPrompt, USER, AI } = require('./nameResolver');
-const { encryption } = require('../encryption');
-const { getCompanionPersonaBase } = require('./companionPersona');
-const { sqlNow, sqlTimeAhead, DAY_MS } = require('../utils/time');
-// ── W7 拆分進行中：以下名稱已搬到 services/cognitiveModel/ ──
-const { MIN_GAP_USER_MODEL } = require('./cognitiveModel/constants');
-const { createEntry, updateEntry, resolveEntry, abandonEntry, supersedeEntry, correctEntry } = require('./cognitiveModel/entries');
-const { addEvidence, matchEvidenceFromFragments, anchorEntriesToFragments, seedAnchorOrphanEntries, harvestFacts, backfillModelEvidence, bridgeStarMapToModel } = require('./cognitiveModel/evidence');
-const { processModelDecay, resolveExpiredStates } = require('./cognitiveModel/decay');
-const { manageCurrentState } = require('./cognitiveModel/currentState');
-const { validateHypotheses, detectNewTraits, reviewFlaggedTraits, reviewStableTraits } = require('./cognitiveModel/traits');
-const { getModelContext, getWhisperRelevant } = require('./cognitiveModel/context');
-const { seedFromExisting } = require('./cognitiveModel/migration');
-const { readUserRawMessages } = require('./cognitiveModel/observation');
-const { integrateProfileTraits } = require('./cognitiveModel/profile');
-const { crossRefStateWithEntities, mergeModelEntries, detectModelOverlaps, synthesizeCoreInsight } = require('./cognitiveModel/overlap');
-const { runUserModelCycle } = require('./cognitiveModel/cycle');
+// =================================================================
+// W7 起程式拆到 services/cognitiveModel/ 目錄，依職責分檔；本檔只轉出 index.js，
+// 保持 require('./cognitiveModel') 等既有路徑可用。分檔說明見 services/cognitiveModel/index.js。
+// =================================================================
 
-// ══════════════════════════════════════════════════════════════
-
-module.exports = {
-    createEntry, updateEntry, manageCurrentState,
-    // CRUD
-    createEntry,
-    updateEntry,
-    resolveEntry,
-    abandonEntry,
-    supersedeEntry,
-    correctEntry,
-
-    // Evidence
-    addEvidence,
-    matchEvidenceFromFragments,
-    harvestFacts,  // v4.8 退役，保留兼容
-    bridgeStarMapToModel,
-
-    // Decay & validation
-    processModelDecay,
-    validateHypotheses,
-    detectNewTraits,
-    reviewFlaggedTraits,
-    resolveExpiredStates,
-    reviewStableTraits,
-    seedAnchorOrphanEntries,
-    anchorEntriesToFragments,
-
-    // Profile integration (v5.10)
-    integrateProfileTraits,
-
-    // Dedup (v4.9)
-    detectModelOverlaps,
-    mergeModelEntries,
-
-    // Cross-reference (v5.0)
-    crossRefStateWithEntities,
-
-    // Core insight (v5.0)
-    synthesizeCoreInsight,
-
-    // Context
-    getModelContext,
-    getWhisperRelevant,
-
-    // Migration
-    seedFromExisting,
-
-    // Evidence
-    backfillModelEvidence,
-
-    // Deep cycle
-    runUserModelCycle,
-    readUserRawMessages,
-    MIN_GAP_USER_MODEL,
-};
+module.exports = require('./cognitiveModel/index');
