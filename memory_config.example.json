@@ -82,6 +82,29 @@
     "cite_min_overlap": 0.3,
     "cite_min_shared": 3
   },
+  "emotion": {
+    "_comment": "Eight-dimension emotion engine (Plutchik: joy, trust, fear, surprise, sadness, disgust, anger, anticipation). Scribe emits scores for each fact in the same LLM call (no extra calls); the engine learns a personal, time-of-day baseline per dimension (Ornstein-Uhlenbeck + Kalman, hierarchical shrinkage) and flags emotional turning points. enabled=false: Scribe stops emitting emotion fields and nothing else in this section runs.",
+    "enabled": true,
+    "timezone": "Asia/Taipei",
+    "_comment_timezone": "IANA timezone used for time-of-day slots (morning 05-11, noon 11-17, evening 17-23, night 23-05) and weekday.",
+    "noise_floor": 0.2,
+    "_comment_noise_floor": "Scores at or below this are treated as background noise (measured: neutral short sentences land at 0.1-0.2 on every dimension). Subtracted before intensity/valence.",
+    "prior_mu": 0.2,
+    "prior_sigma": 0.15,
+    "tau_hours": 6,
+    "obs_noise": 0.07,
+    "shrink_slot_n0": 8,
+    "shrink_user_n0": 10,
+    "learning_min_samples": 50,
+    "_comment_learning": "Fewer informative fragments than this = still learning (population priors dominate). prior_* = population prior (baseline, spread); tau_hours = recovery time (prior only); obs_noise = Kalman observation noise; shrink_*_n0 = pseudo-observations of the prior.",
+    "anomaly_sigma": 2,
+    "attribution_half_life_days": 30,
+    "attribution_prior_strength": 3,
+    "attribution_prior_rate": 0.1,
+    "fade_half_life_neg_days": 60,
+    "fade_half_life_pos_days": 120,
+    "_comment_fade": "Fading affect bias for ranking: negative emotion intensity halves every 60 days, positive every 120. Raw scores are never modified."
+  },
   "librarian": {
     "_comment": "Exclude specific fragment sources from search results.",
     "exclude_sources": []

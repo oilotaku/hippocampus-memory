@@ -1355,6 +1355,49 @@ function initDatabase() {
         return stmts.join('\n');
     })());
 
+    // v111（G2）：八維情緒引擎與事件歸因。
+    // 碎片新欄位：emo_*（八維原始分數 0～1，未扣底噪）、emotion_conf、intensity（八維最大值，扣底噪後）、
+    // valence（−1～1）、raised_at（話題被提出的時間，UTC）、event_at（事件本身的日期，YYYY-MM-DD 或 YYYY-MM）、
+    // raised_slot（當地時段）、weekday（當地星期，0=週日）、tz。新表：使用者基準統計與 OU 狀態、
+    // 已處理事件（含轉折）、實體 × 情緒、話題（實體類別）× 時段。
+    {
+        const have = new Set(db.prepare('PRAGMA table_info(memory_fragments)').all().map(r => r.name));
+        const dims = ['joy', 'trust', 'fear', 'surprise', 'sadness', 'disgust', 'anger', 'anticipation'];
+        const cols = [
+            ...dims.map(d => [`emo_${d}`, 'REAL']),
+            ['emotion_conf', 'REAL'], ['intensity', 'REAL'], ['valence', 'REAL'],
+            ['raised_at', 'TEXT'], ['event_at', 'TEXT'], ['raised_slot', 'TEXT'], ['weekday', 'INTEGER'], ['tz', 'TEXT'],
+        ].filter(([c]) => !have.has(c));
+        runMigration(111, 'G2: 八維情緒引擎與事件歸因',
+            cols.map(([c, t]) => `ALTER TABLE memory_fragments ADD COLUMN ${c} ${t};`).join('\n') + `
+            CREATE INDEX IF NOT EXISTS idx_mf_raised_at ON memory_fragments(raised_at);
+            CREATE INDEX IF NOT EXISTS idx_mf_event_at ON memory_fragments(event_at);
+            CREATE TABLE IF NOT EXISTS emotion_baseline_stats (
+                dim TEXT NOT NULL, slot TEXT NOT NULL,
+                n REAL DEFAULT 0, w REAL DEFAULT 0, s REAL DEFAULT 0, nr INTEGER DEFAULT 0, r2 REAL DEFAULT 0,
+                PRIMARY KEY (dim, slot)
+            );
+            CREATE TABLE IF NOT EXISTS emotion_state (
+                dim TEXT PRIMARY KEY, x REAL NOT NULL, p REAL NOT NULL, t TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS emotion_events (
+                fragment_id INTEGER PRIMARY KEY, raised_at TEXT, slot TEXT,
+                informative INTEGER DEFAULT 1, learning INTEGER DEFAULT 0,
+                anomalies TEXT DEFAULT '[]', max_z REAL DEFAULT 0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS emotion_entity_stats (
+                entity_id INTEGER NOT NULL, dim TEXT NOT NULL,
+                n REAL DEFAULT 0, hits REAL DEFAULT 0, mag REAL DEFAULT 0, last_at TEXT,
+                PRIMARY KEY (entity_id, dim)
+            );
+            CREATE TABLE IF NOT EXISTS emotion_topic_slot (
+                category TEXT NOT NULL, slot TEXT NOT NULL, dim TEXT NOT NULL,
+                n REAL DEFAULT 0, sum REAL DEFAULT 0, last_at TEXT,
+                PRIMARY KEY (category, slot, dim)
+            );`);
+    }
+
     // v113（G1）：取記憶時機閘門。
     //  - injected_count：被注入 prompt 的次數（novelty 懲罰用）；以既有 read_count 初始化，
     //    因為舊的 read_count 就是「注入次數」。

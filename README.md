@@ -26,6 +26,7 @@ A self-organizing long-term memory system for AI assistants and companions. It e
 | Daily persona drift check against anchor answers, with automatic rollback of the relationship layer | Working (embedding channel needs ChromaDB; falls back to bigram Jaccard) |
 | Retrieval timing gate: skip memory lookup for greetings and commands, adaptive result count, context-triggered surfacing, upcoming-event reminders, capped hard triggers | Working (on by default; `recall.gate=false` restores the old behaviour) |
 | `injected_count` (put in the prompt) split from `cited_count` (actually used) | Working; `cited_count` is fed by the `recall_memory` tool, and by `recallGate.markCitedFromReply()` for hosts that can pass the assistant's reply |
+| Eight-dimension emotion engine: per-fragment scores, personal time-of-day baselines, turning-point attribution to entities, anniversaries, fading | Working (on by default, `emotion.enabled`) |
 
 ---
 
@@ -199,6 +200,24 @@ Personalization lives here: user and assistant names, relationship, and colors. 
 | `recall.prospective_days / prospective_max` | 7 / 3 | Events dated within this many days are added to an upcoming-events block even if the message did not match them. Dates are parsed from fragment text (`M月D日`, `M/D`, `下週X`, `週X`, `明天`, ...) relative to when the fragment was written; an `event_at` column is used if present |
 | `recall.hard_trigger_max` | 3 | Most hard-trigger memories injected per message; tags now match on two-character tokens instead of raw substrings |
 | `recall.cite_min_overlap / cite_min_shared` | 0.3 / 3 | How much of a fragment's two-character tokens must appear in a reply for `markCitedFromReply()` to count it as cited |
+
+#### Emotion engine (`emotion.*`)
+
+| Key | Default | Purpose |
+|---|---|---|
+| `emotion.enabled` | true | Master switch. `false`: Scribe stops emitting emotion fields and nothing else in this section runs |
+| `emotion.timezone` | `Asia/Taipei` | IANA timezone for time-of-day slots (morning 05-11, noon 11-17, evening 17-23, night 23-05) and weekday |
+| `emotion.noise_floor` | 0.2 | Scores at or below this are background noise; subtracted before `intensity` / `valence` |
+| `emotion.prior_mu` / `prior_sigma` | 0.2 / 0.15 | Population prior for a dimension's baseline and spread |
+| `emotion.tau_hours` | 6 | Recovery time (prior only, not learned) |
+| `emotion.obs_noise` | 0.07 | Kalman observation noise (std) |
+| `emotion.shrink_slot_n0` / `shrink_user_n0` | 8 / 10 | Hierarchical shrinkage strength: slot baseline toward the user's own mean, user mean toward the population prior |
+| `emotion.learning_min_samples` | 50 | Fewer informative fragments than this means "still learning" |
+| `emotion.anomaly_sigma` | 2 | Deviation from the personal, time-of-day baseline that counts as an emotional turning point |
+| `emotion.attribution_half_life_days` | 30 | Decay of the entity x emotion and topic x time-of-day statistics |
+| `emotion.fade_half_life_neg_days` / `fade_half_life_pos_days` | 60 / 120 | Fading affect bias for ranking (negative fades faster); raw scores are never changed |
+
+Scribe emits the eight scores (joy, trust, fear, surprise, sadness, disgust, anger, anticipation, each 0-1) and an `event_at` date for every fact in the same LLM call. Each fragment stores `raised_at` (earliest source message), `event_at`, `created_at`, plus local `raised_slot` and `weekday`. Read-only API (login required): `GET /api/emotion/baseline`, `/entities`, `/topic-slots`, `/anniversaries`, `/events`. Library entry points are in `services/emotion/` (`getAnniversaries(db, date)`, `effectiveIntensity(fragment, now)`).
 
 ---
 

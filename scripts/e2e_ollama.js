@@ -69,6 +69,10 @@ const convo = [
     ['ai',   '很棒，持續下去一定會進步。'],
     ['user', '提醒你一下，我對花生過敏，吃到會起疹子喘不過氣'],
     ['ai',   '我記住了，之後推薦食物會避開花生。'],
+    ['user', '下個月十五號要去東京玩，超期待，不過一個人搭飛機有點緊張'],
+    ['ai',   '第一次自己出國嗎？'],
+    ['user', '今天被主管當眾罵，氣死我了，真的很想離職'],
+    ['ai',   '聽起來你真的很難受。'],
 ];
 const messages = convo.map(([sender, content], i) => ({
     id: i + 1, sender, content, message_type: 'text', is_encrypted: 0,
@@ -96,9 +100,24 @@ async function main() {
     if (!r?.written || process.env.E2E_SHOW_REPLY) console.log('模型原始輸出（前 3000 字）:\n' + String(llmLog[llmLog.length - 1]?.reply || '').slice(0, 3000));
 
     }
-    const rows = db.prepare('SELECT id, type, entity, content, quote, emotional_weight FROM memory_fragments ORDER BY id').all();
+    const rows = db.prepare('SELECT * FROM memory_fragments ORDER BY id').all();
     console.log('\n寫入的碎片:');
-    for (const f of rows) console.log(`  #${f.id} [${f.type}] ${f.entity}: ${f.content}  （quote: ${f.quote}）`);
+    for (const f of rows) {
+        console.log(`  #${f.id} [${f.type}] ${f.entity}: ${f.content}  （quote: ${f.quote}）`);
+        // G2：八維情緒（原始分數）、衍生 intensity / valence、事件日期、時間與時段
+        if (f.intensity !== null && f.intensity !== undefined) {
+            const emo = ['joy', 'trust', 'fear', 'surprise', 'sadness', 'disgust', 'anger', 'anticipation']
+                .map(d => `${d}=${(f['emo_' + d] ?? 0).toFixed(2)}`).join(' ');
+            console.log(`      情緒 ${emo}`);
+            console.log(`      intensity=${f.intensity.toFixed(2)} valence=${f.valence.toFixed(2)} conf=${f.emotion_conf} emotional_weight=${f.emotional_weight.toFixed(2)}`);
+        } else {
+            console.log('      情緒：（模型未輸出或 emotion.enabled=false）');
+        }
+        console.log(`      event_at=${f.event_at ?? 'null'} raised_at=${f.raised_at} 時段=${f.raised_slot} 週${f.weekday} tz=${f.tz}`);
+    }
+    const emo = require('../services/emotion');
+    const bs = emo.getBaselineStatus(db);
+    console.log(`\n個人情緒基準：學習中=${bs.learning}（有效樣本 ${bs.samples}/${bs.min_samples}）；轉折 ${db.prepare("SELECT COUNT(*) c FROM emotion_events WHERE anomalies != '[]'").get().c} 條碎片`);
 
     console.log('\n===== Librarian 查詢 =====');
     // 前三個是繁體查詢；後三個是簡體寫法對照（W9：斷詞前逐字簡繁正規化，簡繁查詢都應命中，與碎片本身是哪種字體無關）

@@ -18,6 +18,7 @@ const { chromaDBOperation } = require('./memory');
 const { WORLD_CONTEXT } = require('./worldContext');
 const { renderTagSpecForPrompt } = require('./tagRouting');
 const { filterEntriesByQuote, normalizedContentHash, findDuplicate } = require('./scribeQuality');
+const emotion = require('./emotion');
 const { spawn } = require('child_process');
 const path = require('path');
 
@@ -245,7 +246,7 @@ ${USER.name}同一天可能發生多個獨立的事件——它們只是碰巧�
       "quote": "從來源訊息中【逐字複製】的一段原話（≤60字，不得改寫/概括/補字）。普通 entry 必須來自${USER.name}的發言；找不到原話就不要輸出這條 entry",
       "quote_from": "user（預設）|ai——僅當這條是上文允許提取的兩類${AI.name}發言（情緒感知/強烈情感表達，type 只能是 observation|state|reflection）時才填 ai，此時 quote 必須逐字取自${AI.name}的發言",
       "content": "第三人稱，必須以人名或實體名開頭或句中明確點名（${USER.name}/${AI.name}/具體人名/地名/作品名），禁止用他/她/承認/表示等無名主語開頭；不超過80字；必須使用與${USER.name}發言相同的語言與字體書寫（${USER.name}用繁體就用繁體、用簡體就用簡體，不要自行轉換）",
-      "emotional_weight": 參見評分錨定表（必填，不得省略）",
+      "emotional_weight": 參見評分錨定表（必填，不得省略）",{EMOTION_FIELDS}
       "value_tags": [],
       "source": "chat|wechat|book|game",
       "is_rp": false
@@ -311,7 +312,7 @@ ${renderTagSpecForPrompt()}
 - 從${USER.name}的角度判斷：這件事對${USER.name}真實的情緒衝擊有多大？
 - 不確定時往下取，不要往上取。寧可標低了將來被Curator升級，也別標高了汙染檢索權重。
 
-## 時間表達（關鍵規則）
+{EMOTION_RULES}## 時間表達（關鍵規則）
 
 輸入訊息帶有時間戳，例如 \`[2026-05-02 13:22]\` 表示2026年5月2日13:22傳送的訊息。
 
@@ -639,7 +640,9 @@ async function runScribe(messages, since) {
         .replace('{ENTITY_RELATION_CONTEXT}', entityRelationContext)
         .replace('{COMPANION_MEMORY_CONTEXT}', companionMemoryContext)
         .replace('{CORRECTION_LESSONS}', correctionLessons)
-        .replace('{OPEN_INTENTIONS}', openIntentions));
+        .replace('{OPEN_INTENTIONS}', openIntentions)
+        .replace('{EMOTION_FIELDS}', () => emotion.prompt.fields())
+        .replace('{EMOTION_RULES}', () => emotion.prompt.rules()));
 
     let result;
     let attempts = 0;
@@ -844,6 +847,7 @@ async function runScribe(messages, since) {
                 quote = COALESCE(quote, ?)
             WHERE id = ?
         `);
+        const emoMsgs = messages.filter(m => m.message_type !== 'image').map(m => ({ ts: m.timestamp, text: dec(m) }));
         const insertEntityLink = db.prepare(`
             INSERT OR IGNORE INTO fragment_entities (fragment_id, entity_id, relation, confidence, classified_by, created_at)
             VALUES (?, ?, ?, 0.70, 'scribe_extract', datetime('now'))
@@ -909,6 +913,13 @@ async function runScribe(messages, since) {
             const fragId = info.lastInsertRowid;
             newFragmentIds.push(fragId);
 
+            // G2：八維情緒、事件日期、三種時間與時段（emotion.enabled=false 時不做任何事；失敗不影響寫入）
+            try {
+                emotion.applyScribeEmotion(db, fragId, entry, { raisedAt: emotion.resolveRaisedAt(entry.quote, emoMsgs) });
+            } catch (e) {
+                console.warn(`[Scribe] 情緒欄位寫入失敗 frag#${fragId}: ${e.message}`);
+            }
+
             // 按值標直連到聚合星座（配置驅動，見 services/tagRouting.js）。
             // **入庫即建鏈**：不能等分類管線——分類入口要求 status='active'，而整合會把
             // 跑過的碎片改成 'consolidated'，兩條管線搶同一批碎片，誰先到誰說了算。
@@ -964,6 +975,17 @@ async function runScribe(messages, since) {
             await resolveEntityIds(newFragmentIds, fullText);
         } catch (e) {
             console.error('[Scribe] 實體解析失敗（非致命）:', e.message);
+        }
+    }
+
+    // G2：實體連結完成後，更新個人情緒基準（OU/Kalman）、偵測情緒轉折並歸因到實體
+    if (newFragmentIds.length > 0) {
+        try {
+            const done = emotion.processFragments(db, newFragmentIds);
+            const turns = done.reduce((n, r) => n + (r.anomalies?.length || 0), 0);
+            if (turns > 0) console.log(`[Scribe] 情緒轉折：${done.filter(r => r.anomalies?.length).length} 條碎片、${turns} 個維度`);
+        } catch (e) {
+            console.error('[Scribe] 情緒狀態更新失敗（非致命）:', e.message);
         }
     }
 

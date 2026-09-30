@@ -89,6 +89,9 @@ app.use(require('./routes/memory-api'));
 // ── 人格三層：提案審核、漂移事件（G3）──
 app.use(require('./routes/persona-api'));
 
+// ── 情緒引擎查詢 API（唯讀，需登入）──
+app.use(require('./routes/emotion-api'));
+
 // ── Chat ingest API（接收外部機器人訊息，攢記憶）──
 app.use('/api', require('./routes/ingest'));
 
