@@ -150,6 +150,7 @@ The full walkthrough is in [`OSS_SETUP.md`](OSS_SETUP.md).
 | `SANCTUARY_ENCRYPTION_KEY` | Yes | Current encryption key, 64 hex characters (`openssl rand -hex 32`) |
 | `SANCTUARY_ENCRYPTION_KEY_ID` | No | ID written into new ciphertext, default `k1` |
 | `SANCTUARY_ENCRYPTION_KEYS_OLD` | No | Older keys for decryption after rotation, as `kid=hex,kid=hex` |
+| `MEMORY_ENCRYPTION` | No | `on` (default) encrypts memory bodies at rest (fragment content/quote, episode title/content, constellation facts/status/judgment/overview) and uses a keyed blind index for full-text search; `off` stores them in plain text. Switching either way is handled on the next start. Rotate keys with `node scripts/rotate_memory_keys.js [--dry-run]` |
 | `SESSION_SECRET` | Yes | Session secret, 64 hex characters |
 | `LOGIN_PASSWORD` | Yes | Web login password |
 | `API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `DEEPSEEK_API_KEY` | For cloud models | Model provider keys |
