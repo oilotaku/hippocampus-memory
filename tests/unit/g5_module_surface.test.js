@@ -71,7 +71,29 @@ const MOVED = [
     ['services/persona/similarity.js', 'services/hippocampus/cortex/persona/similarity.js'],
     ['services/entityProfile.js', 'services/hippocampus/cortex/entityProfile.js'],
     ['services/userProfile.js', 'services/hippocampus/cortex/userProfile.js'],
-    ['services/companionPersona.js', 'services/hippocampus/cortex/companionPersona.js']
+    ['services/companionPersona.js', 'services/hippocampus/cortex/companionPersona.js'],
+    ['services/archivist/classify.js', 'services/hippocampus/consolidation/archivist/classify.js'],
+    ['services/archivist/constants.js', 'services/hippocampus/consolidation/archivist/constants.js'],
+    ['services/archivist/dailyStatus.js', 'services/hippocampus/consolidation/archivist/dailyStatus.js'],
+    ['services/archivist/emergent.js', 'services/hippocampus/consolidation/archivist/emergent.js'],
+    ['services/archivist/entityDiscovery.js', 'services/hippocampus/consolidation/archivist/entityDiscovery.js'],
+    ['services/archivist/entityLink.js', 'services/hippocampus/consolidation/archivist/entityLink.js'],
+    ['services/archivist/entityOverview.js', 'services/hippocampus/consolidation/archivist/entityOverview.js'],
+    ['services/archivist/episode.js', 'services/hippocampus/consolidation/archivist/episode.js'],
+    ['services/archivist/guards.js', 'services/hippocampus/consolidation/archivist/guards.js'],
+    ['services/archivist/index.js', 'services/hippocampus/consolidation/archivist/index.js'],
+    ['services/archivist/insights.js', 'services/hippocampus/consolidation/archivist/insights.js'],
+    ['services/archivist/intuitionStopwords.js', 'services/hippocampus/consolidation/archivist/intuitionStopwords.js'],
+    ['services/archivist/patterns.js', 'services/hippocampus/consolidation/archivist/patterns.js'],
+    ['services/archivist/registerTools.js', 'services/hippocampus/consolidation/archivist/registerTools.js'],
+    ['services/archivist/relations.js', 'services/hippocampus/consolidation/archivist/relations.js'],
+    ['services/archivist/rematch.js', 'services/hippocampus/consolidation/archivist/rematch.js'],
+    ['services/archivist/runtime.js', 'services/hippocampus/consolidation/archivist/runtime.js'],
+    ['services/archivist/seeds.js', 'services/hippocampus/consolidation/archivist/seeds.js'],
+    ['services/archivist/shared.js', 'services/hippocampus/consolidation/archivist/shared.js'],
+    ['services/archivist/tick.js', 'services/hippocampus/consolidation/archivist/tick.js'],
+    ['services/consolidator.js', 'services/hippocampus/consolidation/consolidator.js'],
+    ['services/summary.js', 'services/hippocampus/consolidation/summary.js']
 ];
 
 if (process.env.G5_RECORD === '1') {

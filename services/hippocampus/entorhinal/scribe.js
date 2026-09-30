@@ -925,7 +925,7 @@ async function runScribe(messages, since) {
             // **入庫即建鏈**：不能等分類管線——分類入口要求 status='active'，而整合會把
             // 跑過的碎片改成 'consolidated'，兩條管線搶同一批碎片，誰先到誰說了算。
             try {
-                const { linkTaggedFragment } = require('../../archivist');
+                const { linkTaggedFragment } = require('../consolidation/archivist');
                 linkTaggedFragment(db, fragId, valueTags);
             } catch (e) {
                 console.warn(`[Scribe] 標路由連結失敗 frag#${fragId}: ${e.message}`);
@@ -1026,7 +1026,7 @@ async function runScribe(messages, since) {
     // 新碎片寫入完成 → 通知 Archivist Agent（事件驅動，秒級響應）
     if (written > 0) {
         try {
-            const { archivistEvents } = require('../../archivist');
+            const { archivistEvents } = require('../consolidation/archivist');
             archivistEvents.emit('fragments:written', { fragmentIds: newFragmentIds, sourceMsgIds });
         } catch (e) {
             console.error('[Scribe] Archivist 事件傳送失敗:', e.message);

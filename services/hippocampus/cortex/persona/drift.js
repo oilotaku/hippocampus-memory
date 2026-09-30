@@ -49,7 +49,7 @@ async function answerProbe(callLLM, systemPrompt, question, configId) {
 }
 
 function getDefaultLLM() {
-    const { ARCHIVIST_LLM_CONFIG_ID } = require('../../../archivist/constants');
+    const { ARCHIVIST_LLM_CONFIG_ID } = require('../../consolidation/archivist/constants');
     // 呼叫當下才取 callLLM，測試才能替換 llm.callLLM
     return { callLLM: (...a) => require('../../../llm').callLLM(...a), configId: ARCHIVIST_LLM_CONFIG_ID };
 }

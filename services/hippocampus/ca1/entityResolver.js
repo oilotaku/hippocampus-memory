@@ -419,7 +419,7 @@ async function resolveEntityIds(fragmentIds, conversationText) {
 
     // —— 第四層（fire-and-forget）：實體關係發現 ——
     try {
-        const { discoverEntityRelationships } = require('../../archivist');
+        const { discoverEntityRelationships } = require('../consolidation/archivist');
         const db = getDb();
 
         const missingRels = db.prepare(`

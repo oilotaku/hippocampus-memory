@@ -280,7 +280,7 @@ async function runEntityExtraction() {
                 // ⚠️ 哨兵（"無明顯變化"）不落庫：這裡是**整段替換**語義，實體不存在時
                 // 還會直接 INSERT 建一個。懶載入避免把整個 archivist 拖進來。
                 try {
-                    const { isNoChangeSentinel } = require('../../archivist');
+                    const { isNoChangeSentinel } = require('../consolidation/archivist');
                     if (isNoChangeSentinel(result.current_status)) {
                         stats.unchanged++;
                         continue;

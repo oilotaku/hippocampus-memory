@@ -88,7 +88,7 @@ async function updateEntityProfiles(newEpisodes) {
         // ⚠️ 哨兵（"無明顯變化"）不落庫——跟 archivist 那邊同一條規矩。
         // 這裡是**整段替換**語義，且實體不存在時會直接 INSERT 建一個。
         try {
-            const { isNoChangeSentinel } = require('../../archivist');
+            const { isNoChangeSentinel } = require('../consolidation/archivist');
             if (isNoChangeSentinel(u.new_status)) {
                 console.log(`[EntityProfile] ${u.entity} 跳過（近況是哨兵值，保留舊值）`);
                 continue;
