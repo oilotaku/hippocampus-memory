@@ -321,6 +321,36 @@ describe('情境浮現', () => {
         assert.deepEqual(r.map(f => f.id), [ann]);
         assert.equal(r[0]._surfaceReason, 'anniversary');
     });
+    test('F4：G2 啟用時週年日走 getAnniversaries——以當地日期比對 raised_at（UTC 差一天也算）', () => {
+        // NOW = 2026-09-30 12:00 UTC（台北 20:00，同日）；去年 UTC 09-29 18:00 = 台北 09-30 02:00 → 當地是「去年今天」
+        const id = addFrag({ content: '去年半夜想到的事', created: '2025-05-01 00:00:00', injected: 3 });
+        db.prepare("UPDATE memory_fragments SET raised_at = '2025-09-29 18:00:00', intensity = 0.5, valence = -0.2 WHERE id = ?").run(id);
+        const r = pick({ lastMessageAt: NOW - 60000 });
+        assert.deepEqual(r.map(f => f.id), [id]);
+        assert.equal(r[0]._surfaceReason, 'anniversary');
+    });
+    test('F4：event_at 為去年今天也算（即使 created_at 是別天）', () => {
+        const id = addFrag({ content: '去年今天的婚禮', created: '2025-10-15 00:00:00', injected: 3 });
+        db.prepare("UPDATE memory_fragments SET raised_at = '2025-10-15 00:00:00', event_at = '2025-09-30', intensity = 0.6, valence = 0.8 WHERE id = ?").run(id);
+        const r = pick({ lastMessageAt: NOW - 60000 });
+        assert.deepEqual(r.map(f => f.id), [id]);
+    });
+    test('F4：有 raised_at 的碎片不再用 created_at 月日比對（避免 UTC 月日誤判）；沒有的舊碎片仍走 created_at', () => {
+        const wrong = addFrag({ content: '建立日相同但被提出在別天', created: '2025-09-30 08:00:00', injected: 3 });
+        db.prepare("UPDATE memory_fragments SET raised_at = '2025-03-01 08:00:00', intensity = 0.5, valence = 0 WHERE id = ?").run(wrong);
+        const legacy = addFrag({ content: '舊碎片沒有情緒欄位', created: '2025-09-30 09:00:00', injected: 3 });
+        const r = pick({ lastMessageAt: NOW - 60000 });
+        assert.deepEqual(r.map(f => f.id), [legacy]);
+    });
+    test('F4：G2 關閉 → 退回原本的 created_at 比對', () => {
+        const emotion = require('../../services/emotion');
+        const wrong = addFrag({ content: '建立日相同但被提出在別天', created: '2025-09-30 08:00:00', injected: 3 });
+        db.prepare("UPDATE memory_fragments SET raised_at = '2025-03-01 08:00:00', intensity = 0.5, valence = 0 WHERE id = ?").run(wrong);
+        emotion._setOverride({ enabled: false });
+        try {
+            assert.deepEqual(pick({ lastMessageAt: NOW - 60000 }).map(f => f.id), [wrong]);
+        } finally { emotion._setOverride(null); }
+    });
     test('冷卻期內不重複、過了冷卻可再浮現', () => {
         const id = addFrag({ content: '舊事一件', created: daysBefore(30) });
         const o = { lastMessageAt: NOW - 8 * 3600000 };

@@ -362,15 +362,43 @@ function pickSurface({ db, cfg, now = Date.now(), lastMessageAt = null, rng = Ma
 
     try {
         // (b) 同一日期（去年今天）：不要求閒置
+        // G2 啟用時優先用 getAnniversaries：以「當地日期」比對 event_at（事件日）與 raised_at（被提出日），處理時區；
+        // 沒有 raised_at／event_at 的舊碎片仍以 created_at 月日比對（UTC，原邏輯）。G2 關閉時整段退回原邏輯。
+        let emo = null;
+        try {
+            const { getEmotionConfig } = require('./emotion/config');
+            if (getEmotionConfig().enabled) emo = require('./emotion/queries');
+        } catch (_) { emo = null; }
+        let annivRows = [];
+        let legacyOnly = false;
+        if (emo) {
+            try {
+                const ids = [...new Set(emo.getAnniversaries(db, nowDate, { limit: 50 }).map(a => a.fragment_id))];
+                if (ids.length) {
+                    annivRows = db.prepare(`
+                        SELECT ${cols} FROM memory_fragments mf
+                        WHERE mf.status = 'active' AND mf.id IN (${ids.map(() => '?').join(',')})
+                          AND ${notCooling}
+                        ORDER BY mf.emotional_weight DESC, mf.id DESC LIMIT 50
+                    `).all(...ids, cooldownCutoff);
+                }
+                legacyOnly = true;
+            } catch (e) {
+                console.error('[recallGate] 週年日查詢失敗，退回 created_at 比對:', e.message);
+                emo = null; annivRows = [];
+            }
+        }
+        for (const f of annivRows) candidates.set(f.id, { ...f, _surfaceReason: 'anniversary' });
         const anniv = db.prepare(`
             SELECT ${cols} FROM memory_fragments mf
             WHERE mf.status = 'active'
               AND substr(mf.created_at, 6, 5) = ?
               AND substr(mf.created_at, 1, 4) != ?
+              ${legacyOnly ? 'AND mf.raised_at IS NULL' : ''}
               AND ${notCooling}
             ORDER BY mf.emotional_weight DESC, mf.id DESC LIMIT 50
         `).all(mmdd, thisYear, cooldownCutoff);
-        for (const f of anniv) candidates.set(f.id, { ...f, _surfaceReason: 'anniversary' });
+        for (const f of anniv) if (!candidates.has(f.id)) candidates.set(f.id, { ...f, _surfaceReason: 'anniversary' });
 
         // (a) 閒置後第一句：從沒被注入過的舊碎片
         if (idle) {

@@ -5,6 +5,8 @@ const { AI } = require('./nameResolver');
 const { toQueryTokens } = require('../utils/cjkTokenize');
 const { toTraditionalChars } = require('../utils/zhNormalize');
 const { parseDbTime } = require('../utils/time');
+const { effectiveIntensity } = require('./emotion/fading');
+const { getEmotionConfig } = require('./emotion/config');
 const { getRecallConfig } = require('./recallGate');
 
 // ── 檢索排除源（從 memory_config.json 讀取）──
@@ -147,6 +149,20 @@ async function lookupEntityIds(userMessage) {
 
     // 去重（活動詞可能同時命中名稱匹配）
     return [...new Set(ids)];
+}
+
+// 撈排序用的情緒欄位（intensity／valence／raised_at／created_at）。emotion.enabled=false 或欄位不存在時回空表
+function loadEmotionRows(items) {
+  const out = new Map();
+  try {
+    if (!getEmotionConfig().enabled) return out;
+    const ids = [...new Set(items.filter(r => r.source_table === 'fragment').map(r => r.id))];
+    if (ids.length === 0) return out;
+    const rows = getDb().prepare(`SELECT id, intensity, valence, raised_at, created_at FROM memory_fragments
+      WHERE id IN (${ids.map(() => '?').join(',')}) AND intensity IS NOT NULL`).all(...ids);
+    for (const r of rows) out.set(r.id, r);
+  } catch (e) { console.error('Hybrid: 情緒欄位讀取失敗，退回 emotional_weight:', e.message); }
+  return out;
 }
 
 function getEntityFragments(entityIds, limit = 10) {
@@ -329,6 +345,7 @@ function formatForContext(fragments) {
 // 混合檢索：FTS5（關鍵詞）+ 向量（語義），RRF 融合
 // =================================================================
 
+// opts.now：情緒褪色計算用的「現在」（預設現在，測試可注入）
 // opts.random：隨機浮現的亂數來源（預設 Math.random，測試可注入）
 // opts.surface：'random'（預設，原行為：結果 <3 條時 40% 機率隨機浮現）｜'none'（不在這裡浮現；
 //   recall.gate 開啟時 buildSmartContext 改用 recallGate.pickSurface 依情境浮現）
@@ -509,11 +526,24 @@ async function searchHybrid(userMessage, limit = 6, opts = {}) {
     }
   }
 
+  // G2 情緒褪色：碎片有八維情緒（intensity）時，排序用「褪色後的有效強度」取代 emotional_weight。
+  // 負面情緒褪得比正面快；沒有情緒資料的碎片與 emotion.enabled=false 時維持原本的 emotional_weight。
+  const emoById = loadEmotionRows(ranked);
+  const emoNow = opts.now != null ? new Date(opts.now) : new Date();
+  const weightOf = (item) => {
+    const base = item.emotional_weight || 0.5;
+    const row = item.source_table === 'fragment' ? emoById.get(item.id) : null;
+    if (!row) return base;
+    const eff = effectiveIntensity(row, emoNow);
+    // 0.1 下限與 G2 寫入 emotional_weight 時一致：下游多處以 `|| 0.5` 當缺值，0 會被當成缺值
+    return eff == null ? base : Math.max(0.1, eff);
+  };
+
   // 時間衰減（分段：前3天新鮮度主導，3天後情緒主導）+ 重要性 + 新穎度
   const decayed = ranked.map(item => {
     const dateForDecay = item._created_at || item.date_label;
     const days = daysAgo(dateForDecay);
-    const ew = item.emotional_weight || 0.5;
+    const ew = weightOf(item);
     const actualDays = intent === 'long_term' ? days * 0.4 : days;  // long_term 意圖下時間走得慢
     const decay = segmentedDecay(actualDays, ew);
     const importance = 0.4 + ew * 0.6;

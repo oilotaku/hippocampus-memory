@@ -1,5 +1,5 @@
 'use strict';
-const { test, describe, before, after, beforeEach } = require('node:test');
+const { test, describe, before, after, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const { setupEnv, cleanupDb, quiet } = require('./_helpers');
 
@@ -275,6 +275,51 @@ describe('searchHybrid：隨機浮現', () => {
         addFrag({ content: '舊事', daysAgo: 10 });
         const r = await lib.searchHybrid('蘋果', 6, { random: () => 0.1 });
         assert.ok(r.every(x => !x._isFloated));
+    });
+});
+
+describe('searchHybrid：情緒褪色進排序（F4 接 G2）', () => {
+    const emotion = require('../../services/emotion');
+    afterEach(() => emotion._setOverride(null));
+    const setEmo = (id, { intensity, valence, raisedDaysAgo }) =>
+        db.prepare('UPDATE memory_fragments SET intensity = ?, valence = ?, raised_at = ? WHERE id = ?')
+            .run(intensity, valence, iso(raisedDaysAgo).slice(0, 19).replace('T', ' '), id);
+    const importance = async (q) => (await lib.searchHybrid(q, 6, { surface: 'none' }))[0]._importance;
+
+    test('負面情緒隔很久褪掉：有效強度取代 emotional_weight（下限 0.1）', async () => {
+        const id = addFrag({ content: '主管在會議上罵我', ew: 0.9, daysAgo: 0 });
+        setEmo(id, { intensity: 0.9, valence: -0.8, raisedDaysAgo: 300 });   // 半衰期 60 天 → 5 個半衰期
+        close(await importance('主管會議'), 0.4 + 0.1 * 0.6);
+    });
+    test('剛發生：有效強度 ≈ intensity（不是 emotional_weight）', async () => {
+        const id = addFrag({ content: '拿到了升遷通知', ew: 0.3, daysAgo: 0 });
+        setEmo(id, { intensity: 0.8, valence: 0.7, raisedDaysAgo: 0 });
+        close(await importance('升遷通知'), 0.4 + 0.8 * 0.6);
+    });
+    test('正面褪得比負面慢：同強度、同時間，正面的有效強度較高', async () => {
+        const pos = addFrag({ content: '正面回憶蘋果', ew: 0.5, daysAgo: 0 });
+        const neg = addFrag({ content: '負面回憶香蕉', ew: 0.5, daysAgo: 0 });
+        setEmo(pos, { intensity: 0.8, valence: 0.9, raisedDaysAgo: 90 });
+        setEmo(neg, { intensity: 0.8, valence: -0.9, raisedDaysAgo: 90 });
+        const p = await importance('正面回憶'), n = await importance('負面回憶');
+        assert.ok(p > n, `pos ${p} neg ${n}`);
+    });
+    test('沒有情緒資料（intensity 為 NULL）→ 維持 emotional_weight', async () => {
+        addFrag({ content: '普通的一天雜記', ew: 0.7, daysAgo: 0 });
+        close(await importance('普通一天雜記'), 0.4 + 0.7 * 0.6);
+    });
+    test('emotion.enabled=false → 與原本完全一致（用 emotional_weight）', async () => {
+        const id = addFrag({ content: '主管在會議上罵我', ew: 0.9, daysAgo: 0 });
+        setEmo(id, { intensity: 0.9, valence: -0.8, raisedDaysAgo: 300 });
+        emotion._setOverride({ enabled: false });
+        close(await importance('主管會議'), 0.4 + 0.9 * 0.6);
+    });
+    test('opts.now 可注入：同一筆碎片在較晚的「現在」褪得更多', async () => {
+        const id = addFrag({ content: '主管在會議上罵我', ew: 0.9, daysAgo: 0 });
+        setEmo(id, { intensity: 0.9, valence: -0.8, raisedDaysAgo: 0 });
+        const now = (await lib.searchHybrid('主管會議', 6, { surface: 'none' }))[0]._importance;
+        const later = (await lib.searchHybrid('主管會議', 6, { surface: 'none', now: Date.now() + 120 * DAY }))[0]._importance;
+        assert.ok(later < now);
     });
 });
 
