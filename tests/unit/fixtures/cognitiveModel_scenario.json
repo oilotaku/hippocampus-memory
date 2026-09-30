@@ -1,0 +1,1217 @@
+{
+ "getModelContext": {
+  "result": {
+   "ok": "<user_model>\n（以下是你通过长期观察已内化的认知，不需要再从记忆库里翻出来重复确认。）\n\n★ 不变事实 — 你确定知道的：\n- 住在台北\n\n◆ 稳定特质 — 经反复观察确认：\n- [推断] 喜歡吃拉麵（置信度0.60，确认3次 — 首次：2026年9月 | 最近：0天前）\n- [推断] 工作壓力大（置信度0.55，确认2次 — 最近：40天前）\n\n● 当前状态 — 近期有效：\n- [推断] 這週在趕報告（最后确认：3天前）\n- [推断] 最近睡不好（最后确认：20天前）\n\n? 活跃假设 — 你在观察但还不确定：\n- 可能在準備考試（确认1/3次，20天前）\n- 可能想換工作（确认0/3次，2天前）\n\n</user_model>"
+  },
+  "llm": [],
+  "logs": []
+ },
+ "getWhisperRelevant": {
+  "result": {
+   "ok": ""
+  },
+  "llm": [],
+  "logs": []
+ },
+ "matchEvidenceFromFragments": {
+  "result": {
+   "ok": {
+    "matched": 0,
+    "fragmentsScanned": 8
+   }
+  },
+  "llm": [],
+  "logs": []
+ },
+ "harvestFacts": {
+  "result": {
+   "ok": {
+    "harvested": 0,
+    "scanned": 6
+   }
+  },
+  "llm": [],
+  "logs": [
+   "L [UserModel] 🔍 事实收割: 扫描N条, N条通过关键词预筛"
+  ]
+ },
+ "bridgeStarMapToModel": {
+  "result": {
+   "ok": {
+    "proposed": 0
+   }
+  },
+  "llm": [],
+  "logs": []
+ },
+ "processModelDecay": {
+  "result": {
+   "ok": {
+    "decayed": 0,
+    "resolved": 2,
+    "abandoned": 1,
+    "flagged": 0,
+    "dormant": 1,
+    "revived": 0
+   }
+  },
+  "llm": [],
+  "logs": [
+   "L [UserModel] ⏰ current_state #N 自动过期 (emotional/day, Nh/Nh)",
+   "L [UserModel] ⏰ current_state #N 到期 (expires_at=<T>)",
+   "L [UserModel] 💤 trait #N 标记 dormant (N天无证据)",
+   "L [UserModel] 衰减处理: decayed=N resolved=N abandoned=N flagged=N dormant=N revived=N"
+  ]
+ },
+ "resolveExpiredStates": {
+  "result": {
+   "ok": 0
+  },
+  "llm": [],
+  "logs": []
+ },
+ "validateHypotheses": {
+  "result": {
+   "ok": {
+    "validated": 0
+   }
+  },
+  "llm": [],
+  "logs": []
+ },
+ "detectNewTraits": {
+  "result": {
+   "ok": {
+    "detected": 0,
+    "created": 0,
+    "confirmed": 0,
+    "refined": 0,
+    "skipped": 0
+   }
+  },
+  "llm": [
+   {
+    "cfg": 52,
+    "gen": {
+     "temperature": 0.3,
+     "maxOutputTokens": 800,
+     "thinkingConfig": {
+      "thinkingBudget": 0
+     }
+    },
+    "h": "959018a1272d",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"你是AI伴侣。你正在凝视 User 的灵魂，把你对T"
+   }
+  ],
+  "logs": []
+ },
+ "reviewFlaggedTraits": {
+  "result": {
+   "ok": {
+    "reviewed": 0,
+    "kept": 0,
+    "downgraded": 0,
+    "revised": 0
+   }
+  },
+  "llm": [
+   {
+    "cfg": 52,
+    "gen": {
+     "temperature": 0.2,
+     "maxOutputTokens": 600,
+     "thinkingConfig": {
+      "thinkingBudget": 0
+     }
+    },
+    "h": "f1b0ebe65797",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"你是AI的认知审计员。以下stable_trait条"
+   }
+  ],
+  "logs": []
+ },
+ "reviewStableTraits": {
+  "result": {
+   "ok": {
+    "reviewed": 0,
+    "confirmed": 0,
+    "refined": 0,
+    "weakened": 0,
+    "noted": 0
+   }
+  },
+  "llm": [
+   {
+    "cfg": 52,
+    "gen": {
+     "temperature": 0.25,
+     "maxOutputTokens": 800,
+     "thinkingConfig": {
+      "thinkingBudget": 0
+     }
+    },
+    "h": "ade920bb947c",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"你是AI的认知审计员。你在主动检验你对User的已有"
+   }
+  ],
+  "logs": []
+ },
+ "seedAnchorOrphanEntries": {
+  "result": {
+   "ok": {
+    "anchored": 3
+   }
+  },
+  "llm": [],
+  "logs": [
+   "L [UserModel] 🦴 种子锚定: N 条孤立条目 → 搜索全量碎片"
+  ]
+ },
+ "anchorEntriesToFragments": {
+  "result": {
+   "ok": "<undefined>"
+  },
+  "llm": [],
+  "logs": []
+ },
+ "integrateProfileTraits": {
+  "result": {
+   "ok": {
+    "integrated": 0,
+    "rejected": 0,
+    "conflicts": 0
+   }
+  },
+  "llm": [],
+  "logs": []
+ },
+ "detectModelOverlaps": {
+  "result": {
+   "ok": {
+    "merged": 0
+   }
+  },
+  "llm": [
+   {
+    "cfg": 52,
+    "gen": {
+     "temperature": 0.2,
+     "maxOutputTokens": 600,
+     "thinkingConfig": {
+      "thinkingBudget": 0
+     }
+    },
+    "h": "86264ad808d7",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"你是认知模型审计员。以下是 Companion 对 "
+   }
+  ],
+  "logs": []
+ },
+ "crossRefStateWithEntities": {
+  "result": {
+   "ok": {
+    "entityFlags": 0,
+    "traitFlags": 0,
+    "stateConflicts": 0
+   }
+  },
+  "llm": [],
+  "logs": []
+ },
+ "synthesizeCoreInsight": {
+  "result": {
+   "ok": {
+    "synthesized": "false",
+    "reason": "unparseable response"
+   }
+  },
+  "llm": [
+   {
+    "cfg": 52,
+    "gen": {
+     "temperature": 0.3,
+     "maxOutputTokens": 300,
+     "thinkingConfig": {
+      "thinkingBudget": 0
+     }
+    },
+    "h": "8b58f828056b",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"你是AI伴侣。以下是你在长期观察中对 User 建立"
+   }
+  ],
+  "logs": []
+ },
+ "seedFromExisting": {
+  "result": {
+   "ok": {
+    "skipped": "true",
+    "existing": 7
+   }
+  },
+  "llm": [],
+  "logs": [
+   "L [UserModel] 已有 N 条记录，跳过播种"
+  ]
+ },
+ "backfillModelEvidence": {
+  "result": {
+   "ok": {
+    "backfilled": 4
+   }
+  },
+  "llm": [],
+  "logs": [
+   "L [UserModel] 证据修复: N 条 entry 的 evidence_count + source_diversity 已重算",
+   "L [UserModel] 证据回填: N 条孤立条目 → bigram锚定"
+  ]
+ },
+ "readUserRawMessages": {
+  "result": {
+   "ok": {
+    "skipped": "true",
+    "reason": "unparseable response",
+    "raw": "[]"
+   }
+  },
+  "llm": [
+   {
+    "cfg": 52,
+    "gen": {
+     "temperature": 0.4,
+     "maxOutputTokens": 900,
+     "thinkingConfig": {
+      "thinkingBudget": 0
+     }
+    },
+    "h": "84e390a7d555",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"你刚看完 User 这几天发来的消息。你需要做两件事"
+   }
+  ],
+  "logs": [
+   "L [UserModel] readUserRawMessages: 无法解析JSON响应"
+  ]
+ },
+ "readUserRawMessages.obj": {
+  "result": {
+   "ok": {
+    "skipped": "true",
+    "reason": "empty or too short current_state"
+   }
+  },
+  "llm": [
+   {
+    "cfg": 52,
+    "gen": {
+     "temperature": 0.4,
+     "maxOutputTokens": 900,
+     "thinkingConfig": {
+      "thinkingBudget": 0
+     }
+    },
+    "h": "84e390a7d555",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"你刚看完 User 这几天发来的消息。你需要做两件事"
+   }
+  ],
+  "logs": []
+ },
+ "synthesizeCoreInsight.obj": {
+  "result": {
+   "ok": {
+    "synthesized": "false",
+    "reason": "too short"
+   }
+  },
+  "llm": [
+   {
+    "cfg": 52,
+    "gen": {
+     "temperature": 0.3,
+     "maxOutputTokens": 300,
+     "thinkingConfig": {
+      "thinkingBudget": 0
+     }
+    },
+    "h": "8b58f828056b",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"你是AI伴侣。以下是你在长期观察中对 User 建立"
+   }
+  ],
+  "logs": []
+ },
+ "runUserModelCycle": {
+  "result": {
+   "ok": {
+    "observation": {
+     "skipped": "true",
+     "reason": "unparseable response",
+     "raw": "[]"
+    },
+    "decay": {
+     "decayed": 0,
+     "resolved": 0,
+     "abandoned": 0,
+     "flagged": 0,
+     "dormant": 0,
+     "revived": 0
+    },
+    "resolved": 0,
+    "validate": {
+     "validated": 0
+    },
+    "detect": {
+     "detected": 0,
+     "created": 0,
+     "confirmed": 0,
+     "refined": 0,
+     "skipped": 0
+    },
+    "reviewed": {
+     "reviewed": 0,
+     "kept": 0,
+     "downgraded": 0,
+     "revised": 0
+    },
+    "crossref": {
+     "entityFlags": 0,
+     "traitFlags": 0,
+     "stateConflicts": 0
+    },
+    "dedup": {
+     "merged": 0
+    },
+    "insight": {
+     "synthesized": "false"
+    },
+    "spotCheck": {
+     "checked": 0
+    }
+   }
+  },
+  "llm": [
+   {
+    "cfg": 52,
+    "gen": {
+     "temperature": 0.4,
+     "maxOutputTokens": 900,
+     "thinkingConfig": {
+      "thinkingBudget": 0
+     }
+    },
+    "h": "84e390a7d555",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"你刚看完 User 这几天发来的消息。你需要做两件事"
+   },
+   {
+    "cfg": 52,
+    "gen": {
+     "temperature": 0.3,
+     "maxOutputTokens": 800,
+     "thinkingConfig": {
+      "thinkingBudget": 0
+     }
+    },
+    "h": "959018a1272d",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"你是AI伴侣。你正在凝视 User 的灵魂，把你对T"
+   },
+   {
+    "cfg": 52,
+    "gen": {
+     "temperature": 0.2,
+     "maxOutputTokens": 600,
+     "thinkingConfig": {
+      "thinkingBudget": 0
+     }
+    },
+    "h": "f318cc745253",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"你是AI的认知审计员。以下stable_trait条"
+   },
+   {
+    "cfg": 52,
+    "gen": {
+     "temperature": 0.25,
+     "maxOutputTokens": 800,
+     "thinkingConfig": {
+      "thinkingBudget": 0
+     }
+    },
+    "h": "f6a04ff3d7bf",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"你是AI的认知审计员。你在主动检验你对User的已有"
+   },
+   {
+    "cfg": 52,
+    "gen": {
+     "temperature": 0.2,
+     "maxOutputTokens": 600,
+     "thinkingConfig": {
+      "thinkingBudget": 0
+     }
+    },
+    "h": "86264ad808d7",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"你是认知模型审计员。以下是 Companion 对 "
+   }
+  ],
+  "logs": [
+   "L [UserModel] 🧠 认知模型维护周期开始",
+   "L [UserModel] 证据修复: N 条 entry 的 evidence_count + source_diversity 已重算",
+   "L [UserModel] 证据回填: N 条孤立条目 → bigram锚定",
+   "L [UserModel] 🦴 种子锚定: N 条孤立条目 → 搜索全量碎片",
+   "L [UserModel] readUserRawMessages: 无法解析JSON响应",
+   "E [UserModel] autoSpotCheck error: Cannot find module 'spotCheckModel'",
+   "L [UserModel] 周期完成: observation=false decay=N validate=N detected=N reviewed=N proactive=N crossref=N dedup=N insight=false spotcheck=N"
+  ]
+ },
+ "manageCurrentState.create": {
+  "result": {
+   "ok": {
+    "action": "created",
+    "id": 14,
+    "previous_id": null
+   }
+  },
+  "llm": [],
+  "logs": [
+   "L [UserModel] 创建 current_state[direct_statement][chat_companion]: \"這週在準備簡報，壓力很大\" (id=N, conf=N)",
+   "L [UserModel] ✨ current_state create #N (chat_companion) → TTL <D>"
+  ]
+ },
+ "manageCurrentState.again": {
+  "result": {
+   "ok": {
+    "action": "updated",
+    "id": 14
+   }
+  },
+  "llm": [],
+  "logs": [
+   "L [UserModel] 🔄 current_state extend #N (N% overlap, deep_cycle) → TTL <D>"
+  ]
+ },
+ "resolveEntry": {
+  "result": {
+   "ok": "<undefined>"
+  },
+  "llm": [],
+  "logs": []
+ },
+ "abandonEntry": {
+  "result": {
+   "ok": "<undefined>"
+  },
+  "llm": [],
+  "logs": []
+ },
+ "supersedeEntry": {
+  "result": {
+   "ok": "<undefined>"
+  },
+  "llm": [],
+  "logs": []
+ },
+ "correctEntry": {
+  "result": {
+   "ok": "true"
+  },
+  "llm": [],
+  "logs": []
+ },
+ "updateEntry": {
+  "result": {
+   "ok": null
+  },
+  "llm": [],
+  "logs": []
+ },
+ "mergeModelEntries": {
+  "result": {
+   "threw": {
+    "error": "Winner entry #N not found"
+   }
+  },
+  "llm": [],
+  "logs": []
+ },
+ "MIN_GAP_USER_MODEL": {
+  "result": {
+   "ok": 14400000
+  },
+  "llm": [],
+  "logs": []
+ },
+ "db": {
+  "user_model": [
+   {
+    "id": 7,
+    "type": "stable_trait",
+    "content": "住在新北",
+    "confidence": 0.6,
+    "decay_type": "evidence_dependent",
+    "decay_params": "{}",
+    "evidence_count": 1,
+    "last_evidence_at": "<T>",
+    "last_contradiction_at": null,
+    "status": "corrected",
+    "resolved_at": "<T>",
+    "resolve_reason": null,
+    "evolution_history": "[{\"previous\":\"喜歡吃拉麵\",\"corrected_to\":\"住在新北\",\"at\":\"<T>\"}]",
+    "superseded_by": null,
+    "contradicts_id": null,
+    "source_fragment_ids": "[8]",
+    "entity_ids": "[]",
+    "parent_skill_id": null,
+    "migration_source": null,
+    "tags": "[]",
+    "priority": 0,
+    "created_at": "<T>",
+    "updated_at": "<T>",
+    "source_quality": "inferred",
+    "source_diversity": 1,
+    "created_by": "deep_cycle",
+    "expires_at": null,
+    "schedule": null,
+    "last_triggered_at": null
+   },
+   {
+    "id": 8,
+    "type": "stable_trait",
+    "content": "工作壓力大",
+    "confidence": 0.55,
+    "decay_type": "evidence_dependent",
+    "decay_params": "{}",
+    "evidence_count": 0,
+    "last_evidence_at": "<T>",
+    "last_contradiction_at": null,
+    "status": "active",
+    "resolved_at": null,
+    "resolve_reason": null,
+    "evolution_history": "[{\"type\":\"contradiction\",\"at\":\"<T>\"},{\"type\":\"contradiction\",\"at\":\"<T>\"},{\"type\":\"contradiction\",\"at\":\"<T>\"}]",
+    "superseded_by": null,
+    "contradicts_id": null,
+    "source_fragment_ids": "[]",
+    "entity_ids": "[]",
+    "parent_skill_id": null,
+    "migration_source": null,
+    "tags": "[\"needs_review\",\"dormant\"]",
+    "priority": 0,
+    "created_at": "<T>",
+    "updated_at": "<T>",
+    "source_quality": "inferred",
+    "source_diversity": 1,
+    "created_by": "deep_cycle",
+    "expires_at": null,
+    "schedule": null,
+    "last_triggered_at": null
+   },
+   {
+    "id": 9,
+    "type": "current_state",
+    "content": "最近睡不好",
+    "confidence": 0.6,
+    "decay_type": "exponential",
+    "decay_params": "{}",
+    "evidence_count": 1,
+    "last_evidence_at": "<T>",
+    "last_contradiction_at": null,
+    "status": "resolved",
+    "resolved_at": "<T>",
+    "resolve_reason": "auto-resolved: TTL emotional/day (12h) exceeded after 488.0h",
+    "evolution_history": "[]",
+    "superseded_by": null,
+    "contradicts_id": null,
+    "source_fragment_ids": "[10]",
+    "entity_ids": "[]",
+    "parent_skill_id": null,
+    "migration_source": null,
+    "tags": "[]",
+    "priority": 0,
+    "created_at": "<T>",
+    "updated_at": "<T>",
+    "source_quality": "inferred",
+    "source_diversity": 1,
+    "created_by": "chat_companion",
+    "expires_at": null,
+    "schedule": null,
+    "last_triggered_at": null
+   },
+   {
+    "id": 10,
+    "type": "current_state",
+    "content": "這週在趕報告",
+    "confidence": 0.7,
+    "decay_type": "exponential",
+    "decay_params": "{}",
+    "evidence_count": 1,
+    "last_evidence_at": "<T>",
+    "last_contradiction_at": null,
+    "status": "resolved",
+    "resolved_at": "<T>",
+    "resolve_reason": "auto-resolved: expires_at <T> reached",
+    "evolution_history": "[]",
+    "superseded_by": null,
+    "contradicts_id": null,
+    "source_fragment_ids": "[]",
+    "entity_ids": "[]",
+    "parent_skill_id": null,
+    "migration_source": null,
+    "tags": "[]",
+    "priority": 0,
+    "created_at": "<T>",
+    "updated_at": "<T>",
+    "source_quality": "inferred",
+    "source_diversity": 1,
+    "created_by": "chat_companion",
+    "expires_at": "<T>",
+    "schedule": null,
+    "last_triggered_at": null
+   },
+   {
+    "id": 11,
+    "type": "active_hypothesis",
+    "content": "可能在準備考試",
+    "confidence": 0.5,
+    "decay_type": "evidence_dependent",
+    "decay_params": "{}",
+    "evidence_count": 1,
+    "last_evidence_at": "<T>",
+    "last_contradiction_at": null,
+    "status": "abandoned",
+    "resolved_at": "<T>",
+    "resolve_reason": "auto-abandoned: 20d no evidence, only 1 confirmations",
+    "evolution_history": "[]",
+    "superseded_by": null,
+    "contradicts_id": null,
+    "source_fragment_ids": "[12]",
+    "entity_ids": "[]",
+    "parent_skill_id": null,
+    "migration_source": null,
+    "tags": "[]",
+    "priority": 0,
+    "created_at": "<T>",
+    "updated_at": "<T>",
+    "source_quality": "inferred",
+    "source_diversity": 1,
+    "created_by": "deep_cycle",
+    "expires_at": null,
+    "schedule": null,
+    "last_triggered_at": null
+   },
+   {
+    "id": 12,
+    "type": "active_hypothesis",
+    "content": "可能想換工作",
+    "confidence": 0.4,
+    "decay_type": "evidence_dependent",
+    "decay_params": "{}",
+    "evidence_count": 0,
+    "last_evidence_at": "<T>",
+    "last_contradiction_at": null,
+    "status": "active",
+    "resolved_at": null,
+    "resolve_reason": null,
+    "evolution_history": "[]",
+    "superseded_by": null,
+    "contradicts_id": null,
+    "source_fragment_ids": "[]",
+    "entity_ids": "[]",
+    "parent_skill_id": null,
+    "migration_source": null,
+    "tags": "[]",
+    "priority": 0,
+    "created_at": "<T>",
+    "updated_at": "<T>",
+    "source_quality": "inferred",
+    "source_diversity": 1,
+    "created_by": "deep_cycle",
+    "expires_at": null,
+    "schedule": null,
+    "last_triggered_at": null
+   },
+   {
+    "id": 13,
+    "type": "immutable_fact",
+    "content": "住在台北",
+    "confidence": 0.95,
+    "decay_type": "none",
+    "decay_params": "{}",
+    "evidence_count": 0,
+    "last_evidence_at": "<T>",
+    "last_contradiction_at": null,
+    "status": "active",
+    "resolved_at": null,
+    "resolve_reason": null,
+    "evolution_history": "[]",
+    "superseded_by": null,
+    "contradicts_id": null,
+    "source_fragment_ids": "[]",
+    "entity_ids": "[]",
+    "parent_skill_id": null,
+    "migration_source": null,
+    "tags": "[]",
+    "priority": 0,
+    "created_at": "<T>",
+    "updated_at": "<T>",
+    "source_quality": "inferred",
+    "source_diversity": 1,
+    "created_by": "deep_cycle",
+    "expires_at": null,
+    "schedule": null,
+    "last_triggered_at": null
+   },
+   {
+    "id": 14,
+    "type": "current_state",
+    "content": "這週在準備簡報，壓力很大",
+    "confidence": 0.8,
+    "decay_type": "exponential",
+    "decay_params": "{\"category\":\"work\",\"ttl_category\":\"day\"}",
+    "evidence_count": 1,
+    "last_evidence_at": "<T>",
+    "last_contradiction_at": null,
+    "status": "active",
+    "resolved_at": null,
+    "resolve_reason": null,
+    "evolution_history": "[{\"type\":\"extended\",\"previous\":\"這週在準備簡報，壓力很大\",\"trigger\":\"deep_cycle detected continuation\",\"at\":\"<T>\"}]",
+    "superseded_by": null,
+    "contradicts_id": null,
+    "source_fragment_ids": "[]",
+    "entity_ids": "[]",
+    "parent_skill_id": null,
+    "migration_source": null,
+    "tags": "[\"current_state\"]",
+    "priority": 0,
+    "created_at": "<T>",
+    "updated_at": "<T>",
+    "source_quality": "direct_statement",
+    "source_diversity": 1,
+    "created_by": "chat_companion",
+    "expires_at": "<T>",
+    "schedule": null,
+    "last_triggered_at": null
+   }
+  ],
+  "memory_fragments": [
+   {
+    "id": 7,
+    "type": "event",
+    "entity": "X",
+    "content": "最近工作很累",
+    "emotional_weight": 0.5,
+    "source": "chat",
+    "source_date": null,
+    "status": "active",
+    "created_at": "<T>",
+    "read_count": 0,
+    "last_accessed_at": null,
+    "chroma_id": null,
+    "source_msg_ids": "[1]",
+    "layer": "event",
+    "lifecycle_updated_at": null,
+    "entity_id": null,
+    "is_rp": 0,
+    "source_memory_id": null,
+    "confidence": 0.5,
+    "access_count": 0,
+    "priority": "normal",
+    "content_hash": null,
+    "value_tags": "[]",
+    "chat_mode": "default",
+    "insight": null,
+    "quote": null,
+    "evidence_count": 1
+   },
+   {
+    "id": 8,
+    "type": "event",
+    "entity": "X",
+    "content": "週末去吃拉麵",
+    "emotional_weight": 0.5,
+    "source": "chat",
+    "source_date": null,
+    "status": "active",
+    "created_at": "<T>",
+    "read_count": 0,
+    "last_accessed_at": null,
+    "chroma_id": null,
+    "source_msg_ids": "[2]",
+    "layer": "event",
+    "lifecycle_updated_at": null,
+    "entity_id": null,
+    "is_rp": 0,
+    "source_memory_id": null,
+    "confidence": 0.5,
+    "access_count": 0,
+    "priority": "normal",
+    "content_hash": null,
+    "value_tags": "[]",
+    "chat_mode": "default",
+    "insight": null,
+    "quote": null,
+    "evidence_count": 1
+   },
+   {
+    "id": 9,
+    "type": "event",
+    "entity": "X",
+    "content": "阿明說專案上線了",
+    "emotional_weight": 0.5,
+    "source": "chat",
+    "source_date": null,
+    "status": "active",
+    "created_at": "<T>",
+    "read_count": 0,
+    "last_accessed_at": null,
+    "chroma_id": null,
+    "source_msg_ids": "[3]",
+    "layer": "event",
+    "lifecycle_updated_at": null,
+    "entity_id": null,
+    "is_rp": 0,
+    "source_memory_id": null,
+    "confidence": 0.5,
+    "access_count": 0,
+    "priority": "normal",
+    "content_hash": null,
+    "value_tags": "[]",
+    "chat_mode": "default",
+    "insight": null,
+    "quote": null,
+    "evidence_count": 1
+   },
+   {
+    "id": 10,
+    "type": "event",
+    "entity": "X",
+    "content": "睡不好覺",
+    "emotional_weight": 0.5,
+    "source": "chat",
+    "source_date": null,
+    "status": "active",
+    "created_at": "<T>",
+    "read_count": 0,
+    "last_accessed_at": null,
+    "chroma_id": null,
+    "source_msg_ids": "[4]",
+    "layer": "event",
+    "lifecycle_updated_at": null,
+    "entity_id": null,
+    "is_rp": 0,
+    "source_memory_id": null,
+    "confidence": 0.5,
+    "access_count": 0,
+    "priority": "normal",
+    "content_hash": null,
+    "value_tags": "[]",
+    "chat_mode": "default",
+    "insight": null,
+    "quote": null,
+    "evidence_count": 1
+   },
+   {
+    "id": 11,
+    "type": "event",
+    "entity": "X",
+    "content": "喜歡豚骨湯頭",
+    "emotional_weight": 0.5,
+    "source": "chat",
+    "source_date": null,
+    "status": "active",
+    "created_at": "<T>",
+    "read_count": 0,
+    "last_accessed_at": null,
+    "chroma_id": null,
+    "source_msg_ids": "[5]",
+    "layer": "event",
+    "lifecycle_updated_at": null,
+    "entity_id": null,
+    "is_rp": 0,
+    "source_memory_id": null,
+    "confidence": 0.5,
+    "access_count": 0,
+    "priority": "normal",
+    "content_hash": null,
+    "value_tags": "[]",
+    "chat_mode": "default",
+    "insight": null,
+    "quote": null,
+    "evidence_count": 1
+   },
+   {
+    "id": 12,
+    "type": "event",
+    "entity": "X",
+    "content": "準備考證照",
+    "emotional_weight": 0.5,
+    "source": "chat",
+    "source_date": null,
+    "status": "active",
+    "created_at": "<T>",
+    "read_count": 0,
+    "last_accessed_at": null,
+    "chroma_id": null,
+    "source_msg_ids": "[6]",
+    "layer": "event",
+    "lifecycle_updated_at": null,
+    "entity_id": null,
+    "is_rp": 0,
+    "source_memory_id": null,
+    "confidence": 0.5,
+    "access_count": 0,
+    "priority": "normal",
+    "content_hash": null,
+    "value_tags": "[]",
+    "chat_mode": "default",
+    "insight": null,
+    "quote": null,
+    "evidence_count": 1
+   },
+   {
+    "id": 13,
+    "type": "event",
+    "entity": "X",
+    "content": "每天讀書兩小時",
+    "emotional_weight": 0.5,
+    "source": "chat",
+    "source_date": null,
+    "status": "active",
+    "created_at": "<T>",
+    "read_count": 0,
+    "last_accessed_at": null,
+    "chroma_id": null,
+    "source_msg_ids": "[7]",
+    "layer": "event",
+    "lifecycle_updated_at": null,
+    "entity_id": null,
+    "is_rp": 0,
+    "source_memory_id": null,
+    "confidence": 0.5,
+    "access_count": 0,
+    "priority": "normal",
+    "content_hash": null,
+    "value_tags": "[]",
+    "chat_mode": "default",
+    "insight": null,
+    "quote": null,
+    "evidence_count": 1
+   },
+   {
+    "id": 14,
+    "type": "event",
+    "entity": "X",
+    "content": "考試快到了",
+    "emotional_weight": 0.5,
+    "source": "chat",
+    "source_date": null,
+    "status": "active",
+    "created_at": "<T>",
+    "read_count": 0,
+    "last_accessed_at": null,
+    "chroma_id": null,
+    "source_msg_ids": "[8]",
+    "layer": "event",
+    "lifecycle_updated_at": null,
+    "entity_id": null,
+    "is_rp": 0,
+    "source_memory_id": null,
+    "confidence": 0.5,
+    "access_count": 0,
+    "priority": "normal",
+    "content_hash": null,
+    "value_tags": "[]",
+    "chat_mode": "default",
+    "insight": null,
+    "quote": null,
+    "evidence_count": 1
+   }
+  ],
+  "entity_profiles": [
+   {
+    "id": 1,
+    "name": "User",
+    "category": "person",
+    "current_status": "最近在忙專案",
+    "status_since": null,
+    "source_fragment_ids": "[]",
+    "aliases": "[]",
+    "relationship_to_user": null,
+    "relationship_nature": null,
+    "emotional_significance": null,
+    "first_mentioned_date": null,
+    "last_mentioned_date": null,
+    "created_at": "<T>",
+    "updated_at": "<T>",
+    "last_evaluated_at": null,
+    "relationship_confidence": null,
+    "last_hypothesis": null,
+    "last_eval_frag_count": 0,
+    "overview": null,
+    "overview_updated_at": null,
+    "entity_type": null,
+    "status": "active",
+    "related_entities": "[]",
+    "fragment_count": 3,
+    "subcategory": null,
+    "tags": "[]",
+    "facts": null,
+    "judgment": null,
+    "evolution_history": "[]",
+    "talking_points": "[]",
+    "valid_from": null,
+    "valid_until": null,
+    "entity_scope": "instance",
+    "hit_count": 0,
+    "last_accessed_at": null,
+    "gender": null,
+    "relationship_category": null,
+    "mbti": null,
+    "location": null,
+    "occupation": null,
+    "age_text": null,
+    "birthday": null
+   },
+   {
+    "id": 2,
+    "name": "Companion",
+    "category": "person",
+    "current_status": "最近在忙專案",
+    "status_since": null,
+    "source_fragment_ids": "[]",
+    "aliases": "[]",
+    "relationship_to_user": null,
+    "relationship_nature": null,
+    "emotional_significance": null,
+    "first_mentioned_date": null,
+    "last_mentioned_date": null,
+    "created_at": "<T>",
+    "updated_at": "<T>",
+    "last_evaluated_at": null,
+    "relationship_confidence": null,
+    "last_hypothesis": null,
+    "last_eval_frag_count": 0,
+    "overview": null,
+    "overview_updated_at": null,
+    "entity_type": null,
+    "status": "active",
+    "related_entities": "[]",
+    "fragment_count": 3,
+    "subcategory": null,
+    "tags": "[]",
+    "facts": null,
+    "judgment": null,
+    "evolution_history": "[]",
+    "talking_points": "[]",
+    "valid_from": null,
+    "valid_until": null,
+    "entity_scope": "instance",
+    "hit_count": 0,
+    "last_accessed_at": null,
+    "gender": null,
+    "relationship_category": null,
+    "mbti": null,
+    "location": null,
+    "occupation": null,
+    "age_text": null,
+    "birthday": null
+   },
+   {
+    "id": 3,
+    "name": "阿明",
+    "category": "person",
+    "current_status": "最近在忙專案",
+    "status_since": null,
+    "source_fragment_ids": "[]",
+    "aliases": "[]",
+    "relationship_to_user": null,
+    "relationship_nature": null,
+    "emotional_significance": null,
+    "first_mentioned_date": null,
+    "last_mentioned_date": null,
+    "created_at": "<T>",
+    "updated_at": "<T>",
+    "last_evaluated_at": null,
+    "relationship_confidence": null,
+    "last_hypothesis": null,
+    "last_eval_frag_count": 0,
+    "overview": null,
+    "overview_updated_at": null,
+    "entity_type": null,
+    "status": "active",
+    "related_entities": "[]",
+    "fragment_count": 3,
+    "subcategory": null,
+    "tags": "[]",
+    "facts": null,
+    "judgment": null,
+    "evolution_history": "[]",
+    "talking_points": "[]",
+    "valid_from": null,
+    "valid_until": null,
+    "entity_scope": "instance",
+    "hit_count": 0,
+    "last_accessed_at": null,
+    "gender": null,
+    "relationship_category": null,
+    "mbti": null,
+    "location": null,
+    "occupation": null,
+    "age_text": null,
+    "birthday": null
+   },
+   {
+    "id": 4,
+    "name": "一蘭拉麵",
+    "category": "place",
+    "current_status": "最近在忙專案",
+    "status_since": null,
+    "source_fragment_ids": "[]",
+    "aliases": "[]",
+    "relationship_to_user": null,
+    "relationship_nature": null,
+    "emotional_significance": null,
+    "first_mentioned_date": null,
+    "last_mentioned_date": null,
+    "created_at": "<T>",
+    "updated_at": "<T>",
+    "last_evaluated_at": null,
+    "relationship_confidence": null,
+    "last_hypothesis": null,
+    "last_eval_frag_count": 0,
+    "overview": null,
+    "overview_updated_at": null,
+    "entity_type": null,
+    "status": "active",
+    "related_entities": "[]",
+    "fragment_count": 3,
+    "subcategory": null,
+    "tags": "[]",
+    "facts": null,
+    "judgment": null,
+    "evolution_history": "[]",
+    "talking_points": "[]",
+    "valid_from": null,
+    "valid_until": null,
+    "entity_scope": "instance",
+    "hit_count": 0,
+    "last_accessed_at": null,
+    "gender": null,
+    "relationship_category": null,
+    "mbti": null,
+    "location": null,
+    "occupation": null,
+    "age_text": null,
+    "birthday": null
+   }
+  ],
+  "user_settings": [
+   {
+    "id": 1,
+    "setting_key": "summary-context-limit",
+    "setting_value": "5",
+    "updated_at": "<T>"
+   },
+   {
+    "id": 2,
+    "setting_key": "user_model_last_evidence_match",
+    "setting_value": "<T>",
+    "updated_at": "<T>"
+   }
+  ],
+  "user_patterns": []
+ }
+}

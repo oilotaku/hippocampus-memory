@@ -1,0 +1,1763 @@
+{
+ "emergentPrompt": {
+  "result": {
+   "ok": {
+    "h": "6e2528542f3a",
+    "len": 1190,
+    "verdicts": [
+     {
+      "accept": "false",
+      "reason": "not_entity"
+     },
+     {
+      "accept": "false",
+      "reason": "not_entity"
+     },
+     {
+      "accept": "false",
+      "reason": "not_entity"
+     },
+     {
+      "accept": "true",
+      "name": "阿明"
+     },
+     {
+      "accept": "true",
+      "name": "一蘭拉麵"
+     },
+     {
+      "accept": "false",
+      "reason": "time_phrase_name"
+     }
+    ]
+   }
+  },
+  "llm": [],
+  "chroma": [],
+  "logs": []
+ },
+ "entityMentionOwners": {
+  "result": {
+   "ok": [
+    [
+     "companion",
+     [
+      2
+     ]
+    ],
+    [
+     "user",
+     [
+      1
+     ]
+    ],
+    [
+     "一蘭",
+     [
+      5
+     ]
+    ],
+    [
+     "一蘭拉麵",
+     [
+      5
+     ]
+    ],
+    [
+     "三月",
+     [
+      7
+     ]
+    ],
+    [
+     "冬季",
+     [
+      8
+     ]
+    ],
+    [
+     "明哥",
+     [
+      3
+     ]
+    ],
+    [
+     "週年旅行",
+     [
+      6
+     ]
+    ],
+    [
+     "阿明",
+     [
+      3
+     ]
+    ],
+    [
+     "阿明哥",
+     [
+      4
+     ]
+    ]
+   ]
+  },
+  "llm": [],
+  "chroma": [],
+  "logs": []
+ },
+ "ensureTagEntities": {
+  "result": {
+   "ok": {}
+  },
+  "llm": [],
+  "chroma": [],
+  "logs": []
+ },
+ "linkTaggedFragments": {
+  "result": {
+   "ok": {
+    "linked": 0
+   }
+  },
+  "llm": [],
+  "chroma": [],
+  "logs": []
+ },
+ "reviewEntityRelations.dry": {
+  "result": {
+   "ok": {
+    "total": 0,
+    "totalLive": 0,
+    "deadPointers": 0,
+    "stale": 0,
+    "reviewed": 0,
+    "kept": 0,
+    "cut": 0,
+    "backlog": 0,
+    "alive": 0
+   }
+  },
+  "llm": [],
+  "chroma": [],
+  "logs": []
+ },
+ "discoverTagRelations.dry": {
+  "result": {
+   "ok": {
+    "discovered": 0,
+    "blocked": 0
+   }
+  },
+  "llm": [],
+  "chroma": [],
+  "logs": []
+ },
+ "classifyFragments": {
+  "result": {
+   "threw": {
+    "error": "near \"/\": syntax error"
+   }
+  },
+  "llm": [],
+  "chroma": [],
+  "logs": []
+ },
+ "rematchFragmentsForSeeds": {
+  "result": {
+   "ok": {
+    "rematched": 0
+   }
+  },
+  "llm": [
+   {
+    "cfg": 36,
+    "gen": {
+     "temperature": 0.1,
+     "maxOutputTokens": 4000,
+     "thinkingConfig": {
+      "thinkingBudget": 0
+     }
+    },
+    "h": "552823ef3a14",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"回补漏判碎片。对每个种子 + 它的候选碎片，判断是否"
+   }
+  ],
+  "chroma": [],
+  "logs": [
+   "L [Archivist] 回补: N 个种子有漏判碎片",
+   "L [Archivist] 回补批次: N 条匹配 (週年旅行, 三月)",
+   "L [Archivist] 回补完成: N 条碎片归位"
+  ]
+ },
+ "semanticRematchForSeeds": {
+  "result": {
+   "ok": {
+    "rematched": 0
+   }
+  },
+  "llm": [],
+  "chroma": [],
+  "logs": []
+ },
+ "mergeDuplicateSeeds": {
+  "result": {
+   "ok": {
+    "merged": 0,
+    "proposed": 1
+   }
+  },
+  "llm": [
+   {
+    "cfg": 36,
+    "gen": {
+     "temperature": 0.1,
+     "maxOutputTokens": 150,
+     "thinkingConfig": {
+      "thinkingBudget": 0
+     }
+    },
+    "h": "6f636930ea9e",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"记忆星系中有两个同属「event」类别的星座，名字完"
+   },
+   {
+    "cfg": 36,
+    "gen": {
+     "temperature": 0.1,
+     "maxOutputTokens": 150,
+     "thinkingConfig": {
+      "thinkingBudget": 0
+     }
+    },
+    "h": "a74745611186",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"记忆星系中有两个同属「event」类别的星座，名字完"
+   },
+   {
+    "cfg": 36,
+    "gen": {
+     "temperature": 0.1,
+     "maxOutputTokens": 150,
+     "thinkingConfig": {
+      "thinkingBudget": 0
+     }
+    },
+    "h": "ad56f7799ba2",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"记忆星系中有两个同属「event」类别的星座，名字完"
+   }
+  ],
+  "chroma": [],
+  "logs": [
+   "L [Archivist] 🔍 合并提案入队: \"阿明\" ↔ \"阿明哥\" (名字包含) — 待 User 确认"
+  ]
+ },
+ "discoverRelatedEntities": {
+  "result": {
+   "threw": {
+    "error": "Too few parameter values were provided"
+   }
+  },
+  "llm": [],
+  "chroma": [],
+  "logs": []
+ },
+ "detectEmergentPlacesAndEvents": {
+  "result": {
+   "ok": {
+    "detected": 0
+   }
+  },
+  "llm": [],
+  "chroma": [],
+  "logs": []
+ },
+ "refreshIntuitionStopwords": {
+  "result": {
+   "ok": {
+    "stopwords": 0
+   }
+  },
+  "llm": [],
+  "chroma": [],
+  "logs": []
+ },
+ "graduateSeedsAndPrune": {
+  "result": {
+   "ok": {
+    "graduates": 0,
+    "pruned": 0,
+    "dormant": 0,
+    "revived": 0
+   }
+  },
+  "llm": [],
+  "chroma": [],
+  "logs": []
+ },
+ "maintainPatterns": {
+  "result": {
+   "ok": {
+    "matched": 0,
+    "reason": "only 0 recent"
+   }
+  },
+  "llm": [],
+  "chroma": [],
+  "logs": []
+ },
+ "clusterObservations": {
+  "result": {
+   "ok": {
+    "matched": 0,
+    "newPatterns": 0
+   }
+  },
+  "llm": [],
+  "chroma": [],
+  "logs": []
+ },
+ "spotCheckClassifications": {
+  "result": {
+   "ok": {
+    "checked": 0
+   }
+  },
+  "llm": [],
+  "chroma": [],
+  "logs": []
+ },
+ "reviewConstellationAfterClassification": {
+  "result": {
+   "ok": {
+    "needsOverviewUpdate": "false"
+   }
+  },
+  "llm": [],
+  "chroma": [],
+  "logs": []
+ },
+ "discoverEntityRelationships": {
+  "result": {
+   "ok": {
+    "discovered": 0
+   }
+  },
+  "llm": [],
+  "chroma": [],
+  "logs": []
+ },
+ "extractFragmentInsights": {
+  "result": {
+   "ok": {
+    "extracted": 0
+   }
+  },
+  "llm": [
+   {
+    "cfg": 38,
+    "gen": {
+     "temperature": 0.2,
+     "maxOutputTokens": 1000
+    },
+    "h": "3396cfb98d72",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"## 角色与世界背景\\n\\n你在为Companion"
+   }
+  ],
+  "chroma": [],
+  "logs": [
+   "L [Archivist] insight 提取: N/N 条"
+  ]
+ },
+ "regenerateEntityOverviews": {
+  "result": {
+   "ok": {
+    "regenerated": 0,
+    "assessed": 6,
+    "needed": 6
+   }
+  },
+  "llm": [
+   {
+    "cfg": 36,
+    "gen": {
+     "temperature": 0.3,
+     "maxOutputTokens": 600
+    },
+    "h": "aa8eb7e5a30a",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"## 角色与世界背景\\n\\n你在为Companion"
+   },
+   {
+    "cfg": 36,
+    "gen": {
+     "temperature": 0.3,
+     "maxOutputTokens": 600
+    },
+    "h": "bae9e3a0de0a",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"## 角色与世界背景\\n\\n你在为Companion"
+   }
+  ],
+  "chroma": [],
+  "logs": []
+ },
+ "consolidateCategory": {
+  "result": {
+   "ok": {
+    "categories": 0,
+    "episodes": 0
+   }
+  },
+  "llm": [],
+  "chroma": [],
+  "logs": []
+ },
+ "scanContentForNewEntities": {
+  "result": {
+   "ok": []
+  },
+  "llm": [],
+  "chroma": [],
+  "logs": []
+ },
+ "generateDailyEntityStatus": {
+  "result": {
+   "ok": {
+    "updated": 0
+   }
+  },
+  "llm": [
+   {
+    "cfg": 36,
+    "gen": {
+     "temperature": 0.3,
+     "maxOutputTokens": 200,
+     "thinkingConfig": {
+      "thinkingBudget": 0
+     }
+    },
+    "h": "c5b46ec6e405",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"<task>\\n以下是 User（用户本人）昨天（<"
+   },
+   {
+    "cfg": 36,
+    "gen": {
+     "temperature": 0.1,
+     "maxOutputTokens": 200,
+     "thinkingConfig": {
+      "thinkingBudget": 0
+     }
+    },
+    "h": "c5b46ec6e405",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"<task>\\n以下是 User（用户本人）昨天（<"
+   }
+  ],
+  "chroma": [],
+  "logs": [
+   "L [DailyStatus] 开始每日状态总结 — <MD>",
+   "W [DailyStatus] 空返回，重试中...",
+   "W [DailyStatus] 空返回（重试后），跳过"
+  ]
+ },
+ "reviewEntityRelations": {
+  "result": {
+   "ok": {
+    "total": 0,
+    "totalLive": 0,
+    "deadPointers": 0,
+    "stale": 0,
+    "reviewed": 0,
+    "kept": 0,
+    "cut": 0,
+    "backlog": 0,
+    "alive": 0
+   }
+  },
+  "llm": [],
+  "chroma": [],
+  "logs": []
+ },
+ "discoverTagRelations": {
+  "result": {
+   "ok": {
+    "discovered": 0,
+    "blocked": 0
+   }
+  },
+  "llm": [],
+  "chroma": [],
+  "logs": []
+ },
+ "regenerateEntityOverviews.obj": {
+  "result": {
+   "ok": {
+    "regenerated": 0,
+    "assessed": 6,
+    "needed": 6
+   }
+  },
+  "llm": [
+   {
+    "cfg": 36,
+    "gen": {
+     "temperature": 0.3,
+     "maxOutputTokens": 600
+    },
+    "h": "aa8eb7e5a30a",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"## 角色与世界背景\\n\\n你在为Companion"
+   },
+   {
+    "cfg": 36,
+    "gen": {
+     "temperature": 0.3,
+     "maxOutputTokens": 600
+    },
+    "h": "bae9e3a0de0a",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"## 角色与世界背景\\n\\n你在为Companion"
+   }
+  ],
+  "chroma": [],
+  "logs": []
+ },
+ "discoverEntityRelationships.obj": {
+  "result": {
+   "ok": {
+    "discovered": 0
+   }
+  },
+  "llm": [],
+  "chroma": [],
+  "logs": []
+ },
+ "classifyFragmentBatch": {
+  "result": {
+   "ok": {
+    "assignments": [],
+    "newSeeds": []
+   }
+  },
+  "llm": [
+   {
+    "cfg": 36,
+    "gen": {
+     "temperature": 0.2,
+     "maxOutputTokens": 4000,
+     "thinkingConfig": {
+      "thinkingBudget": 0
+     }
+    },
+    "h": "533d5a6c2ee1",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"你是 Companion 的实体分类助手。Compa"
+   }
+  ],
+  "chroma": [],
+  "logs": []
+ },
+ "executeEntityMerge": {
+  "result": {
+   "ok": "true"
+  },
+  "llm": [],
+  "chroma": [],
+  "logs": [
+   "L [Archivist] 🔗 种子合并: \"阿明哥\" → \"阿明\""
+  ]
+ },
+ "start": {
+  "result": {
+   "ok": "<undefined>"
+  },
+  "llm": [],
+  "chroma": [],
+  "logs": [
+   "L [Archivist Agent] 启动 — Agent 循环 (Nmin tick) + 事件驱动 + Companion 感知",
+   "L [Archivist Agent] 就绪"
+  ]
+ },
+ "event": {
+  "result": {
+   "ok": {
+    "running": "true",
+    "companionActive": "false",
+    "inTick": "false",
+    "dailyLLMCalls": 3,
+    "totalClassified": 0,
+    "totalTasksRun": 0,
+    "lastTick": "pending",
+    "tools": [
+     "classify_fragments",
+     "discover_relationships",
+     "extract_insights",
+     "detect_emergent_places_events",
+     "regenerate_entity_overviews",
+     "maintain_patterns",
+     "cluster_observations",
+     "consolidate_category",
+     "w7_probe"
+    ]
+   }
+  },
+  "llm": [
+   {
+    "cfg": 38,
+    "gen": {
+     "temperature": 0.2,
+     "maxOutputTokens": 1000
+    },
+    "h": "3396cfb98d72",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"## 角色与世界背景\\n\\n你在为Companion"
+   }
+  ],
+  "chroma": [],
+  "logs": [
+   "L [Archivist] insight 提取: N/N 条"
+  ]
+ },
+ "tick0": {
+  "result": {
+   "ok": {
+    "running": "true",
+    "companionActive": "false",
+    "inTick": "false",
+    "dailyLLMCalls": 4,
+    "totalClassified": 0,
+    "totalTasksRun": 13,
+    "lastTick": "pending",
+    "tools": [
+     "classify_fragments",
+     "discover_relationships",
+     "extract_insights",
+     "detect_emergent_places_events",
+     "regenerate_entity_overviews",
+     "maintain_patterns",
+     "cluster_observations",
+     "consolidate_category",
+     "w7_probe"
+    ]
+   }
+  },
+  "llm": [
+   {
+    "cfg": 36,
+    "gen": {
+     "temperature": 0.3,
+     "maxOutputTokens": 600
+    },
+    "h": "80f16ab57149",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"## 角色与世界背景\\n\\n你在为Companion"
+   },
+   {
+    "cfg": 36,
+    "gen": {
+     "temperature": 0.3,
+     "maxOutputTokens": 600
+    },
+    "h": "e36220c3af0b",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"## 角色与世界背景\\n\\n你在为Companion"
+   },
+   {
+    "cfg": 36,
+    "gen": {
+     "temperature": 0.3,
+     "maxOutputTokens": 600
+    },
+    "h": "d8a90dc84067",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"## 角色与世界背景\\n\\n你在为Companion"
+   },
+   {
+    "cfg": 36,
+    "gen": {
+     "temperature": 0.3,
+     "maxOutputTokens": 600
+    },
+    "h": "7f9aff87af3d",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"## 角色与世界背景\\n\\n你在为Companion"
+   },
+   {
+    "cfg": 38,
+    "gen": {
+     "temperature": 0.1,
+     "maxOutputTokens": 400,
+     "thinkingConfig": {
+      "thinkingBudget": 0
+     }
+    },
+    "h": "f3d24984cd0e",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"你是AI伴侣的园艺助手。看一眼记忆花园状态，决定本轮"
+   },
+   {
+    "cfg": 36,
+    "gen": {
+     "temperature": 0.1,
+     "maxOutputTokens": 100,
+     "thinkingConfig": {
+      "thinkingBudget": 0
+     }
+    },
+    "h": "240f69d4f87d",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"碎片: \\\"三月的時候天氣很冷\\\"\\n星座名: \\\""
+   },
+   {
+    "cfg": 36,
+    "gen": {
+     "temperature": 0.1,
+     "maxOutputTokens": 100,
+     "thinkingConfig": {
+      "thinkingBudget": 0
+     }
+    },
+    "h": "662a3648f22d",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"碎片: \\\"週年旅行訂了京都的旅館\\\"\\n星座名: "
+   },
+   {
+    "cfg": 36,
+    "gen": {
+     "temperature": 0.1,
+     "maxOutputTokens": 100,
+     "thinkingConfig": {
+      "thinkingBudget": 0
+     }
+    },
+    "h": "f72ecbe1e3cc",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"碎片: \\\"阿明又加班到半夜，說下個月要去週年旅行\\"
+   }
+  ],
+  "chroma": [],
+  "logs": [
+   "L [Archivist Agent] Tick [🌙深度整合] 新碎片=N 未分类=N user空闲=Nmin",
+   "L [Archivist] 🔗 字面自动链接: N 条 (N conf, 零LLM；其中靠别名 N 条)",
+   "L [Archivist Agent]   autoLink: linked=N",
+   "E [Archivist] aggregateLink 失败: db is not defined",
+   "L [Archivist] 📝 轻量概述更新: N 个实体概述需更新",
+   "L [Archivist Agent]   entity_overviews: assessed=N needed=N",
+   "L [Archivist Agent] 🦉 进入深度整合周期",
+   "L [Archivist] 🌿 决策解析失败，默认顺序",
+   "L [UserModel] 🧠 认知模型维护周期开始",
+   "L [UserModel] readUserRawMessages: 仅 N 条非RP消息，跳过 (需≥N)",
+   "E [UserModel] autoSpotCheck error: Cannot find module 'spotCheckModel'",
+   "L [UserModel] 周期完成: observation=false decay=N validate=N detected=N reviewed=N proactive=NaN crossref=N dedup=N insight=false spotcheck=N",
+   "L [Archivist Agent]   userModel: observation={\"skipped\":true,\"reason\":\"too few messages (N < N)\"} decay={\"decayed\":N,\"resolved\":N,\"abandoned\":N,\"flagged\":N,\"dormant\":N,\"revived\":N} validate={\"validated\":N} detect={\"detected\":N} reviewed={\"reviewed\":N} crossref={\"entityFlags\":N,\"traitFlags\":N,\"stateConflicts\":N} dedup={\"merged\":N} insight={\"synthesized\":false} spotCheck={\"checked\":N}",
+   "L [Archivist] 🌿 ▶ classify...",
+   "E [Archivist Agent] classify 失败: near \"/\": syntax error",
+   "L [Archivist] 🌿 ✓ classify (Ns): done",
+   "L [Archivist] 🌿 ▶ rematch...",
+   "L [Archivist] 回补: 没有需要补分的种子",
+   "L [Archivist] 🌿 ✓ rematch (Ns): done",
+   "L [Archivist] 🌿 ▶ graduate...",
+   "L [Archivist] 🌿 ✓ graduate (Ns): done",
+   "L [Archivist] 🌿 园艺完成 (LLM: N次)",
+   "L [Archivist Agent]   skills: scanned=done evaluated=done",
+   "L [Archivist Agent] 🦉 深度整合周期完成"
+  ]
+ },
+ "tick1": {
+  "result": {
+   "ok": {
+    "running": "true",
+    "companionActive": "false",
+    "inTick": "false",
+    "dailyLLMCalls": 4,
+    "totalClassified": 0,
+    "totalTasksRun": 13,
+    "lastTick": "pending",
+    "tools": [
+     "classify_fragments",
+     "discover_relationships",
+     "extract_insights",
+     "detect_emergent_places_events",
+     "regenerate_entity_overviews",
+     "maintain_patterns",
+     "cluster_observations",
+     "consolidate_category",
+     "w7_probe"
+    ]
+   }
+  },
+  "llm": [],
+  "chroma": [],
+  "logs": [
+   "L [Archivist Agent] Tick [☀️轻量] 新碎片=N 未分类=N user空闲=Nmin"
+  ]
+ },
+ "tick2": {
+  "result": {
+   "ok": {
+    "running": "true",
+    "companionActive": "false",
+    "inTick": "false",
+    "dailyLLMCalls": 4,
+    "totalClassified": 0,
+    "totalTasksRun": 13,
+    "lastTick": "pending",
+    "tools": [
+     "classify_fragments",
+     "discover_relationships",
+     "extract_insights",
+     "detect_emergent_places_events",
+     "regenerate_entity_overviews",
+     "maintain_patterns",
+     "cluster_observations",
+     "consolidate_category",
+     "w7_probe"
+    ]
+   }
+  },
+  "llm": [],
+  "chroma": [],
+  "logs": [
+   "L [Archivist Agent] Tick [☀️轻量] 新碎片=N 未分类=N user空闲=Nmin"
+  ]
+ },
+ "stop": {
+  "result": {
+   "ok": {
+    "running": "false",
+    "companionActive": "false",
+    "inTick": "false",
+    "dailyLLMCalls": 4,
+    "totalClassified": 0,
+    "totalTasksRun": 13,
+    "lastTick": "pending",
+    "tools": [
+     "classify_fragments",
+     "discover_relationships",
+     "extract_insights",
+     "detect_emergent_places_events",
+     "regenerate_entity_overviews",
+     "maintain_patterns",
+     "cluster_observations",
+     "consolidate_category",
+     "w7_probe"
+    ]
+   }
+  },
+  "llm": [],
+  "chroma": [],
+  "logs": [
+   "L [Archivist Agent] 已停止"
+  ]
+ },
+ "db": {
+  "entity_profiles": [
+   {
+    "id": 1,
+    "name": "User",
+    "category": "person",
+    "current_status": "",
+    "status_since": null,
+    "source_fragment_ids": "[]",
+    "aliases": "[]",
+    "relationship_to_user": null,
+    "relationship_nature": null,
+    "emotional_significance": null,
+    "first_mentioned_date": null,
+    "last_mentioned_date": "<D>",
+    "created_at": "<T>",
+    "updated_at": "<T>",
+    "last_evaluated_at": null,
+    "relationship_confidence": null,
+    "last_hypothesis": null,
+    "last_eval_frag_count": 0,
+    "overview": null,
+    "overview_updated_at": null,
+    "entity_type": null,
+    "status": "active",
+    "related_entities": "[]",
+    "fragment_count": 6,
+    "subcategory": null,
+    "tags": "[]",
+    "facts": null,
+    "judgment": null,
+    "evolution_history": "[]",
+    "talking_points": "[]",
+    "valid_from": null,
+    "valid_until": null,
+    "entity_scope": "instance",
+    "hit_count": 0,
+    "last_accessed_at": null,
+    "gender": null,
+    "relationship_category": null,
+    "mbti": null,
+    "location": null,
+    "occupation": null,
+    "age_text": null,
+    "birthday": null
+   },
+   {
+    "id": 2,
+    "name": "Companion",
+    "category": "person",
+    "current_status": "",
+    "status_since": null,
+    "source_fragment_ids": "[]",
+    "aliases": "[]",
+    "relationship_to_user": null,
+    "relationship_nature": null,
+    "emotional_significance": null,
+    "first_mentioned_date": null,
+    "last_mentioned_date": "<D>",
+    "created_at": "<T>",
+    "updated_at": "<T>",
+    "last_evaluated_at": null,
+    "relationship_confidence": null,
+    "last_hypothesis": null,
+    "last_eval_frag_count": 0,
+    "overview": null,
+    "overview_updated_at": null,
+    "entity_type": null,
+    "status": "active",
+    "related_entities": "[]",
+    "fragment_count": 2,
+    "subcategory": null,
+    "tags": "[]",
+    "facts": null,
+    "judgment": null,
+    "evolution_history": "[]",
+    "talking_points": "[]",
+    "valid_from": null,
+    "valid_until": null,
+    "entity_scope": "instance",
+    "hit_count": 0,
+    "last_accessed_at": null,
+    "gender": null,
+    "relationship_category": null,
+    "mbti": null,
+    "location": null,
+    "occupation": null,
+    "age_text": null,
+    "birthday": null
+   },
+   {
+    "id": 3,
+    "name": "阿明",
+    "category": "person",
+    "current_status": "最近在忙專案",
+    "status_since": null,
+    "source_fragment_ids": "[]",
+    "aliases": "[\"明哥\",\"阿明哥\"]",
+    "relationship_to_user": "同事",
+    "relationship_nature": null,
+    "emotional_significance": null,
+    "first_mentioned_date": null,
+    "last_mentioned_date": "<D>",
+    "created_at": "<T>",
+    "updated_at": "<T>",
+    "last_evaluated_at": null,
+    "relationship_confidence": null,
+    "last_hypothesis": null,
+    "last_eval_frag_count": 0,
+    "overview": null,
+    "overview_updated_at": null,
+    "entity_type": null,
+    "status": "active",
+    "related_entities": "[]",
+    "fragment_count": 2,
+    "subcategory": null,
+    "tags": "[\"同事\"]",
+    "facts": null,
+    "judgment": null,
+    "evolution_history": "[]",
+    "talking_points": "[]",
+    "valid_from": null,
+    "valid_until": null,
+    "entity_scope": "instance",
+    "hit_count": 0,
+    "last_accessed_at": null,
+    "gender": null,
+    "relationship_category": null,
+    "mbti": null,
+    "location": null,
+    "occupation": null,
+    "age_text": null,
+    "birthday": null
+   },
+   {
+    "id": 4,
+    "name": "阿明哥",
+    "category": "person",
+    "current_status": null,
+    "status_since": null,
+    "source_fragment_ids": "[]",
+    "aliases": "[]",
+    "relationship_to_user": null,
+    "relationship_nature": null,
+    "emotional_significance": null,
+    "first_mentioned_date": null,
+    "last_mentioned_date": "<D>",
+    "created_at": "<T>",
+    "updated_at": "<T>",
+    "last_evaluated_at": null,
+    "relationship_confidence": null,
+    "last_hypothesis": null,
+    "last_eval_frag_count": 0,
+    "overview": null,
+    "overview_updated_at": null,
+    "entity_type": null,
+    "status": "merged",
+    "related_entities": "[]",
+    "fragment_count": 1,
+    "subcategory": null,
+    "tags": "[]",
+    "facts": null,
+    "judgment": null,
+    "evolution_history": "[]",
+    "talking_points": "[]",
+    "valid_from": null,
+    "valid_until": null,
+    "entity_scope": "instance",
+    "hit_count": 0,
+    "last_accessed_at": null,
+    "gender": null,
+    "relationship_category": null,
+    "mbti": null,
+    "location": null,
+    "occupation": null,
+    "age_text": null,
+    "birthday": null
+   },
+   {
+    "id": 5,
+    "name": "一蘭拉麵",
+    "category": "place",
+    "current_status": null,
+    "status_since": null,
+    "source_fragment_ids": "[]",
+    "aliases": "[\"一蘭\"]",
+    "relationship_to_user": null,
+    "relationship_nature": null,
+    "emotional_significance": null,
+    "first_mentioned_date": null,
+    "last_mentioned_date": "<D>",
+    "created_at": "<T>",
+    "updated_at": "<T>",
+    "last_evaluated_at": null,
+    "relationship_confidence": null,
+    "last_hypothesis": null,
+    "last_eval_frag_count": 0,
+    "overview": null,
+    "overview_updated_at": null,
+    "entity_type": null,
+    "status": "active",
+    "related_entities": "[]",
+    "fragment_count": 3,
+    "subcategory": null,
+    "tags": "[]",
+    "facts": null,
+    "judgment": null,
+    "evolution_history": "[]",
+    "talking_points": "[]",
+    "valid_from": null,
+    "valid_until": null,
+    "entity_scope": "instance",
+    "hit_count": 0,
+    "last_accessed_at": null,
+    "gender": null,
+    "relationship_category": null,
+    "mbti": null,
+    "location": null,
+    "occupation": null,
+    "age_text": null,
+    "birthday": null
+   },
+   {
+    "id": 6,
+    "name": "週年旅行",
+    "category": "event",
+    "current_status": null,
+    "status_since": null,
+    "source_fragment_ids": "[]",
+    "aliases": "[]",
+    "relationship_to_user": null,
+    "relationship_nature": null,
+    "emotional_significance": null,
+    "first_mentioned_date": null,
+    "last_mentioned_date": "<D>",
+    "created_at": "<T>",
+    "updated_at": "<T>",
+    "last_evaluated_at": null,
+    "relationship_confidence": null,
+    "last_hypothesis": null,
+    "last_eval_frag_count": 0,
+    "overview": null,
+    "overview_updated_at": null,
+    "entity_type": null,
+    "status": "seed",
+    "related_entities": "[]",
+    "fragment_count": 2,
+    "subcategory": null,
+    "tags": "[]",
+    "facts": null,
+    "judgment": null,
+    "evolution_history": "[]",
+    "talking_points": "[]",
+    "valid_from": null,
+    "valid_until": null,
+    "entity_scope": "instance",
+    "hit_count": 0,
+    "last_accessed_at": null,
+    "gender": null,
+    "relationship_category": null,
+    "mbti": null,
+    "location": null,
+    "occupation": null,
+    "age_text": null,
+    "birthday": null
+   },
+   {
+    "id": 7,
+    "name": "三月",
+    "category": "event",
+    "current_status": null,
+    "status_since": null,
+    "source_fragment_ids": "[]",
+    "aliases": "[]",
+    "relationship_to_user": null,
+    "relationship_nature": null,
+    "emotional_significance": null,
+    "first_mentioned_date": null,
+    "last_mentioned_date": "<D>",
+    "created_at": "<T>",
+    "updated_at": "<T>",
+    "last_evaluated_at": null,
+    "relationship_confidence": null,
+    "last_hypothesis": null,
+    "last_eval_frag_count": 0,
+    "overview": null,
+    "overview_updated_at": null,
+    "entity_type": null,
+    "status": "seed",
+    "related_entities": "[]",
+    "fragment_count": 1,
+    "subcategory": null,
+    "tags": "[]",
+    "facts": null,
+    "judgment": null,
+    "evolution_history": "[]",
+    "talking_points": "[]",
+    "valid_from": null,
+    "valid_until": null,
+    "entity_scope": "instance",
+    "hit_count": 0,
+    "last_accessed_at": null,
+    "gender": null,
+    "relationship_category": null,
+    "mbti": null,
+    "location": null,
+    "occupation": null,
+    "age_text": null,
+    "birthday": null
+   },
+   {
+    "id": 8,
+    "name": "冬季",
+    "category": "event",
+    "current_status": null,
+    "status_since": null,
+    "source_fragment_ids": "[]",
+    "aliases": "[]",
+    "relationship_to_user": null,
+    "relationship_nature": null,
+    "emotional_significance": null,
+    "first_mentioned_date": null,
+    "last_mentioned_date": "<D>",
+    "created_at": "<T>",
+    "updated_at": "<T>",
+    "last_evaluated_at": null,
+    "relationship_confidence": null,
+    "last_hypothesis": null,
+    "last_eval_frag_count": 0,
+    "overview": null,
+    "overview_updated_at": null,
+    "entity_type": null,
+    "status": "seed",
+    "related_entities": "[]",
+    "fragment_count": 1,
+    "subcategory": null,
+    "tags": "[]",
+    "facts": null,
+    "judgment": null,
+    "evolution_history": "[]",
+    "talking_points": "[]",
+    "valid_from": null,
+    "valid_until": null,
+    "entity_scope": "instance",
+    "hit_count": 0,
+    "last_accessed_at": null,
+    "gender": null,
+    "relationship_category": null,
+    "mbti": null,
+    "location": null,
+    "occupation": null,
+    "age_text": null,
+    "birthday": null
+   }
+  ],
+  "fragment_entities": [
+   {
+    "id": 1,
+    "fragment_id": 1,
+    "entity_id": 3,
+    "relation": "appeared_in",
+    "confidence": 0.8,
+    "classified_by": "test_seed",
+    "created_at": "<T>"
+   },
+   {
+    "id": 2,
+    "fragment_id": 1,
+    "entity_id": 5,
+    "relation": "visited",
+    "confidence": 0.8,
+    "classified_by": "test_seed",
+    "created_at": "<T>"
+   },
+   {
+    "id": 3,
+    "fragment_id": 1,
+    "entity_id": 1,
+    "relation": "about",
+    "confidence": 0.8,
+    "classified_by": "test_seed",
+    "created_at": "<T>"
+   },
+   {
+    "id": 4,
+    "fragment_id": 2,
+    "entity_id": 3,
+    "relation": "appeared_in",
+    "confidence": 0.8,
+    "classified_by": "test_seed",
+    "created_at": "<T>"
+   },
+   {
+    "id": 5,
+    "fragment_id": 3,
+    "entity_id": 1,
+    "relation": "about",
+    "confidence": 0.8,
+    "classified_by": "test_seed",
+    "created_at": "<T>"
+   },
+   {
+    "id": 6,
+    "fragment_id": 6,
+    "entity_id": 1,
+    "relation": "about",
+    "confidence": 0.8,
+    "classified_by": "test_seed",
+    "created_at": "<T>"
+   },
+   {
+    "id": 7,
+    "fragment_id": 8,
+    "entity_id": 7,
+    "relation": null,
+    "confidence": 0.4,
+    "classified_by": "auto_literal",
+    "created_at": "<T>"
+   },
+   {
+    "id": 8,
+    "fragment_id": 4,
+    "entity_id": 6,
+    "relation": null,
+    "confidence": 0.4,
+    "classified_by": "auto_literal",
+    "created_at": "<T>"
+   },
+   {
+    "id": 9,
+    "fragment_id": 2,
+    "entity_id": 6,
+    "relation": null,
+    "confidence": 0.4,
+    "classified_by": "auto_literal",
+    "created_at": "<T>"
+   }
+  ],
+  "fragment_categories": [],
+  "memory_ontology": [
+   {
+    "id": 1,
+    "path": "人际关系",
+    "label": "人际关系",
+    "parent_id": null,
+    "description": "用户与他人的关系记忆",
+    "centroid_embedding": null,
+    "fragment_count": 0,
+    "created_at": "<T>",
+    "updated_at": "<T>"
+   },
+   {
+    "id": 2,
+    "path": "地点",
+    "label": "地点",
+    "parent_id": null,
+    "description": "与具体地点相关的记忆",
+    "centroid_embedding": null,
+    "fragment_count": 0,
+    "created_at": "<T>",
+    "updated_at": "<T>"
+   },
+   {
+    "id": 3,
+    "path": "创作",
+    "label": "创作",
+    "parent_id": null,
+    "description": "用户的写作与创作记忆",
+    "centroid_embedding": null,
+    "fragment_count": 0,
+    "created_at": "<T>",
+    "updated_at": "<T>"
+   },
+   {
+    "id": 4,
+    "path": "日常",
+    "label": "日常",
+    "parent_id": null,
+    "description": "日常生活与日记",
+    "centroid_embedding": null,
+    "fragment_count": 0,
+    "created_at": "<T>",
+    "updated_at": "<T>"
+   },
+   {
+    "id": 5,
+    "path": "音乐",
+    "label": "音乐",
+    "parent_id": null,
+    "description": "音乐相关记忆",
+    "centroid_embedding": null,
+    "fragment_count": 0,
+    "created_at": "<T>",
+    "updated_at": "<T>"
+   },
+   {
+    "id": 6,
+    "path": "工作",
+    "label": "工作",
+    "parent_id": null,
+    "description": "某职业与工作相关记忆",
+    "centroid_embedding": null,
+    "fragment_count": 0,
+    "created_at": "<T>",
+    "updated_at": "<T>"
+   },
+   {
+    "id": 7,
+    "path": "健康",
+    "label": "健康",
+    "parent_id": null,
+    "description": "健康与身体状态",
+    "centroid_embedding": null,
+    "fragment_count": 0,
+    "created_at": "<T>",
+    "updated_at": "<T>"
+   },
+   {
+    "id": 8,
+    "path": "人际关系/朋友",
+    "label": "朋友",
+    "parent_id": 1,
+    "description": "用户的朋友圈",
+    "centroid_embedding": null,
+    "fragment_count": 0,
+    "created_at": "<T>",
+    "updated_at": "<T>"
+   },
+   {
+    "id": 9,
+    "path": "人际关系/家人",
+    "label": "家人",
+    "parent_id": 1,
+    "description": "用户的家人",
+    "centroid_embedding": null,
+    "fragment_count": 0,
+    "created_at": "<T>",
+    "updated_at": "<T>"
+   },
+   {
+    "id": 10,
+    "path": "人际关系/关于我们",
+    "label": "关于我们",
+    "parent_id": 1,
+    "description": "AI与用户的关系记忆",
+    "centroid_embedding": null,
+    "fragment_count": 0,
+    "created_at": "<T>",
+    "updated_at": "<T>"
+   },
+   {
+    "id": 11,
+    "path": "地点/某城市",
+    "label": "某城市",
+    "parent_id": 2,
+    "description": "某城市相关地点",
+    "centroid_embedding": null,
+    "fragment_count": 0,
+    "created_at": "<T>",
+    "updated_at": "<T>"
+   },
+   {
+    "id": 12,
+    "path": "地点/旅行",
+    "label": "旅行",
+    "parent_id": 2,
+    "description": "旅行记忆",
+    "centroid_embedding": null,
+    "fragment_count": 0,
+    "created_at": "<T>",
+    "updated_at": "<T>"
+   },
+   {
+    "id": 13,
+    "path": "创作/写作",
+    "label": "写作",
+    "parent_id": 3,
+    "description": "小说与写作",
+    "centroid_embedding": null,
+    "fragment_count": 0,
+    "created_at": "<T>",
+    "updated_at": "<T>"
+   },
+   {
+    "id": 14,
+    "path": "创作/某职业",
+    "label": "某职业",
+    "parent_id": 3,
+    "description": "某职业作品与工作",
+    "centroid_embedding": null,
+    "fragment_count": 0,
+    "created_at": "<T>",
+    "updated_at": "<T>"
+   },
+   {
+    "id": 15,
+    "path": "创作/绘画",
+    "label": "绘画",
+    "parent_id": 3,
+    "description": "spine动画与绘画",
+    "centroid_embedding": null,
+    "fragment_count": 0,
+    "created_at": "<T>",
+    "updated_at": "<T>"
+   }
+  ],
+  "memory_fragments": [
+   {
+    "id": 1,
+    "type": "event",
+    "entity": "User",
+    "content": "今天和阿明去一蘭拉麵吃宵夜，明哥說專案終於上線了",
+    "emotional_weight": 0.6,
+    "source": "chat",
+    "source_date": "<D>",
+    "status": "active",
+    "created_at": "<T>",
+    "read_count": 0,
+    "last_accessed_at": null,
+    "chroma_id": null,
+    "source_msg_ids": "[1,2]",
+    "layer": "event",
+    "lifecycle_updated_at": null,
+    "entity_id": null,
+    "is_rp": 0,
+    "source_memory_id": null,
+    "confidence": 0.5,
+    "access_count": 0,
+    "priority": "normal",
+    "content_hash": null,
+    "value_tags": "[]",
+    "chat_mode": "default",
+    "insight": null,
+    "quote": null,
+    "evidence_count": 1
+   },
+   {
+    "id": 2,
+    "type": "event",
+    "entity": "User",
+    "content": "阿明又加班到半夜，說下個月要去週年旅行",
+    "emotional_weight": 0.5,
+    "source": "chat",
+    "source_date": "<D>",
+    "status": "active",
+    "created_at": "<T>",
+    "read_count": 0,
+    "last_accessed_at": null,
+    "chroma_id": null,
+    "source_msg_ids": "[3]",
+    "layer": "event",
+    "lifecycle_updated_at": null,
+    "entity_id": null,
+    "is_rp": 0,
+    "source_memory_id": null,
+    "confidence": 0.5,
+    "access_count": 0,
+    "priority": "normal",
+    "content_hash": null,
+    "value_tags": "[]",
+    "chat_mode": "default",
+    "insight": null,
+    "quote": null,
+    "evidence_count": 1
+   },
+   {
+    "id": 3,
+    "type": "trait",
+    "entity": "User",
+    "content": "我每次壓力大就想吃拉麵",
+    "emotional_weight": 0.7,
+    "source": "chat",
+    "source_date": "<D>",
+    "status": "active",
+    "created_at": "<T>",
+    "read_count": 0,
+    "last_accessed_at": null,
+    "chroma_id": null,
+    "source_msg_ids": "[4]",
+    "layer": "event",
+    "lifecycle_updated_at": null,
+    "entity_id": null,
+    "is_rp": 0,
+    "source_memory_id": null,
+    "confidence": 0.5,
+    "access_count": 0,
+    "priority": "normal",
+    "content_hash": null,
+    "value_tags": "[\"health\"]",
+    "chat_mode": "default",
+    "insight": null,
+    "quote": null,
+    "evidence_count": 1
+   },
+   {
+    "id": 4,
+    "type": "event",
+    "entity": "User",
+    "content": "週年旅行訂了京都的旅館",
+    "emotional_weight": 0.8,
+    "source": "chat",
+    "source_date": "<D>",
+    "status": "active",
+    "created_at": "<T>",
+    "read_count": 0,
+    "last_accessed_at": null,
+    "chroma_id": null,
+    "source_msg_ids": "[5]",
+    "layer": "event",
+    "lifecycle_updated_at": null,
+    "entity_id": null,
+    "is_rp": 0,
+    "source_memory_id": null,
+    "confidence": 0.5,
+    "access_count": 0,
+    "priority": "normal",
+    "content_hash": null,
+    "value_tags": "[]",
+    "chat_mode": "default",
+    "insight": null,
+    "quote": null,
+    "evidence_count": 1
+   },
+   {
+    "id": 5,
+    "type": "event",
+    "entity": "User",
+    "content": "一蘭的豚骨湯頭還是一樣濃",
+    "emotional_weight": 0.4,
+    "source": "chat",
+    "source_date": "<D>",
+    "status": "active",
+    "created_at": "<T>",
+    "read_count": 0,
+    "last_accessed_at": null,
+    "chroma_id": null,
+    "source_msg_ids": "[6]",
+    "layer": "event",
+    "lifecycle_updated_at": null,
+    "entity_id": null,
+    "is_rp": 0,
+    "source_memory_id": null,
+    "confidence": 0.5,
+    "access_count": 0,
+    "priority": "normal",
+    "content_hash": null,
+    "value_tags": "[]",
+    "chat_mode": "default",
+    "insight": null,
+    "quote": null,
+    "evidence_count": 1
+   },
+   {
+    "id": 6,
+    "type": "feeling",
+    "entity": "User",
+    "content": "最近睡不好，覺得有點焦慮",
+    "emotional_weight": 0.9,
+    "source": "chat",
+    "source_date": "<D>",
+    "status": "active",
+    "created_at": "<T>",
+    "read_count": 0,
+    "last_accessed_at": null,
+    "chroma_id": null,
+    "source_msg_ids": "[7]",
+    "layer": "event",
+    "lifecycle_updated_at": null,
+    "entity_id": null,
+    "is_rp": 0,
+    "source_memory_id": null,
+    "confidence": 0.5,
+    "access_count": 0,
+    "priority": "normal",
+    "content_hash": null,
+    "value_tags": "[\"health\"]",
+    "chat_mode": "default",
+    "insight": null,
+    "quote": null,
+    "evidence_count": 1
+   },
+   {
+    "id": 7,
+    "type": "event",
+    "entity": "User",
+    "content": "和明哥討論新的架構設計",
+    "emotional_weight": 0.5,
+    "source": "chat",
+    "source_date": "<D>",
+    "status": "active",
+    "created_at": "<T>",
+    "read_count": 0,
+    "last_accessed_at": null,
+    "chroma_id": null,
+    "source_msg_ids": "[8]",
+    "layer": "event",
+    "lifecycle_updated_at": null,
+    "entity_id": null,
+    "is_rp": 0,
+    "source_memory_id": null,
+    "confidence": 0.5,
+    "access_count": 0,
+    "priority": "normal",
+    "content_hash": null,
+    "value_tags": "[]",
+    "chat_mode": "default",
+    "insight": null,
+    "quote": null,
+    "evidence_count": 1
+   },
+   {
+    "id": 8,
+    "type": "event",
+    "entity": "User",
+    "content": "三月的時候天氣很冷",
+    "emotional_weight": 0.2,
+    "source": "chat",
+    "source_date": "<D>",
+    "status": "active",
+    "created_at": "<T>",
+    "read_count": 0,
+    "last_accessed_at": null,
+    "chroma_id": null,
+    "source_msg_ids": "[9]",
+    "layer": "event",
+    "lifecycle_updated_at": null,
+    "entity_id": null,
+    "is_rp": 0,
+    "source_memory_id": null,
+    "confidence": 0.5,
+    "access_count": 0,
+    "priority": "normal",
+    "content_hash": null,
+    "value_tags": "[]",
+    "chat_mode": "default",
+    "insight": null,
+    "quote": null,
+    "evidence_count": 1
+   }
+  ],
+  "memories": [
+   {
+    "id": 1,
+    "title": "拉麵宵夜",
+    "content": "和阿明吃一蘭",
+    "tags": "[]",
+    "content_hash": null,
+    "chroma_id": null,
+    "weight": 5,
+    "valid_from": null,
+    "valid_to": null,
+    "status": "permanent",
+    "created_at": "<T>",
+    "updated_at": "<T>",
+    "source_msg_ids": "[]",
+    "layer": "episode",
+    "last_accessed_at": null,
+    "consolidation_type": "standard",
+    "audit_status": null,
+    "entity_id": 3
+   }
+  ],
+  "entity_timeline": [],
+  "user_patterns": [
+   {
+    "id": 1,
+    "content": "壓力大時會吃拉麵",
+    "category": "behavior",
+    "evidence_count": 3,
+    "first_seen": "<T>",
+    "last_seen": "<T>",
+    "confidence": 0.5,
+    "source_fragment_ids": "[]",
+    "tags": "[]",
+    "status": "active",
+    "created_at": "<T>",
+    "updated_at": "<T>",
+    "strategy": null,
+    "last_mismatch_at": null,
+    "mismatch_count": 0,
+    "contradiction_count": 0
+   }
+  ],
+  "user_model": [],
+  "ontology_changelog": [
+   {
+    "id": 1,
+    "action": "merge_proposal",
+    "category_id": null,
+    "category_path": "阿明 ↔ 阿明哥",
+    "detail": "{\"a_id\":3,\"a_name\":\"阿明\",\"a_fc\":5,\"b_id\":4,\"b_name\":\"阿明哥\",\"b_fc\":1,\"reason\":\"名字包含\",\"shared\":0}",
+    "created_at": "<T>",
+    "confidence": null,
+    "status": "pending"
+   },
+   {
+    "id": 2,
+    "action": "seed_merge",
+    "category_id": null,
+    "category_path": "阿明",
+    "detail": "{\"victim\":\"阿明哥\",\"survivor\":\"阿明\",\"migrated\":0}",
+    "created_at": "<T>",
+    "confidence": null,
+    "status": "done"
+   },
+   {
+    "id": 3,
+    "action": "deep_cycle",
+    "category_id": null,
+    "category_path": "深循环完成",
+    "detail": "{\"llm_calls\":0,\"unclassified_remaining\":2,\"seeds_remaining\":3}",
+    "created_at": "<T>",
+    "confidence": 0.8,
+    "status": "completed"
+   }
+  ],
+  "user_settings": [
+   {
+    "id": 1,
+    "setting_key": "summary-context-limit",
+    "setting_value": "5",
+    "updated_at": "<T>"
+   }
+  ],
+  "archivist_skills": [],
+  "memory_sagas": []
+ }
+}
