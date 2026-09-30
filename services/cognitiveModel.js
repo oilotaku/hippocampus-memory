@@ -19,53 +19,7 @@ const { getCompanionPersonaBase } = require('./companionPersona');
 const { sqlNow, sqlTimeAhead, DAY_MS } = require('../utils/time');
 // ── W7 拆分進行中：以下名稱已搬到 services/cognitiveModel/ ──
 const { LLM_CONFIG_ID, HYPOTHESIS_UPGRADE_EVIDENCE, HYPOTHESIS_ABANDON_DAYS, TRAIT_CONTRADICTION_THRESHOLD, MIN_GAP_USER_MODEL } = require('./cognitiveModel/constants');
-
-// v5.10: 增强版 system prompt — Companion 人格 + User 画像
-// 供 detectNewTraits / readUserRawMessages 等需要深度理解 {{user.name}} 的 LLM 调用使用
-function _buildModelSystemPrompt() {
-    let sp = WORLD_CONTEXT + '\n\n---\n\n';
-    // Companion 人格
-    const persona = getCompanionPersonaBase();
-    if (persona) sp += persona + '\n\n---\n\n';
-    // {{user.name}} 现有画像摘要
-    try {
-        const { assembleProfile } = require('./userProfile');
-        const profile = assembleProfile(300);
-        if (profile) sp += profile;
-    } catch (_) {}
-    return sp;
-}
-
-// ═══════════════════════════════════════════════════════
-// Helper: extract plain text from message content
-// Handles: encrypted JSON → decrypt → parse components → plain text
-// ═══════════════════════════════════════════════════════
-
-function extractMessageText(rawContent) {
-    if (!rawContent) return '';
-    let text = rawContent;
-
-    // 1. Decrypt if encrypted
-    if (text.startsWith('enc:')) {
-        try { text = encryption.decrypt(text, { silent: true }); } catch (_) { return ''; }
-        if (text === null) return '';
-    }
-
-    // 2. Parse JSON components if present
-    if (text.startsWith('{') && text.includes('"components"')) {
-        try {
-            const parsed = JSON.parse(text);
-            if (parsed.components && Array.isArray(parsed.components)) {
-                text = parsed.components
-                    .filter(c => c.type === 'text' && c.content)
-                    .map(c => c.content)
-                    .join(' ');
-            }
-        } catch (_) { /* not JSON, use as-is */ }
-    }
-
-    return text.trim();
-}
+const { _buildModelSystemPrompt, extractMessageText, safeParseJson } = require('./cognitiveModel/helpers');
 
 // ═══════════════════════════════════════════════════════
 // CRUD
@@ -2051,10 +2005,6 @@ function seedFromExisting() {
 
     console.log(`[UserModel] 播种完成: immutable_fact=${created.immutable_fact} stable_trait=${created.stable_trait} active_hypothesis=${created.active_hypothesis}`);
     return { created };
-}
-
-function safeParseJson(str) {
-    try { return JSON.parse(str); } catch { return []; }
 }
 
 // ═══════════════════════════════════════════════════════
