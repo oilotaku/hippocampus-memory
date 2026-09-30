@@ -28,6 +28,8 @@ A self-organizing long-term memory system for AI assistants and companions. It e
 | Retrieval timing gate: skip memory lookup for greetings and commands, adaptive result count, context-triggered surfacing, upcoming-event reminders, capped hard triggers | Working (on by default; `recall.gate=false` restores the old behaviour) |
 | `injected_count` (put in the prompt) split from `cited_count` (actually used) | Working; `cited_count` is fed by the `recall_memory` tool, and by `recallGate.markCitedFromReply()` for hosts that can pass the assistant's reply |
 | Eight-dimension emotion engine: per-fragment scores, personal time-of-day baselines, turning-point attribution to entities, anniversaries, fading | Working (on by default, `emotion.enabled`) |
+| Retrieval ranking v2: entities boost instead of flooding, no penalty for full-text-only hits, time decay orders but never filters | Working (on by default; `librarian.ranking=legacy` restores the old ranking) |
+| Retrieval benchmark on LoCoMo and a Traditional Chinese synthetic set (`eval/`) | Done; see [Retrieval evaluation](#retrieval-evaluation) |
 
 ---
 
@@ -203,6 +205,12 @@ Personalization lives here: user and assistant names, relationship, and colors. 
 | `recall.prospective_days / prospective_max` | 7 / 3 | Events dated within this many days are added to an upcoming-events block even if the message did not match them. Dates are parsed from fragment text (`M月D日`, `M/D`, `下週X`, `週X`, `明天`, ...) relative to when the fragment was written; an `event_at` column is used if present |
 | `recall.hard_trigger_max` | 3 | Most hard-trigger memories injected per message; tags now match on two-character tokens instead of raw substrings |
 | `recall.cite_min_overlap / cite_min_shared` | 0.3 / 3 | How much of a fragment's two-character tokens must appear in a reply for `markCitedFromReply()` to count it as cited |
+| `librarian.ranking` | `v2` | Retrieval ranking. `legacy` restores the original: entity channel injects its latest 10 fragments at fixed ranks, full-text-only hits ×0.7, time decay used as a score cutoff |
+| `librarian.entity_boost` | 0.1 | Candidates already found by full text or vectors that link to an entity named in the message get relevance × (1 + boost). The user's and assistant's own names never trigger it |
+| `librarian.fts_only_penalty` | 1.0 | Relevance multiplier for results found by full text only (no vector confirmation) |
+| `librarian.decay_weight` | 0.05 | Exponent on time decay in the rank score. Decay only reorders, it never removes a result; 0 ignores time |
+| `librarian.min_relevance` | 0.005 | Drop threshold on fused relevance (excluding decay, importance, novelty), so old but relevant memories are still returned |
+| `librarian.candidate_overfetch` | 2 | Full text fetches this many times the limit, so boosting and time ordering can promote results from just outside the top |
 
 #### Emotion engine (`emotion.*`)
 
@@ -243,13 +251,39 @@ node tests/smoke_memory.js    # memory pipeline smoke test (the ChromaDB check f
 node scripts/e2e_ollama.js    # end-to-end run against a real local Ollama
 ```
 
+### Retrieval evaluation
+
+`eval/locomo_retrieval.js` loads each conversation straight into the memory store (no LLM extraction) and checks whether the evidence turns for each question come back in the top k. Datasets are not included in the repository:
+
+- **LoCoMo**: download `locomo10.json` from [snap-research/locomo](https://github.com/snap-research/locomo) into `data/locomo/` (10 conversations, 1,986 questions).
+- **Traditional Chinese synthetic set**: `eval/synth/generate_zh.py` has two Claude CLI instances chat across sessions while a third judges and corrects the dialogue and writes questions in LoCoMo format (the set used here: 3 conversations, 18 sessions, 144 questions). Point `LOCOMO_DATA` at the result.
+
+```bash
+node eval/locomo_retrieval.js --variants A,C    # A = product default without vectors, C = A plus a bge-m3 vector channel
+node eval/locomo_aggregate.js                   # writes eval/results/retrieval_summary.{json,md}
+node eval/locomo_tune.js eval/tune/grid1.json   # parameter sweeps via LIBRARIAN_OVERRIDE
+```
+
+Results for the product default (evidence found in the top 20, and mean reciprocal rank):
+
+| Dataset | Variant | Legacy ranking | Ranking v2 |
+|---|---|---|---|
+| LoCoMo | A (no vectors) | 4.0%, MRR 0.034 | 67.4%, MRR 0.369 |
+| LoCoMo | C (with vectors) | | 77.5%, MRR 0.441 |
+| Chinese synthetic | A (no vectors) | 73.4%, MRR 0.303 | 95.0%, MRR 0.710 |
+| Chinese synthetic | C (with vectors) | | 97.8%, MRR 0.739 |
+
+The legacy ranking scored far below plain full-text search (MRR 0.370 on LoCoMo) because the entity channel filled the top ranks with each entity's latest fragments. Tuning notes are in `eval/results/ranking_tuning.md`, full tables in `eval/results/*/retrieval_summary.md`.
+
 ---
 
 ## Known limitations
 
 - **Mixed scripts in search (mitigated).** Indexing and querying fold Simplified and Traditional characters together (character-by-character, `utils/zhNormalize.js`), so a Traditional query finds Simplified fragments and vice versa. Folding is per character, not per word, so regional vocabulary differences (e.g. 软件 / 軟體) are not bridged. Existing databases rebuild their search index once on the first start after upgrading.
 - **Local models need a context of at least 8k tokens.** The Scribe extraction prompt is about 5.4k tokens (Traditional Chinese tokenizes about 10% longer than Simplified). With Ollama's default `num_ctx` of 4096 the prompt is silently truncated and an 8B model stops returning `type`/`quote`, so every entry is dropped. Create a model variant with `PARAMETER num_ctx 8192` (or set `OLLAMA_CONTEXT_LENGTH`).
-- **Assistant replies get extracted.** In testing with an 8B local model, half of the extracted fragments were the assistant's own small talk.
+- **Assistant replies get extracted.** In testing with an 8B local model, half of the extracted fragments were the assistant's own small talk. The small-talk word list is Chinese only, so English small talk is not filtered.
+- **Extraction is tuned for Chinese.** The 60-character limit on verbatim quotes is too short for English sentences, and the Scribe reserves 4,096 output tokens, which leaves little room for input in an 8k context.
+- **End-to-end quality is not yet measured.** The retrieval benchmark bypasses LLM extraction; a full run through a local 8B model on CPU was too slow to finish.
 - **Entity resolution is broken upstream.** `entityResolver.js` reads a column `related_entity_ids` that no migration creates.
 - **The vector channel needs ChromaDB.** Without it, search falls back to full text and entities only.
 - **The blind index leaks frequency.** The same two-character token always hashes to the same value within a column, so token frequencies and shared tokens between rows are visible to someone holding the database file.
@@ -283,6 +317,7 @@ This version would not exist without the foundation they built. The original doc
 | Local models | Ollama setup preset, no auth header without a key, longer local timeouts, fallback to the default model config |
 | Resources | Deep-cycle memory threshold and memory token budget are configurable |
 | Structure | The 311 KB Archivist and 157 KB cognitive-model files were split into focused modules of at most 40 KB each, verified to be a pure move |
+| Retrieval ranking | Ranking v2 (entity boost, no full-text penalty, decay orders only), with a LoCoMo and Traditional Chinese retrieval benchmark |
 | Dependencies | `better-sqlite3` upgraded to 12 for prebuilt Node 24 binaries; license field corrected from ISC to MIT |
 
 ## License
