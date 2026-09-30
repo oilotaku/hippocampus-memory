@@ -9,6 +9,7 @@ const { requireAuth } = require('./auth');
 const { getEmbedding, getEmbeddingAPIKey } = require('../services/llm');
 const { chromaDBOperation } = require('../services/memory');
 const { sqlNow } = require('../utils/time');
+const { assertSafeEndpoint, joinEndpointPath, safeFetch, SsrfError } = require('../utils/ssrf-guard');
 
 const router = express.Router();
 
@@ -958,6 +959,8 @@ router.post('/api/test-embedding', requireAuth, async (req, res) => {
             endpoint: endpoint || 'https://generativelanguage.googleapis.com/v1beta'
         };
         
+        await assertSafeEndpoint(testConfig.endpoint);
+        
         const testText = '这是一条测试文本，用于验证embedding API是否正常工作。';
         const testEmbedding = await getEmbedding(testText, testConfig);
         
@@ -975,6 +978,9 @@ router.post('/api/test-embedding', requireAuth, async (req, res) => {
         }
     } catch (error) {
         console.error('测试embedding失败:', error);
+        if (error instanceof SsrfError) {
+            return res.status(400).json({ success: false, error: error.message });
+        }
         res.json({ 
             success: false, 
             error: error.message || '连接失败，请检查API Key和endpoint'
@@ -983,7 +989,7 @@ router.post('/api/test-embedding', requireAuth, async (req, res) => {
 });
 
 // 保存embedding配置
-router.post('/api/save-embedding-config', requireAuth, (req, res) => {
+router.post('/api/save-embedding-config', requireAuth, async (req, res) => {
     const db = getDb();
     const { api_key, model_name, provider, endpoint } = req.body;
     
@@ -995,6 +1001,7 @@ router.post('/api/save-embedding-config', requireAuth, (req, res) => {
     }
     
     try {
+        if (endpoint) await assertSafeEndpoint(endpoint);
         const encryptedKey = encryption.encrypt(api_key);
         
         const existing = db.prepare(`
@@ -1036,6 +1043,7 @@ router.post('/api/save-embedding-config', requireAuth, (req, res) => {
         
     } catch (error) {
         console.error('保存embedding配置失败:', error);
+        if (error instanceof SsrfError) return res.status(400).json({ success: false, error: error.message });
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -1081,9 +1089,10 @@ router.post('/api/test-llm', requireAuth, async (req, res) => {
     
     try {
         const testEndpoint = endpoint || 'https://generativelanguage.googleapis.com/v1beta';
-        const url = `${testEndpoint}/models/${model_name}:generateContent?key=${api_key}`;
+        // SSRF 防护：端点由使用者提供，先验证再连线；不拼接字串，不跟随转址
+        const url = joinEndpointPath(testEndpoint, `models/${model_name}:generateContent`, { key: api_key });
         
-        const response = await fetch(url, {
+        const response = await safeFetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1105,6 +1114,9 @@ router.post('/api/test-llm', requireAuth, async (req, res) => {
         }
     } catch (error) {
         console.error('测试LLM失败:', error);
+        if (error instanceof SsrfError) {
+            return res.status(400).json({ success: false, error: error.message });
+        }
         res.json({ success: false, error: error.message || '连接失败' });
     }
 });
@@ -1152,9 +1164,9 @@ ${title ? `标题: ${title}\n` : ''}内容: ${content}
 
 标签列表：`;
         
-        const url = `${endpoint}/models/${modelName}:generateContent?key=${apiKey}`;
+        const url = joinEndpointPath(endpoint, `models/${modelName}:generateContent`, { key: apiKey });
         
-        const response = await fetch(url, {
+        const response = await safeFetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1189,7 +1201,7 @@ ${title ? `标题: ${title}\n` : ''}内容: ${content}
 });
 
 // 保存记忆库完整配置（Embedding + LLM）
-router.post('/api/save-memory-config', requireAuth, (req, res) => {
+router.post('/api/save-memory-config', requireAuth, async (req, res) => {
     const db = getDb();
     const { api_key, embedding, llm } = req.body;
     
@@ -1198,6 +1210,8 @@ router.post('/api/save-memory-config', requireAuth, (req, res) => {
     }
     
     try {
+        if (embedding.endpoint) await assertSafeEndpoint(embedding.endpoint);
+        if (llm.endpoint) await assertSafeEndpoint(llm.endpoint);
         const encryptedKey = encryption.encrypt(api_key);
         
         // 保存Embedding配置
@@ -1242,6 +1256,7 @@ router.post('/api/save-memory-config', requireAuth, (req, res) => {
         
     } catch (error) {
         console.error('保存配置失败:', error);
+        if (error instanceof SsrfError) return res.status(400).json({ success: false, error: error.message });
         res.status(500).json({ success: false, error: error.message });
     }
 });

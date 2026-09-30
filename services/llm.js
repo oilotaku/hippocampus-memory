@@ -50,6 +50,7 @@ async function fetchWithRetry(url, options, maxRetries = 3) {
 }
 const { encryption } = require('../encryption');
 const { getShanghaiTime } = require('../utils/time');
+const { assertSafeEndpoint, joinEndpointPath } = require('../utils/ssrf-guard');
 
 const enc = get_encoding('cl100k_base');
 
@@ -163,15 +164,18 @@ async function getEmbedding(text, embeddingConfig) {
         
         let requestUrl, requestBody, headers;
         
+        // SSRF 防护：端点可由使用者存入 DB，连线前验证（无法钉 IP，见 utils/ssrf-guard.js 残余风险说明）
+        await assertSafeEndpoint(embeddingConfig.endpoint);
+        
         if (provider === 'gemini') {
-            requestUrl = `${embeddingConfig.endpoint}/models/${modelName}:embedContent?key=${apiKey}`;
+            requestUrl = joinEndpointPath(embeddingConfig.endpoint, `models/${modelName}:embedContent`, { key: apiKey });
             requestBody = {
                 model: modelName,
                 content: { parts: [{ text: text }] }
             };
             headers = { 'Content-Type': 'application/json' };
         } else {
-            requestUrl = `${embeddingConfig.endpoint}/embeddings`;
+            requestUrl = joinEndpointPath(embeddingConfig.endpoint, 'embeddings');
             requestBody = { input: text, model: modelName };
             headers = {
                 'Content-Type': 'application/json',
@@ -184,9 +188,13 @@ async function getEmbedding(text, embeddingConfig) {
             method: 'POST',
             headers: headers,
             body: JSON.stringify(requestBody),
+            redirect: 'manual',
             ...(useProxy ? { dispatcher: proxyDispatcher } : {})
         });
 
+        if (response.status >= 300 && response.status < 400) {
+            throw new Error('Embedding API 回应转址（3xx），为防止 SSRF 已阻止');
+        }
         if (!response.ok) {
             const errorText = await response.text();
             throw new Error(`Embedding API error (${response.status}): ${errorText.substring(0, 200)}`);
@@ -291,6 +299,7 @@ async function callGeminiAPI(geminiMessages, systemPrompt, tools, generationConf
         baseUrl = 'https://generativelanguage.googleapis.com/v1beta/models/';
     }
     if (!baseUrl.endsWith('/')) baseUrl += '/';
+    await assertSafeEndpoint(baseUrl);
     const url = `${baseUrl}${modelToUse}:generateContent?key=${apiConfig.api_key}`;
     
     const safeUrlLog = url.replace(/key=([^&]+)/, 'key=******');
@@ -298,7 +307,7 @@ async function callGeminiAPI(geminiMessages, systemPrompt, tools, generationConf
 
     let response;
     try {
-        response = await axios.post(url, requestBody, { proxy: needsProxy(url) ? { host: '127.0.0.1', port: 7890, protocol: 'http' } : false });
+        response = await axios.post(url, requestBody, { maxRedirects: 0, proxy: needsProxy(url) ? { host: '127.0.0.1', port: 7890, protocol: 'http' } : false });
     } catch (error) {
         console.error('callGeminiAPI error:', JSON.stringify(error.response?.data, null, 2));
         throw error;
@@ -344,6 +353,7 @@ async function callGeminiAPI(geminiMessages, systemPrompt, tools, generationConf
 // =================================================================
 
 async function callOpenAICompatibleAPI(geminiMessages, systemPrompt, tools, generationConfig, apiConfig) {
+    await assertSafeEndpoint(apiConfig.endpoint);
     let url = apiConfig.endpoint;
     if (!url.endsWith('/')) url += '/';
     if (!url.includes('chat/completions')) {
@@ -445,6 +455,7 @@ async function callOpenAICompatibleAPI(geminiMessages, systemPrompt, tools, gene
             'Content-Type': 'application/json'
         },
         proxy: needsProxy(url) ? { host: '127.0.0.1', port: 7890, protocol: 'http' } : false,
+        maxRedirects: 0,
         timeout: 30000
     };
 
