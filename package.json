@@ -1,5 +1,5 @@
 {
-  "name": "memory-constellations",
+  "name": "hippocampus-memory",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
@@ -10,8 +10,8 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
-  "description": "A self-organizing memory system for AI companions",
+  "license": "MIT",
+  "description": "Self-organizing long-term memory for AI assistants and companions, adapted from Memory Constellations (MIT) by Clara Shafiq & Draco Malfoy",
   "dependencies": {
     "axios": "^1.13.5",
     "bcryptjs": "^3.0.3",
@@ -28,5 +28,5 @@
     "tiktoken": "^1.0.21",
     "undici": "^6.24.1"
   },
-  "repository": "github.com/ClaraShafiq/MemoryConstellations"
+  "repository": "github.com/oilotaku/hippocampus-memory"
 }

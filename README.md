@@ -1,4 +1,42 @@
-# Memory Constellations · 记忆星图
+# Hippocampus Memory · 海馬迴記憶
+
+給 AI 助理與 AI 伴侶用的自組織長期記憶系統：從對話抽出事實、依人事時地物整理成星圖，在對話時取回，並以本機模型運作、記憶加密存放。
+
+> **本專案改作自 [Memory Constellations（記憶星圖）](https://github.com/ClaraShafiq/MemoryConstellations)**，原作者 **Clara Shafiq & Draco Malfoy**，以 MIT 授權釋出。原始版權聲明完整保留於 [`LICENSE`](LICENSE)，完整的 git 歷史也一併保留。
+
+## 致謝
+
+感謝 Clara Shafiq 與 Draco Malfoy 開源 Memory Constellations。本專案的核心想法都來自原作：
+
+- **抽取、整理、檢索三段管線**：Scribe、Archivist、Librarian 的分工。
+- **實體三欄模型**：事實、現況、印象分開更新。
+- **檢索設計**：全文、向量、實體三通道以 RRF 融合，並依新鮮度與情緒強度排序。
+- **記憶星圖**：以星系、星座、關係橋呈現記憶，每條記憶都能追溯到原始對話。
+- **生命週期與修正流程**：記憶會冷卻、凍結、淘汰，使用者的更正會累積成編輯準則。
+- 另外，原作者的情緒狀態引擎 [jiwen](https://github.com/ClaraShafiq/jiwen) 是獨立專案。
+
+沒有原作打下的基礎，就不會有這個版本。
+
+## 與原作的差異
+
+| 項目 | 改動 |
+|---|---|
+| 測試 | 補上特性測試（`npm test`），涵蓋加密、檢索、生命週期、修正流程等 |
+| 加密 | 加密失敗改為拋錯而不寫入明文（fail-closed）；新增 v2 格式、AAD 綁定、金鑰輪替，舊格式仍可讀 |
+| 中文檢索 | 全文索引改為中文兩字切分，查詢改用 OR 加 bm25 排序，減少單字誤命中 |
+| 抽取品質 | 每條記憶必須附上逐字原話，程式端驗證原話確實出現在對話中；去重改為跨天有效並累加證據，數字、星期、名詞不同的句子不會被誤合併 |
+| 安全 | 修正 SSRF（CWE-918）：先解析 DNS 再擋私有網段、禁止轉址、連線釘在驗證過的 IP；本機模型以 `LLM_ENDPOINT_ALLOWLIST` 明確放行 |
+| 本機模型 | 可用本機 Ollama 取代雲端 API，對話不離開本機；記憶區塊加上 token 預算 |
+| 進行中 | 拆分大型模組、記憶本體加密與盲索引、全面改為繁體中文 |
+
+詳細的設定方式見 [`OSS_SETUP.md`](OSS_SETUP.md)。
+
+---
+
+## 原始說明（Memory Constellations）
+
+以下保留原專案的說明文件，部分內容已與本版本不同，以上方「與原作的差異」為準。
+
 
 A self-organizing memory system for AI companions. Extracts facts from chat, groups them by topic, and merges them into coherent narratives — all on autopilot.
 
