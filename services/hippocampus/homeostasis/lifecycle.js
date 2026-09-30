@@ -7,11 +7,11 @@
 
 const { getDb } = require('../../../database');
 const { sealField } = require('../../memoryCrypto');
-const { chromaDBOperation } = require('../../memory');
+const { chromaDBOperation } = require('../ca3/memory');
 const { callLLM } = require('../../llm');
 const { USER, AI } = require('../../nameResolver');
 const { sqlNow, sqlDaysAgo } = require('../../../utils/time');
-const { getRecallConfig } = require('../../recallGate');
+const { getRecallConfig } = require('../ca3/recallGate');
 
 const CONFIG = {
     FRAGMENT_COOLING_DAYS: 14,     // 14天無人訪問 → 冷卻

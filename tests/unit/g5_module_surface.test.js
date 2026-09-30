@@ -36,7 +36,13 @@ const MOVED = [
     ['services/memoryBudget.js', 'services/hippocampus/homeostasis/memoryBudget.js'],
     ['services/rhythmConfig.js', 'services/hippocampus/homeostasis/rhythmConfig.js'],
     ['services/correction.js', 'services/hippocampus/ca1/correction.js'],
-    ['services/entityResolver.js', 'services/hippocampus/ca1/entityResolver.js']
+    ['services/entityResolver.js', 'services/hippocampus/ca1/entityResolver.js'],
+    ['services/librarian.js', 'services/hippocampus/ca3/librarian.js'],
+    ['services/recallGate.js', 'services/hippocampus/ca3/recallGate.js'],
+    ['services/recallPipeline.js', 'services/hippocampus/ca3/recallPipeline.js'],
+    ['services/workingMemory.js', 'services/hippocampus/ca3/workingMemory.js'],
+    ['services/memory.js', 'services/hippocampus/ca3/memory.js'],
+    ['services/intuition.js', 'services/hippocampus/ca3/intuition.js']
 ];
 
 if (process.env.G5_RECORD === '1') {

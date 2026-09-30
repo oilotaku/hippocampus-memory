@@ -17,7 +17,7 @@
 const { getDb } = require('../../../database');
 const { callLLM } = require('../../llm');
 const { USER, AI, SKIP_NAMES, fillPrompt } = require('../../nameResolver');
-const { chromaDBOperation, getLocalEmbedding } = require('../../memory');
+const { chromaDBOperation, getLocalEmbedding } = require('../ca3/memory');
 
 // 向量聯想配置
 const VECTOR_HINT_TOP_K = 5;

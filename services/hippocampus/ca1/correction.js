@@ -13,7 +13,7 @@
 const { getDb } = require('../../../database');
 const { sealField } = require('../../memoryCrypto');
 const { callLLM } = require('../../llm');
-const { chromaDBOperation } = require('../../memory');
+const { chromaDBOperation } = require('../ca3/memory');
 const { fillPrompt, USER } = require('../../nameResolver');
 
 const CORRECTION_CONFIG = {
@@ -277,7 +277,7 @@ async function processChatCorrection({ wrongStatement, correction, memoryId, mem
 
     // 1b. 工作記憶池
     try {
-        const { getRecentFragments } = require('../../workingMemory');
+        const { getRecentFragments } = require('../ca3/workingMemory');
         const recent = getRecentFragments();
         const seen = new Set(candidates.map(c => `${c.source_table}-${c.id}`));
         for (const r of recent) {
@@ -294,7 +294,7 @@ async function processChatCorrection({ wrongStatement, correction, memoryId, mem
 
     // 1c. 向量搜尋補位
     try {
-        const { searchMemoriesByVector } = require('../../memory');
+        const { searchMemoriesByVector } = require('../ca3/memory');
         const vecResults = await searchMemoriesByVector(wrongStatement, 5);
         const seen = new Set(candidates.map(c => `${c.source_table}-${c.id}`));
         for (const v of vecResults) {
