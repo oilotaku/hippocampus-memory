@@ -3,7 +3,7 @@
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
-const { setupEnv, cleanupDb, quiet } = require('./_helpers');
+const { setupEnv, cleanupDb, quiet, listenSafe } = require('./_helpers');
 const { seedQualifiedTrait } = require('./_persona_helpers');
 
 const dbPath = setupEnv('persona-api');
@@ -26,7 +26,7 @@ before(async () => {
     app.use((req, res, next) => { req.session = { authenticated: authed }; next(); });
     app.use(require('../../routes/persona-api'));
     server = http.createServer(app);
-    await new Promise(r => server.listen(0, '127.0.0.1', r));
+    await listenSafe(server);
     base = `http://127.0.0.1:${server.address().port}`;
     persona.recordCoreVersion({ text: '核心層文字' });
     for (const t of ['特質一', '特質二', '特質三']) seedQualifiedTrait(db, t, 0.9);

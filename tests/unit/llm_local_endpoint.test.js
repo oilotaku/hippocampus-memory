@@ -4,6 +4,7 @@ const assert = require('node:assert');
 const http = require('http');
 const os = require('os');
 const path = require('path');
+const { listenSafe } = require('./_helpers');
 
 process.env.DB_PATH = path.join(os.tmpdir(), `mc-llm-local-${process.pid}-${Date.now()}.db`);
 process.env.SANCTUARY_ENCRYPTION_KEY = '0'.repeat(64);
@@ -28,7 +29,7 @@ test.before(async () => {
     // 整套並行、機器吃緊時，undici 會重用閒置的 keep-alive 連線；伺服器預設 5 秒就關閒置連線，
     // 兩邊剛好錯身會多一次重試（2 秒）而讓 seen 內容順序不可預期。拉長閒置時限、並以路徑挑紀錄。
     server.keepAliveTimeout = 60000;
-    await new Promise(r => server.listen(0, '127.0.0.1', r));
+    await listenSafe(server);
     base = `http://127.0.0.1:${server.address().port}`;
     process.env.LLM_ENDPOINT_ALLOWLIST = base;
 });

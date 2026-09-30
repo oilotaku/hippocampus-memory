@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const http = require('http');
 const express = require('express');
 const { boot } = require('./_emotion_helpers');
+const { listenSafe } = require('./_helpers');
 const { effectiveIntensity, halfLifeDays } = require('../../services/emotion/fading');
 
 test('週年日：過去同月同日的事件（event_at）與被提出的話題（raised_at，依當地日期），附當時情緒', () => {
@@ -105,9 +106,9 @@ function serve(authenticated) {
     app.use((req, _res, next) => { req.session = { authenticated }; next(); });
     app.use(require('../../routes/emotion-api'));
     const server = http.createServer(app);
-    return new Promise(resolve => server.listen(0, '127.0.0.1', () => resolve({
+    return listenSafe(server).then(() => ({
         server, get: async (p) => { const r = await fetch(`http://127.0.0.1:${server.address().port}${p}`, { redirect: 'manual' }); return { status: r.status, body: await r.text() }; },
-    })));
+    }));
 }
 
 test('API：未登入擋下；登入後可查基準、實體、話題×時段、週年日、事件', async () => {

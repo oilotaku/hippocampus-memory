@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const http = require('node:http');
+const { listenSafe } = require('./_helpers');
 const path = require('node:path');
 const os = require('node:os');
 
@@ -132,7 +133,7 @@ function listen(handler) {
     return new Promise(resolve => {
         const hits = [];
         const srv = http.createServer((req, res) => { hits.push(req.url); handler(req, res); });
-        srv.listen(0, '127.0.0.1', () => resolve({ srv, hits, port: srv.address().port }));
+        listenSafe(srv).then(() => resolve({ srv, hits, port: srv.address().port }));
     });
 }
 
@@ -183,7 +184,7 @@ test('/api/test-llm：惡意 endpoint 回 400 且目標未收到請求；白名�
     app.use(express.json());
     app.use((req, res, next) => { req.session = { authenticated: true }; next(); });
     app.use(memoryApi);
-    const appSrv = await new Promise(r => { const s = app.listen(0, '127.0.0.1', () => r(s)); });
+    const appSrv = await listenSafe(http.createServer(app));
     const call = async (endpoint) => {
         const r = await fetch(`http://127.0.0.1:${appSrv.address().port}/api/test-llm`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },

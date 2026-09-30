@@ -43,4 +43,25 @@ function rawMemoryPlaintext(db) {
     return found;
 }
 
-module.exports = { setupEnv, cleanupDb, quiet, TEST_KEY, rawMemoryPlaintext };
+// 偶發失敗根因（llm_local_endpoint 等）：server.listen(0) 由作業系統挑埠，偶爾挑到 fetch（WHATWG 規格）
+// 明令禁止的「壞埠」（如 6000、6665–6669、10080），fetch 直接丟 TypeError: fetch failed / bad port。
+// 用這個代替 listen(0, host)：挑到壞埠就關掉重挑。回傳 Promise<server>。
+const FETCH_BAD_PORTS = new Set([1, 7, 9, 11, 13, 15, 17, 19, 20, 21, 22, 23, 25, 37, 42, 43, 53, 69, 77, 79, 87, 95, 101, 102, 103, 104, 109, 110,
+    111, 113, 115, 117, 119, 123, 135, 137, 139, 143, 161, 179, 389, 427, 465, 512, 513, 514, 515, 526, 530, 531, 532, 540, 548, 554, 556, 563,
+    587, 601, 636, 989, 990, 993, 995, 1719, 1720, 1723, 2049, 3659, 4045, 4190, 5060, 5061, 6000, 6566, 6665, 6666, 6667, 6668, 6669, 6679,
+    6697, 10080]);
+function listenSafe(server, host = '127.0.0.1') {
+    return new Promise((resolve, reject) => {
+        const attempt = () => {
+            server.once('error', reject);
+            server.listen(0, host, () => {
+                server.removeListener('error', reject);
+                if (!FETCH_BAD_PORTS.has(server.address().port)) return resolve(server);
+                server.close(() => attempt());
+            });
+        };
+        attempt();
+    });
+}
+
+module.exports = { listenSafe, FETCH_BAD_PORTS, setupEnv, cleanupDb, quiet, TEST_KEY, rawMemoryPlaintext };
