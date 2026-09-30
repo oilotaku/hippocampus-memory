@@ -5,7 +5,8 @@
   "scripts": {
     "start": "node index.js",
     "setup": "bash scripts/setup.sh",
-    "vacuum": "node scripts/vacuum.js"
+    "vacuum": "node scripts/vacuum.js",
+    "test": "node --test tests/unit/*.test.js"
   },
   "keywords": [],
   "author": "",
