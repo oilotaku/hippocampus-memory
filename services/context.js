@@ -7,6 +7,7 @@ const { searchMemoriesByHardTrigger } = require('./memory');
 const { getUserSetting } = require('../utils/settings');
 const { fillPrompt, USER, AI } = require('./nameResolver');
 const { getTriggeredIntuition } = require('./intuition');
+const { getMemoryTokenBudget, estimateTokens, takeWithinBudget, splitEntityBlocks } = require('./memoryBudget');
 
 // =================================================================
 // 健康数据简报生成器
@@ -116,9 +117,19 @@ async function buildSmartContext(userMessage, healthStatus, skipVectorMemory = f
     // === 动态部分 ===
     const dynamicParts = [];
 
+    // 记忆区块（硬触发 + Librarian + 实体档案）共用一份 token 预算，依序先到先得，
+    // 超出时整条丢弃（不切断单条记忆）。见 services/memoryBudget.js。
+    let memoryBudgetLeft = getMemoryTokenBudget();
+
     // 硬触发记忆
     if (userMessage && !skipVectorMemory) {
-        const hardMatches = searchMemoriesByHardTrigger(userMessage);
+        let hardMatches = searchMemoriesByHardTrigger(userMessage);
+        {
+            const r = takeWithinBudget(hardMatches, memoryBudgetLeft, m => estimateTokens(m.content) + 8);
+            if (r.dropped > 0) console.log(`buildSmartContext: hard trigger 超出记忆预算，丢弃 ${r.dropped} 条`);
+            memoryBudgetLeft -= r.used;
+            hardMatches = r.kept;
+        }
         if (hardMatches.length > 0) {
             dynamicParts.push('<relevant_memories>');
             dynamicParts.push('Thinking Process: 检测到关键词，已从冥想盆调取相关记忆：');
@@ -147,7 +158,14 @@ async function buildSmartContext(userMessage, healthStatus, skipVectorMemory = f
         try {
             const { searchHybrid, formatHybridContext } = require('./librarian');
             const { getEntityContext } = require('./entityProfile');
-            const libFragments = await searchHybrid(userMessage, 8);
+            let libFragments = await searchHybrid(userMessage, 8);
+            {
+                // 每条另加约 10 token 的标题行（权限/编号/天数）
+                const r = takeWithinBudget(libFragments, memoryBudgetLeft, f => estimateTokens(f.content) + 10);
+                if (r.dropped > 0) console.log(`buildSmartContext: librarian 超出记忆预算，丢弃 ${r.dropped} 条`);
+                memoryBudgetLeft -= r.used;
+                libFragments = r.kept;
+            }
             const libText = formatHybridContext(libFragments);
             if (libText) {
                 dynamicParts.push(`<memory_context>
@@ -180,7 +198,13 @@ ${libText}
 
                 // 实体档案：如果检索命中涉及已知实体，补充最新近况
                 try {
-                    const entityCtx = getEntityContext(libFragments);
+                    let entityCtx = getEntityContext(libFragments);
+                    if (entityCtx) {
+                        const r = takeWithinBudget(splitEntityBlocks(entityCtx), memoryBudgetLeft, b => estimateTokens(b));
+                        if (r.dropped > 0) console.log(`buildSmartContext: entity 超出记忆预算，丢弃 ${r.dropped} 份档案`);
+                        memoryBudgetLeft -= r.used;
+                        entityCtx = r.kept.join('\n');
+                    }
                     if (entityCtx) {
                         dynamicParts.push(`<entity_context>\n以下是记忆中涉及人物的最新近况（来自${AI.name}的记忆档案）：\n${entityCtx}\n</entity_context>`);
                         estimatedTokens += Math.ceil(entityCtx.length / 4);

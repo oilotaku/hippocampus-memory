@@ -97,7 +97,7 @@ const MIN_GAP_SEMANTIC_REMATCH = 4 * 60 * 60 * 1000;   // 语义回补 4h（Chro
 const MIN_GAP_SEED_MERGE = 12 * 60 * 60 * 1000;        // 种子合并 12h
 const MIN_GAP_RELATED_ENTITIES = 24 * 60 * 60 * 1000;  // 实体关系发现 24h
 const MIN_GAP_EPISODE_AUDIT = 6 * 60 * 60 * 1000;        // Episode质检 6h
-const MIN_FREE_MEMORY_MB = 1200;                   // 深度循环最低可用内存（MB），不足跳过
+const MIN_FREE_MEMORY_MB = require('./rhythmConfig').getDeepCycleMinFreeMb();  // 深度循环最低可用内存（MB），不足跳过；可由 memory_config.json rhythm.deep_cycle_min_free_mb 设定
 const MEMORY_CHECK_GRACE_MB = 300;                 // 每轮分类后额外保留内存
 
 // ═══════════════════════════════════════════════════════

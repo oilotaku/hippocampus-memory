@@ -105,7 +105,7 @@ function getEmbeddingAPIKey() {
     const config = db.prepare(`
         SELECT api_key, model_name, provider, endpoint 
         FROM api_configs 
-        WHERE model_name LIKE '%embedding%'
+        WHERE (model_name LIKE '%embedding%' OR name LIKE '%embedding%')
         AND (provider = 'gemini' OR provider = 'openai_compatible')
         LIMIT 1
     `).get();
@@ -137,7 +137,7 @@ async function getEmbedding(text, embeddingConfig) {
             const db = getDb();
             const dbConfig = db.prepare(`
                 SELECT * FROM api_configs 
-                WHERE model_name LIKE '%embedding%' 
+                WHERE model_name LIKE '%embedding%' OR name LIKE '%embedding%'
                 ORDER BY id DESC LIMIT 1
             `).get();
             
@@ -177,10 +177,9 @@ async function getEmbedding(text, embeddingConfig) {
         } else {
             requestUrl = joinEndpointPath(embeddingConfig.endpoint, 'embeddings');
             requestBody = { input: text, model: modelName };
-            headers = {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`
-            };
+            headers = { 'Content-Type': 'application/json' };
+            // 本机 Ollama 等无需认证的端点：api_key 留空（或占位 none）时不送 Authorization
+            if (apiKey && apiKey !== 'none') headers['Authorization'] = `Bearer ${apiKey}`;
         }
         
         const useProxy = needsProxy(requestUrl);
@@ -233,6 +232,13 @@ async function callLLM(geminiMessages, systemPrompt, tools = null, generationCon
         apiConfig = db.prepare('SELECT * FROM api_configs WHERE is_default = 1').get();
     }
     
+    // 记忆管线各模块写死了专属配置 id（如 52/36/38）；开源部署通常只有一条默认配置
+    //（scripts/setup_llm.js 建立），找不到专属配置时回落到默认，与 OSS_SETUP.md 的说明一致。
+    if (!apiConfig && apiConfigId) {
+        apiConfig = db.prepare('SELECT * FROM api_configs WHERE is_default = 1').get();
+        if (apiConfig) console.warn(`callLLM: 找不到配置 ${apiConfigId}，回落到默认配置 ${apiConfig.name}`);
+    }
+
     if (!apiConfig) {
         throw new Error('未找到有效的API配置');
     }
@@ -353,6 +359,18 @@ async function callGeminiAPI(geminiMessages, systemPrompt, tools, generationConf
 // OpenAI 兼容 API（反向代理）
 // =================================================================
 
+// 请求超时：环境变量 LLM_REQUEST_TIMEOUT_MS 优先；本机端点（如 Ollama，CPU 推论 + 首次载入模型
+// 很容易超过 30 秒）预设 5 分钟；其余维持 30 秒。
+function getRequestTimeoutMs(url) {
+    const envMs = parseInt(process.env.LLM_REQUEST_TIMEOUT_MS, 10);
+    if (Number.isFinite(envMs) && envMs > 0) return envMs;
+    try {
+        const host = new URL(url).hostname;
+        if (host === '127.0.0.1' || host === 'localhost' || host === '[::1]') return 300000;
+    } catch (_) {}
+    return 30000;
+}
+
 async function callOpenAICompatibleAPI(geminiMessages, systemPrompt, tools, generationConfig, apiConfig) {
     await assertSafeEndpoint(apiConfig.endpoint);
     let url = apiConfig.endpoint;
@@ -452,12 +470,13 @@ async function callOpenAICompatibleAPI(geminiMessages, systemPrompt, tools, gene
     
     const axiosConfig = {
         headers: {
-            'Authorization': `Bearer ${apiConfig.api_key}`,
+            // 本机 Ollama 等无需认证的端点：api_key 为空或 'none' 时不送 Authorization
+            ...((apiConfig.api_key && apiConfig.api_key !== 'none') ? { 'Authorization': `Bearer ${apiConfig.api_key}` } : {}),
             'Content-Type': 'application/json'
         },
         proxy: needsProxy(url) ? { host: '127.0.0.1', port: 7890, protocol: 'http' } : false,
         maxRedirects: 0,
-        timeout: 30000
+        timeout: getRequestTimeoutMs(url)
     };
 
     let response;

@@ -26,7 +26,13 @@
   },
   "rhythm": {
     "_comment": "Minutes of user inactivity before deep memory integration runs. Default 60.",
-    "deep_cycle_idle_minutes": 60
+    "deep_cycle_idle_minutes": 60,
+    "_comment_min_free": "Skip the deep cycle when free RAM is below this many MB. Default 1200; lower it on small machines (e.g. 600), raise it if the host is shared.",
+    "deep_cycle_min_free_mb": 1200
+  },
+  "context": {
+    "_comment": "Total token budget for injected memory blocks (relevant_memories + memory_context + entity_context). Estimated as chars/4. Whole memories are dropped from the tail of the ranking, never cut mid-memory. Default 1200.",
+    "memory_token_budget": 1200
   },
   "librarian": {
     "_comment": "Exclude specific fragment sources from search results.",

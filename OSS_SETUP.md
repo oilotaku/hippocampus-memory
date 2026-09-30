@@ -129,6 +129,62 @@ node scripts/setup_llm.js
 
 > 聊天用的主力模型不在这里配——那由你自己的聊天前端决定。这里只配「记忆管线」的后台模型。
 
+### 2.6.1 用本机 Ollama 取代云端 API
+
+记忆管线的后台模型可以完全跑在本机，对话内容**不会离开你的电脑**（没有 API Key、没有第三方日志、离线也能用）。代价是速度：
+
+**1. 安装 Ollama 并拉模型**（用 `ollama pull`，或 `POST /api/pull`）
+
+| 用途 | 建议模型 | 说明 |
+|------|----------|------|
+| 记忆管线（Scribe / Archivist / Consolidator） | `qwen3:8b`（或同级 7~14B 指令模型） | 需要能稳定输出 JSON、懂中文 |
+| Embedding（可选，向量检索用） | `bge-m3` | 1024 维，中英文都好 |
+
+> Qwen3 默认会先「思考」再回答，会吃掉输出预算又拖慢速度。用 Modelfile 建一个关闭思考的变体（模板里不要让它进入 thinking），再把变体名填进下面的模型名。
+
+**2. 让 Ollama 有足够的上下文**：Ollama 默认上下文只有 4096 token，Scribe 一批 60 则消息很容易超过，超出的部分会被静默截掉。启动 Ollama 前设定 `OLLAMA_CONTEXT_LENGTH=16384`（或在 Modelfile 里 `PARAMETER num_ctx 16384`）。
+
+**3. 建立默认配置**
+
+```bash
+node scripts/setup_llm.js --provider ollama --model qwen3-8b-zh
+# 等价于手动写一条 api_configs：provider=openai_compatible、endpoint=http://127.0.0.1:11434/v1、api_key 留空或 none
+```
+
+Ollama 不需要 API Key；`api_key` 留空或填 `none` 时，程序不会送 `Authorization` 标头。记忆管线各模块写死的专属配置 id 找不到时，会回落到这条默认配置。
+
+**4. 放行本机地址（必要）**：为防 SSRF，程序默认只允许 `https` 且拒绝内网 / 本机地址。在 `.env`（或启动环境）加入，值必须是**完整 origin**（协议 + 主机 + 端口）：
+
+```bash
+LLM_ENDPOINT_ALLOWLIST=http://127.0.0.1:11434
+```
+
+可用逗号放行多个；只有 origin 完全相同才放行，`127.0.0.1` 与 `localhost` 视为不同。
+
+**5. 超时**：连到本机（127.0.0.1 / localhost）的请求超时预设 5 分钟（云端为 30 秒）；模型很慢时可设 `LLM_REQUEST_TIMEOUT_MS=600000`。
+
+**6. Embedding（可选）**：在 `api_configs` 增加一条名称含 `embedding` 的配置即可被选用：`provider=openai_compatible`、`endpoint=http://127.0.0.1:11434/v1`、`model_name=bge-m3`、`api_key=none`（实测 `/v1/embeddings` 回 1024 维）。ChromaDB 没启动时，向量检索会自动降级，只剩关键词（FTS5）检索。
+
+**CPU 推论速度预期**（Ryzen 7 4800H、无 GPU、qwen3-8b Q4_K_M 实测）：约 6.5 token/s。Scribe 一次抽取 10 则短对话，输入约 2000 token、输出约 1200 token，**单次约 4~5 分钟**（这是后台批量任务，可接受；即时聊天则很慢）。同时多个请求会排队。首次载入模型另需十几秒。有 GPU 或 Apple Silicon 会快一个数量级。
+
+**验证**：`scripts/e2e_ollama.js` 用暂存 DB 塞 10 则模拟对话，真的跑一次 Scribe 抽取与 Librarian 检索并印出结果（不属于 `npm test`）：
+
+```bash
+LLM_ENDPOINT_ALLOWLIST=http://127.0.0.1:11434 SANCTUARY_ENCRYPTION_KEY=<64位hex> node scripts/e2e_ollama.js
+```
+
+**小模型的已知限制**：本机 8B 模型抽取品质低于云端旗舰——常把 AI 的闲聊也当成「观察」写入，碎片内容可能用简体书写（即使对话是繁体，`quote` 原话佐证仍保持原文）。中文全文检索目前是字面匹配，用繁体查、碎片是简体时会对不上，需要向量检索（Embedding）补足。
+
+### 2.6.2 资源与上下文预算（`memory_config.json`）
+
+```json
+"rhythm": { "deep_cycle_min_free_mb": 1200 },
+"context": { "memory_token_budget": 1200 }
+```
+
+- `rhythm.deep_cycle_min_free_mb`：深度整合周期开始前，可用内存低于这个 MB 数就跳过本轮（预设 1200）。小内存机器可调低（例如 600），与本机模型共用一台机器时可调高。
+- `context.memory_token_budget`：聊天注入的记忆区块（硬触发记忆 + 检索记忆 + 实体档案）的**总** token 预算（预设 1200，以「字数 ÷ 4」估算）。超出时依排序整条丢掉后面的，不会切断单条记忆。
+
 ### 2.7 启动
 
 ```bash
@@ -218,6 +274,7 @@ sqlite3 memory_constellations.db "SELECT COUNT(*) FROM entity_profiles WHERE sta
 - 默认创建的是 Gemini 官方渠道
 - 可以通过设置页面 `/settings.html` → API 配置添加新的 provider
 - 支持 OpenAI 兼容格式（OpenRouter、DeepSeek、Groq 等）
+- 想完全本机运行：见 2.6.1「用本机 Ollama 取代云端 API」
 
 ---
 

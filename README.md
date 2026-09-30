@@ -138,9 +138,9 @@ The system maintains three layers of user understanding at different time scales
 |-------|---------|-----------|----------|-----------------|
 | **current_state** (瞬态) | `user_model` type=current_state | Hours to days, TTL-expiring | Transient states the companion tracks: "she's on her period", "she just moved", "she's stressed about a deadline" | Companion writes via chat tools; auto-resolves on TTL expiry |
 | **current_status** (近期动态) | `entity_profiles.current_status` | Days to weeks | Recent developments per entity: "moved to a new apartment in July", "started a new project at work" | Archivist regenerates on significant change; companion can update mid-chat |
-| **behavior patterns** (行为模式) | `user_patterns` | Weeks to years, confidence-only-grows | Long-term behavioral regularities: "prefers a particular character archetype", "has strong aesthetic preferences" | Auto-clustered from observation & preference fragments; bigram-matched every 6h; new patterns discovered every 24h deep cycle |
+| **behavior patterns** (行为模式) | `user_patterns` | Weeks to years, confidence-not-time-decayed | Long-term behavioral regularities: "prefers a particular character archetype", "has strong aesthetic preferences" | Auto-clustered from observation & preference fragments; bigram-matched every 6h; new patterns discovered every 24h deep cycle |
 
-**Key design principle:** Behavior pattern confidence only increases — a person doesn't "stop preferring something they have always liked" just because they haven't mentioned it in three months. Freshness controls injection priority independently from confidence.
+**Key design principle:** Behavior pattern confidence is not eroded by the mere passage of time — a person doesn't "stop preferring something they have always liked" just because they haven't mentioned it in three months. Confidence rises with confirming evidence, and a contradiction only lowers it mildly (half the penalty applied to traits, floor 0.20; an independent-source contradiction may additionally flag the entry for LLM review). Freshness controls injection priority independently from confidence.
 
 ### Entity three-field model
 

@@ -16,6 +16,8 @@
 //   openrouter   OpenAI 兼容，https://openrouter.ai/api/v1
 //   deepseek     OpenAI 兼容，https://api.deepseek.com/v1
 //   gemini       Gemini 原生，https://generativelanguage.googleapis.com/v1beta/models/
+//   ollama       本机 Ollama（OpenAI 兼容），http://127.0.0.1:11434/v1，不需要 API Key
+//                ⚠️ 需另设环境变量 LLM_ENDPOINT_ALLOWLIST=http://127.0.0.1:11434（SSRF 防护默认拒绝私有地址/http）
 
 const readline = require('readline');
 const { initDatabase, getDb } = require('../database');
@@ -23,6 +25,7 @@ const { initDatabase, getDb } = require('../database');
 const PROVIDERS = {
     openrouter: { provider: 'openai_compatible', endpoint: 'https://openrouter.ai/api/v1', model: 'deepseek/deepseek-chat', label: 'OpenRouter' },
     deepseek:   { provider: 'openai_compatible', endpoint: 'https://api.deepseek.com/v1',      model: 'deepseek-chat',        label: 'DeepSeek' },
+    ollama:     { provider: 'openai_compatible', endpoint: 'http://127.0.0.1:11434/v1',       model: 'qwen3-8b-zh',          label: 'Ollama（本机）', keyless: true },
     gemini:     { provider: 'gemini',             endpoint: 'https://generativelanguage.googleapis.com/v1beta/models/', model: 'gemini-2.5-flash', label: 'Gemini 官方' },
 };
 
@@ -47,10 +50,10 @@ async function main() {
 
     let providerKey, apiKey, model, endpoint, name;
 
-    if (flags.provider && flags.key) {
+    if (flags.provider && (flags.key || PROVIDERS[flags.provider]?.keyless)) {
         // 非交互模式
         providerKey = flags.provider;
-        apiKey = flags.key;
+        apiKey = flags.key || (PROVIDERS[providerKey]?.keyless ? 'none' : '');
         model = flags.model || PROVIDERS[providerKey]?.model;
         endpoint = flags.endpoint || PROVIDERS[providerKey]?.endpoint;
         name = flags.name || `轻量模型 (${providerKey})`;
@@ -64,9 +67,13 @@ async function main() {
         }
         console.log('（默认 openrouter）\n');
 
-        const p = (await ask(rl, '提供商 [openrouter/deepseek/gemini] (回车=openrouter): ')).trim().toLowerCase() || 'openrouter';
+        const p = (await ask(rl, '提供商 [openrouter/deepseek/gemini/ollama] (回车=openrouter): ')).trim().toLowerCase() || 'openrouter';
         providerKey = PROVIDERS[p] ? p : 'openrouter';
-        apiKey = (await ask(rl, `API Key (${PROVIDERS[providerKey].label}): `)).trim();
+        if (PROVIDERS[providerKey].keyless) {
+            apiKey = (await ask(rl, 'API Key (本机 Ollama 不需要，回车跳过): ')).trim() || 'none';
+        } else {
+            apiKey = (await ask(rl, `API Key (${PROVIDERS[providerKey].label}): `)).trim();
+        }
         if (!apiKey) { console.error('❌ API Key 不能为空'); process.exit(1); }
         const dm = PROVIDERS[providerKey].model;
         model = (await ask(rl, `模型名 (回车=${dm}): `)).trim() || dm;
@@ -79,7 +86,7 @@ async function main() {
     if (!model) { console.error('❌ 缺少模型名'); process.exit(1); }
 
     const preset = PROVIDERS[providerKey];
-    if (!preset) { console.error(`❌ 未知提供商: ${providerKey}（可选 openrouter/deepseek/gemini）`); process.exit(1); }
+    if (!preset) { console.error(`❌ 未知提供商: ${providerKey}（可选 openrouter/deepseek/gemini/ollama）`); process.exit(1); }
 
     initDatabase();
     const db = getDb();
