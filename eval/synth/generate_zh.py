@@ -23,6 +23,9 @@ import sys
 import time
 
 MODELS = {"A": "haiku", "B": "haiku", "C": "sonnet"}
+# 這些角色關閉延伸思考（MAX_THINKING_TOKENS=0）：兩個聊天角色不需要思考，關掉後輸出約少 5 倍、成本約 1/4；
+# 評審兼編輯 C 保留思考。可用環境變數 SYNTH_NO_THINK 覆寫（逗號分隔，空字串＝全部照預設）。
+NO_THINK = {r for r in os.environ.get("SYNTH_NO_THINK", "A,B").split(",") if r}
 CLAUDE = os.environ.get("CLAUDE_BIN", "claude")
 # 必須在「往上層找不到任何 CLAUDE.md」的目錄執行：claude CLI 會沿工作目錄往上載入 CLAUDE.md，
 # 若放在 ~/.claude/ 底下會把使用者全域 CLAUDE.md（約 9 萬 token）當專案設定載入，每次呼叫都重付（實測成本差約 400 倍）。
@@ -51,7 +54,8 @@ def call(role, system, user, budget, expect_json=False, retries=2):
     last_err = None
     for attempt in range(retries + 1):
         try:
-            p = subprocess.run(cmd, input=user, capture_output=True, text=True, cwd=WORKDIR, timeout=600)
+            env = dict(os.environ, MAX_THINKING_TOKENS="0") if role in NO_THINK else None
+            p = subprocess.run(cmd, input=user, capture_output=True, text=True, cwd=WORKDIR, timeout=600, env=env)
             d = json.loads(p.stdout)
             budget.add(role, d.get("total_cost_usd"))
             if d.get("is_error"):
