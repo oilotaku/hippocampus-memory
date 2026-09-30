@@ -439,7 +439,9 @@ describe('前瞻記憶：即將發生的事', () => {
         assert.equal(getF(id).injected_count, 1);
     });
     test('event_at 欄位存在時優先使用（G2 之後可替換來源）', () => {
-        db.exec('ALTER TABLE memory_fragments ADD COLUMN event_at TEXT');
+        // G2 的 migration v111 已經建了這個欄位；沒有時（舊庫）才自己補，測完只拿掉自己補的
+        const had = db.prepare('PRAGMA table_info(memory_fragments)').all().some(c => c.name === 'event_at');
+        if (!had) db.exec('ALTER TABLE memory_fragments ADD COLUMN event_at TEXT');
         try {
             const id = addFrag({ content: '沒有任何日期字樣的事件', created: daysBefore(2) });
             db.prepare('UPDATE memory_fragments SET event_at = ? WHERE id = ?').run('2026-10-03', id);
@@ -447,7 +449,7 @@ describe('前瞻記憶：即將發生的事', () => {
             assert.deepEqual(r.map(x => x.id), [id]);
             assert.equal(r[0].daysUntil, 3);
         } finally {
-            db.exec('ALTER TABLE memory_fragments DROP COLUMN event_at');
+            if (!had) db.exec('ALTER TABLE memory_fragments DROP COLUMN event_at');
         }
     });
 });
