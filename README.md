@@ -20,6 +20,10 @@ A self-organizing long-term memory system for AI assistants and companions. It e
 | Encryption of memory content with a blind search index | Working (on by default) |
 | Archivist and cognitive model split into focused modules | Done |
 | All Chinese text in code, prompts, and UI in Traditional Chinese (Simplified input still matches) | Done |
+| Three-layer persona (core / relationship / situational) with versioned, reviewable, rollback-able relationship proposals | Working |
+| Stable traits (confidence ≥ 0.7) and the relationship layer injected into the chat prompt under their own small token budget | Working |
+| Entity `judgment` updated incrementally against the previous version (small edits with cited sources only) | Working |
+| Daily persona drift check against anchor answers, with automatic rollback of the relationship layer | Working (embedding channel needs ChromaDB; falls back to bigram Jaccard) |
 
 ---
 
@@ -171,6 +175,16 @@ Personalization lives here: user and assistant names, relationship, and colors. 
 | `rhythm.deep_cycle_idle_minutes` | 60 | Idle minutes before the deep cycle runs |
 | `rhythm.deep_cycle_min_free_mb` | 1200 | Skip the deep cycle below this much free RAM; lower it on small machines |
 | `context.memory_token_budget` | 1200 | Token budget for memory blocks in the system prompt; whole memories are dropped from the end, never cut in the middle |
+| `persona.auto_apply` | true | Apply relationship-layer proposals automatically (at most `persona.weekly_apply_limit` per 7 days); `false` keeps every proposal `pending` for manual review through `/api/persona/proposals` |
+| `persona.drift_check` | true | Run the daily persona drift check; `false` disables it entirely |
+| `persona.min_evidence` / `persona.min_days` | 3 / 3 | A stable trait becomes a proposal only with this many distinct evidence fragments spread over this many different days |
+| `persona.min_confidence` | 0.7 | Minimum trait confidence for proposals and for chat-prompt injection |
+| `persona.weekly_apply_limit` | 2 | Maximum automatic applications per rolling 7 days |
+| `persona.max_prompt_lines` / `persona.prompt_token_budget` | 5 / 300 | Size limits of the `<relationship_context>` block (separate from `context.memory_token_budget`) |
+| `persona.drift_threshold` | 0.75 | Mean embedding cosine similarity below which drift is declared |
+| `persona.drift_threshold_jaccard` | 0.2 | Same, when embeddings are unavailable and bigram Jaccard is used instead |
+| `persona.drift_samples` | 1 | Answers averaged per probe question (temperature is always 0) |
+| `persona.judgment_max_change` | 0.4 | Largest allowed change ratio (edit distance / longer length) when an entity's `judgment` is rewritten; larger or uncited rewrites keep the old version |
 
 ---
 
@@ -203,6 +217,7 @@ node scripts/e2e_ollama.js    # end-to-end run against a real local Ollama
 - **Entity resolution is broken upstream.** `entityResolver.js` reads a column `related_entity_ids` that no migration creates.
 - **The vector channel needs ChromaDB.** Without it, search falls back to full text and entities only.
 - **The blind index leaks frequency.** The same two-character token always hashes to the same value within a column, so token frequencies and shared tokens between rows are visible to someone holding the database file.
+- **Persona drift checks are subjective and noisy.** The probe questions (`services/persona/probes.json`) are a proxy for character, and a small local model answers differently from run to run. Mitigations: temperature 0, optional `persona.drift_samples` averaging, and a confirmation re-run before any rollback. A rollback only touches the relationship layer, not the raw stable traits that are also injected into the prompt.
 - **Foreign keys are off.** Some child tables lack `ON DELETE` rules, so enabling them would break existing deletes.
 
 ---

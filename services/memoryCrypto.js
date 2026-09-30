@@ -4,6 +4,8 @@
 //   memory_fragments.content / quote
 //   memories.content / title
 //   entity_profiles.facts / current_status / judgment / overview
+//   persona_model.content、persona_proposals.content / diff、persona_relationship_versions.content、
+//   entity_judgment_history.judgment（G3 人格關係層）
 // 刻意不加密：entity_profiles.name 與 aliases（實體比對、星圖、SQL 以名字 JOIN/比對都需要明文）、
 //   memory_fragments.entity（同理）、tags。
 //
@@ -31,6 +33,11 @@ const FIELDS = Object.freeze({
     memory_fragments: Object.freeze(['content', 'quote']),
     memories: Object.freeze(['content', 'title']),
     entity_profiles: Object.freeze(['facts', 'current_status', 'judgment', 'overview']),
+    // G3（v112）：人格關係層與 judgment 歷史同屬「AI 對人的認識」，一併加密
+    persona_model: Object.freeze(['content']),
+    persona_proposals: Object.freeze(['content', 'diff']),
+    persona_relationship_versions: Object.freeze(['content']),
+    entity_judgment_history: Object.freeze(['judgment']),
 });
 
 const AAD_SET = new Set();
@@ -442,6 +449,10 @@ function _plaintextExists(db) {
         memory_fragments: ['content', 'quote'],
         memories: ['content', 'title'],
         entity_profiles: ['facts', 'current_status', 'judgment', 'overview'],
+        persona_model: ['content'],
+        persona_proposals: ['content', 'diff'],
+        persona_relationship_versions: ['content'],
+        entity_judgment_history: ['judgment'],
     };
     for (const [t, cols] of Object.entries(conds)) {
         const where = cols.map(c => `(${c} IS NOT NULL AND ${c} != '' AND substr(${c}, 1, 4) != 'enc:')`).join(' OR ');

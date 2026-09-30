@@ -8,6 +8,7 @@ const { callLLM } = require('../llm');
 const { SKIP_NAMES, USER, AI } = require('../memoryConfig');
 const { runUserModelCycle, matchEvidenceFromFragments, processModelDecay, resolveExpiredStates, MIN_GAP_USER_MODEL } = require('../cognitiveModel');
 const { SKIP_PH, ARCHIVIST_VERIFY_CONFIG_ID, TICK_INTERVAL_MS, USER_IDLE_DEEP_CYCLE_MS, ENTITY_DISCOVERY_MIN_FRAGS, INSIGHT_BATCH_MAX, MIN_GAP_CLASSIFY, MIN_GAP_INSIGHTS, MIN_GAP_ENTITY_OVERVIEWS, MIN_GAP_SKILLS, MIN_GAP_RELATIONSHIPS, MIN_GAP_EMERGENT, MIN_GAP_ENTITY_VERIFY, MIN_GAP_MUSIC_EXTRACT, MIN_GAP_BOOK_EXTRACT, MIN_GAP_AUTO_LINK, MIN_GAP_REMATCH, MIN_GAP_SEMANTIC_REMATCH, MIN_GAP_SEED_MERGE, MIN_GAP_RELATED_ENTITIES, MIN_GAP_EPISODE_AUDIT, MIN_FREE_MEMORY_MB, MEMORY_CHECK_GRACE_MB } = require('./constants');
+const MIN_GAP_PERSONA = 20 * 60 * 60 * 1000;   // 人格維護：每日一次（G3）
 const { archivistEvents, agentState, _checkMemoryGate, toolRegistry, getTool, _checkDailyLLMReset, _canCallLLM, _countRemainingLLM, runTask, _logGardenActivity, _taskKey, runTaskIfDue, _refreshWhisper } = require('./runtime');
 const { autoLinkLiteralMentions, linkTaggedFragments, linkAggregateFragments } = require('./entityLink');
 const { discoverRelatedEntities } = require('./relations');
@@ -471,6 +472,9 @@ async function agentTick() {
                 const tool = getTool('discover_relationships');
                 return tool ? tool.handler({ includeReEval: true }) : { discovered: 0 };
             }, MIN_GAP_RELATIONSHIPS);
+
+            // 人格維護（G3）：核心層版本、關係層提案／套用、漂移偵測。每日一次，內部各步各自容錯。
+            await runTaskIfDue('personaMaintenance', () => require('../persona').runPersonaMaintenance(), MIN_GAP_PERSONA);
 
             // ChromaDB stale cleanup
             try {

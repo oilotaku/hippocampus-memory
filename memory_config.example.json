@@ -34,6 +34,27 @@
     "_comment": "Total token budget for injected memory blocks (relevant_memories + memory_context + entity_context). Estimated as chars/4. Whole memories are dropped from the tail of the ranking, never cut mid-memory. Default 1200.",
     "memory_token_budget": 1200
   },
+  "persona": {
+    "_comment": "Persona layers (core / relationship / situational) and drift detection. Every key is optional; invalid values fall back to the defaults shown.",
+    "auto_apply": true,
+    "_comment_auto_apply": "true = relationship-layer proposals are applied automatically (at most weekly_apply_limit per 7 days); false = every proposal waits as 'pending' for manual review via /api/persona/proposals.",
+    "drift_check": true,
+    "_comment_drift_check": "Daily drift check: fixed probe questions are answered with the full persona and compared with anchor answers stored when the core prompt version was created. Below the threshold the relationship layer is rolled back to the last version that passed. false = never run (also skips generating anchor answers).",
+    "min_evidence": 3,
+    "min_days": 3,
+    "_comment_evidence": "A stable trait becomes a proposal only with at least min_evidence distinct evidence fragments spread over at least min_days different days.",
+    "min_confidence": 0.7,
+    "weekly_apply_limit": 2,
+    "max_prompt_lines": 5,
+    "prompt_token_budget": 300,
+    "_comment_prompt": "The <relationship_context> block in the chat prompt (relationship layer + stable traits with confidence >= min_confidence) is capped at max_prompt_lines lines and its own token budget (chars / 4), separate from context.memory_token_budget.",
+    "drift_threshold": 0.75,
+    "drift_threshold_jaccard": 0.2,
+    "drift_samples": 1,
+    "_comment_drift": "drift_threshold applies to the mean embedding cosine similarity; drift_threshold_jaccard applies when embeddings are unavailable and the check falls back to two-character Jaccard (which reads much lower for paraphrases). drift_samples = answers averaged per probe (temperature is always 0).",
+    "judgment_max_change": 0.4,
+    "_comment_judgment": "An entity's judgment (the assistant's impression of a person) is updated incrementally: the previous version is the anchor, and a rewrite is kept only if it cites valid source fragments and changes at most this fraction of the text (character-level edit distance / longer length). Otherwise the old version is kept and the rejection is logged."
+  },
   "librarian": {
     "_comment": "Exclude specific fragment sources from search results.",
     "exclude_sources": []

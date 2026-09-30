@@ -245,6 +245,12 @@ ${libText}
         console.error('UserIntuition injection failed:', e.message);
     }
 
+    // 人格關係層（G3）：已套用的關係層 + confidence ≥ 0.7 的穩定特質，最多 5 行，獨立小預算
+    try {
+        const relCtx = require('./persona').buildRelationshipContext();
+        if (relCtx) { dynamicParts.push(relCtx); estimatedTokens += Math.ceil(relCtx.length / 4); }
+    } catch (e) { console.error('人格關係層注入失敗:', e.message); }
+
     // 健康簡報
     const healthSummary = generateHealthSummary(healthStatus);
     dynamicParts.push(`<health_status>\n${healthSummary}\n</health_status>`);

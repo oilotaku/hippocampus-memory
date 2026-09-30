@@ -1224,6 +1224,67 @@ function initDatabase() {
     runMigration(106, 'memory_fragments.evidence_count — 重複證據累計',
         `ALTER TABLE memory_fragments ADD COLUMN evidence_count INTEGER DEFAULT 1;`);
 
+    // v112（G3）：人格三層與漂移偵測。表在 v107 加密同步之前建立，
+    // 因為 persona_model.content、persona_proposals.content/diff、persona_relationship_versions.content、
+    // entity_judgment_history.judgment 都列在 services/memoryCrypto.js 的加密欄位清單裡。
+    runMigration(112, 'G3: 人格三層（核心版本／關係層提案與版本）、漂移事件、judgment 歷史',
+        `CREATE TABLE IF NOT EXISTS persona_model (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            section TEXT NOT NULL UNIQUE,
+            content TEXT NOT NULL DEFAULT '',
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS persona_core_versions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            version INTEGER NOT NULL UNIQUE,
+            content_hash TEXT NOT NULL,
+            char_count INTEGER DEFAULT 0,
+            anchor_answers TEXT DEFAULT NULL,
+            anchor_method TEXT DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS persona_proposals (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            trait_id INTEGER,
+            content TEXT NOT NULL,
+            evidence_ids TEXT DEFAULT '[]',
+            evidence_days INTEGER DEFAULT 0,
+            diff TEXT DEFAULT NULL,
+            status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','applied','rejected','rolled_back')),
+            applied_version INTEGER DEFAULT NULL,
+            note TEXT DEFAULT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            applied_at DATETIME DEFAULT NULL,
+            decided_at DATETIME DEFAULT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_persona_proposals_status ON persona_proposals(status);
+        CREATE INDEX IF NOT EXISTS idx_persona_proposals_trait ON persona_proposals(trait_id);
+        CREATE TABLE IF NOT EXISTS persona_relationship_versions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            version INTEGER NOT NULL UNIQUE,
+            content TEXT NOT NULL DEFAULT '',
+            source TEXT,
+            proposal_id INTEGER DEFAULT NULL,
+            drift_passed INTEGER DEFAULT NULL,
+            active INTEGER NOT NULL DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS persona_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            kind TEXT NOT NULL,
+            detail TEXT DEFAULT '{}',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_persona_events_kind ON persona_events(kind, id);
+        CREATE TABLE IF NOT EXISTS entity_judgment_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            entity_id INTEGER NOT NULL,
+            judgment TEXT,
+            reason TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_judgment_history_entity ON entity_judgment_history(entity_id, id);`);
+
     // v107: 記憶本體靜態加密 + FTS 盲索引（W3，見 services/memoryCrypto.js）。
     // MEMORY_ENCRYPTION=on（預設）：既有明文加密（AAD=表:欄）、舊的無 AAD 密文改帶 AAD、
     // 兩個 FTS 表以盲 token 重建、content_hash 改帶金鑰；off：只換觸發器（輸出與原本相同）。

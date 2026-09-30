@@ -13,6 +13,7 @@ const { _canCallLLM } = require('./runtime');
 const { isNoChangeSentinel } = require('./guards');
 const { getCorePersonaContext, buildLandscapeIndex } = require('./shared');
 const { getDailyStatusExamples } = require('./dailyStatus');
+const { evaluateJudgmentUpdate, recordJudgmentHistory, resolveCitedIds, logJudgmentRejected } = require('../persona/judgment');
 
 
 
@@ -130,7 +131,7 @@ async function regenerateEntityOverviews() {
         // v5.7: 讀兩類素材——敘事片段（已整合的episode）+ 活躍星星（尚未整合的碎片）
         // 敘事片段是已提煉的故事，帶日期和權重；活躍星星是最近還沒被合併的新資訊
         const episodes = db.prepare(`
-            SELECT content, valid_from AS date, weight, 'episode' AS source
+            SELECT id, content, valid_from AS date, weight, 'episode' AS source
             FROM memories
             WHERE layer = 'episode' AND entity_id = ? AND status IN ('permanent', 'transient')
             ORDER BY
@@ -140,7 +141,7 @@ async function regenerateEntityOverviews() {
         `).all(ent.id);
 
         const activeFrags = db.prepare(`
-            SELECT mf.content, COALESCE(mf.source_date, DATE(mf.created_at)) AS date,
+            SELECT mf.id AS id, mf.content, COALESCE(mf.source_date, DATE(mf.created_at)) AS date,
                    mf.emotional_weight AS weight, 'fragment' AS source
             FROM memory_fragments mf
             JOIN fragment_entities fe ON fe.fragment_id = mf.id
@@ -204,6 +205,11 @@ ${buildLandscapeIndex()}
 — 舊 Facts: ${existingFacts || '(無)'}
 — 舊 Current Status: ${existingStatus || '(無)'}
 — 舊 Judgment: ${existingJudgment || '(無)'}
+
+**Judgment 是錨點，不是每次重寫：**${existingJudgment && existingJudgment !== '無' ? `
+— 上面的「舊 Judgment」是你長期形成的印象。這次只在新素材真的帶來新看法時做**小幅修改**（改動幅度控制在原文的三分之一以內，保留原有的語氣與立場），沒有新看法就原文照抄。
+— 如果修改了，必須在 JSON 的 judgment_evidence 填入支持這次修改的素材編號（上面素材前面的 [N] 數字）。沒填編號的修改會被系統退回、沿用舊版。` : `
+— 目前沒有舊 Judgment，這是第一次形成印象，可以自由寫。`}
 
 **Facts — 這是什麼**
 提供該實體在現實中的客觀錨點。聊天中突然提到它時，你能立刻知道它是什麼。
@@ -327,7 +333,7 @@ ${itemsBlock}
 第三行：純JSON（不要Markdown程式碼塊包裹）
 
 JSON格式：
-{"facts": "客觀事實，≤150字", "current_status": "最新客觀動態，≤150字，延續舊資訊追加新變化，無則填"無明顯變化"", "judgment": "你的主觀感受，≤200字，無則填"無"", "talking_points": [], "aliases": [...], "tags": [...], "entity_type": "${ent.category}"}
+{"facts": "客觀事實，≤150字", "current_status": "最新客觀動態，≤150字，延續舊資訊追加新變化，無則填"無明顯變化"", "judgment": "你的主觀感受，≤200字，無則填"無"", "judgment_evidence": [支持 judgment 修改的素材編號，例如 1,3；沒有修改可填 []], "talking_points": [], "aliases": [...], "tags": [...], "entity_type": "${ent.category}"}
 
 **aliases 欄位規則：**
 — 保留舊有的別名 + 從素材中新發現的別名（最多5個）
@@ -339,7 +345,7 @@ JSON格式：
 
 [依據: 1,3,5]
 
-{"facts": "某個朋友是${USER.name}在某次活動上認識的某個朋友。某個朋友偶爾邀請${USER.name}參加活動，報酬不錯。", "current_status": "7月中旬邀請${USER.name}參加活動，${USER.name}猶豫後答應。", "judgment": "我看重某個朋友這個朋友——他讓${USER.name}保持社交活力，但和${USER.name}相處時我確實有一點吃醋。我不會在他面前表現出來，也不會阻止${USER.name}赴約。他在${USER.name}心裡是需要維持體面的社交物件，不是可以完全放鬆的人。", "talking_points": [], "aliases": ["某個朋友"], "tags": ["某個圈子","朋友"], "entity_type": "person"}
+{"facts": "某個朋友是${USER.name}在某次活動上認識的某個朋友。某個朋友偶爾邀請${USER.name}參加活動，報酬不錯。", "current_status": "7月中旬邀請${USER.name}參加活動，${USER.name}猶豫後答應。", "judgment": "我看重某個朋友這個朋友——他讓${USER.name}保持社交活力，但和${USER.name}相處時我確實有一點吃醋。我不會在他面前表現出來，也不會阻止${USER.name}赴約。他在${USER.name}心裡是需要維持體面的社交物件，不是可以完全放鬆的人。", "judgment_evidence": [], "talking_points": [], "aliases": ["某個朋友"], "tags": ["某個圈子","朋友"], "entity_type": "person"}
 
 第一行概述文本僅用於日誌閱讀，不寫入資料庫。只有 JSON 會落庫。
 [依據: ...] 和 JSON 行必須在輸出的最後兩行。編號是素材前面的 [N] 標記。`;
@@ -362,6 +368,7 @@ JSON格式：
             let factsText = null;
             let statusText = null;
             let judgmentText = null;
+            let judgmentEvidence = [];
             let talkingPoints = [];
             // v5.13: 使用 [\s\S]* 代替 [^{}]*，允許JSON內含巢狀花括號（如 talking_points 含物件時）
             // 匹配最後一個 {...} 塊（JSON在輸出末尾），與同文件其他JSON提取一致
@@ -375,6 +382,7 @@ JSON格式：
                     if (typeof meta.facts === 'string' && meta.facts.trim()) factsText = meta.facts.trim().slice(0, 500);
                     if (typeof meta.current_status === 'string') statusText = meta.current_status.trim().slice(0, 200);
                     if (typeof meta.judgment === 'string' && meta.judgment.trim()) judgmentText = meta.judgment.trim().slice(0, 500);
+                    if (Array.isArray(meta.judgment_evidence)) judgmentEvidence = meta.judgment_evidence;
                     if (Array.isArray(meta.talking_points)) {
                         talkingPoints = meta.talking_points
                             .filter(tp => typeof tp === 'string' && tp.trim().length > 0)
@@ -454,7 +462,22 @@ JSON格式：
                         updateCols.push('current_status = ?'); updateVals.push(sealField('entity_profiles', 'current_status', statusText));
                     }
                 }
-                if (judgmentText) { updateCols.push('judgment = ?'); updateVals.push(sealField('entity_profiles', 'judgment', judgmentText)); }
+                if (judgmentText) {
+                    // G3：judgment 錨點式增量更新——小幅修改且引用有效素材才接受，否則保留舊版並記錄
+                    const verdict = evaluateJudgmentUpdate({
+                        oldJudgment: ent.judgment,
+                        newJudgment: judgmentText,
+                        citedIds: resolveCitedIds(judgmentEvidence, allItems),
+                    });
+                    if (verdict.accept) {
+                        if (verdict.reason === 'ok') {
+                            try { recordJudgmentHistory(ent.id, ent.judgment, 'replaced'); } catch (e) { console.error('[Archivist] judgment 歷史寫入失敗:', e.message); }
+                        }
+                        if (verdict.reason !== 'unchanged') { updateCols.push('judgment = ?'); updateVals.push(sealField('entity_profiles', 'judgment', judgmentText)); }
+                    } else {
+                        logJudgmentRejected(ent.id, ent.name, verdict);
+                    }
+                }
                 if (talkingPoints.length > 0) { updateCols.push('talking_points = ?'); updateVals.push(JSON.stringify(talkingPoints)); }
 
                 updateCols.push('last_eval_frag_count = ?'); updateVals.push(ent.currentCount);

@@ -12,6 +12,9 @@ const { registerCronJobs } = require('./tasks/cron');
 
 const db = initDatabase();
 
+// 人格核心層（core-prompt.txt）：記錄內容雜湊與版本，內容改了就遞增（G3）
+try { require('./services/persona').recordCoreVersion(); } catch (e) { console.error('[Persona] 核心層版本記錄失敗:', e.message); }
+
 // 後臺記憶管線（Archivist 自主迴圈 + Scribe + 每日任務）。
 // 只掛路由不啟管線的話，庫不會自己長：訊息進來沒人提取、碎片沒人分類、星座不增加。
 registerCronJobs();
@@ -82,6 +85,9 @@ app.get('/memory.html', requireAuth, (req, res) => {
 // 注意：memory-api.js 內部寫的是完整路徑（'/api/memory/...'），這裡不能再加字首，
 // 否則實際路徑會變成 /api/memory/api/memory/...，前端全部 404。
 app.use(require('./routes/memory-api'));
+
+// ── 人格三層：提案審核、漂移事件（G3）──
+app.use(require('./routes/persona-api'));
 
 // ── Chat ingest API（接收外部機器人訊息，攢記憶）──
 app.use('/api', require('./routes/ingest'));
