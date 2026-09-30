@@ -18,7 +18,7 @@ A self-organizing long-term memory system for AI assistants and companions. It e
 | Field encryption (fail-closed, v2 format, key rotation) | Working for chat messages and API keys |
 | SSRF protection for user-supplied endpoints | Working |
 | Encryption of memory content with a blind search index | In progress |
-| Splitting the large Archivist and cognitive-model modules | In progress |
+| Archivist and cognitive model split into focused modules | Done |
 | All Chinese text in code, prompts, and UI in Traditional Chinese | Planned |
 
 ---
@@ -226,6 +226,7 @@ This version would not exist without the foundation they built. The original doc
 | Security | SSRF fix for all user-supplied endpoints, with DNS resolution, redirect refusal, and IP pinning |
 | Local models | Ollama setup preset, no auth header without a key, longer local timeouts, fallback to the default model config |
 | Resources | Deep-cycle memory threshold and memory token budget are configurable |
+| Structure | The 311 KB Archivist and 157 KB cognitive-model files were split into focused modules of at most 40 KB each, verified to be a pure move |
 | Dependencies | `better-sqlite3` upgraded to 12 for prebuilt Node 24 binaries; license field corrected from ISC to MIT |
 
 ## License
