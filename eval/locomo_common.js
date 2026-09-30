@@ -2,11 +2,17 @@
 const fs = require('fs');
 const path = require('path');
 
-const DATA = path.join(__dirname, '..', 'data', 'locomo', 'locomo10.json');
+const DATA = process.env.LOCOMO_DATA ? path.resolve(process.env.LOCOMO_DATA) : path.join(__dirname, '..', 'data', 'locomo', 'locomo10.json');
 const MON = { january: 1, february: 2, march: 3, april: 4, may: 5, june: 6, july: 7, august: 8, september: 9, october: 10, november: 11, december: 12 };
 
 // "1:56 pm on 8 May, 2023" → "2023-05-08 13:56:00"（視為 UTC，DB 的無時區時間即 UTC）
 function parseSessionTime(s) {
+    // 中文合成資料集：「YYYY-MM-DD HH:MM」為台北時間（UTC+8），換成 UTC 存入 DB
+    const z = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/.exec(s || '');
+    if (z) {
+        const t = Date.UTC(+z[1], +z[2] - 1, +z[3], +z[4] - 8, +z[5]);
+        return new Date(t).toISOString().slice(0, 19).replace('T', ' ');
+    }
     const m = /(\d{1,2}):(\d{2})\s*(am|pm)\s+on\s+(\d{1,2})\s+([A-Za-z]+),?\s+(\d{4})/i.exec(s || '');
     if (!m) return null;
     let h = parseInt(m[1], 10) % 12; if (m[3].toLowerCase() === 'pm') h += 12;

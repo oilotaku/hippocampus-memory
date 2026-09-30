@@ -1,7 +1,8 @@
 // eval/locomo_aggregate.js — 彙整第一階段 raw 結果 → retrieval_summary.{md,json}
 const fs = require('fs');
 const path = require('path');
-const RAW = path.join(__dirname, 'results', 'raw');
+const RAW = process.env.LOCOMO_OUT ? path.resolve(process.env.LOCOMO_OUT) : path.join(__dirname, 'results', 'raw');
+const SUMDIR = process.env.LOCOMO_SUMMARY_DIR ? path.resolve(process.env.LOCOMO_SUMMARY_DIR) : path.join(__dirname, 'results');
 const KS = [5, 10, 20];
 const CATN = { 1: '多跳', 2: '時間', 3: '開放推理', 4: '單跳', 5: '對抗/無解' };
 const DESC = { A: '產品預設（加密 on、無向量；真實 2023 日期）', B: '加密 off', C: 'A ＋ bge-m3 向量通道', D: '純 FTS/BM25（searchFragments）',
@@ -45,8 +46,8 @@ for (const c of [1, 2, 3, 4, 5]) {
         md += `| ${v} | ${KS.map(k => pct(a['hit@' + k])).join(' | ')} | ${KS.map(k => pct(a['all@' + k])).join(' | ')} | ${a.mrr.toFixed(3)} |\n`; }
     md += '\n';
 }
-fs.writeFileSync(path.join(__dirname, 'results', 'retrieval_summary.json'), JSON.stringify(summary, null, 1));
+fs.writeFileSync(path.join(SUMDIR, 'retrieval_summary.json'), JSON.stringify(summary, null, 1));
 const notes = path.join(__dirname, 'retrieval_notes.md');
 if (fs.existsSync(notes)) md += fs.readFileSync(notes, 'utf8');
-fs.writeFileSync(path.join(__dirname, 'results', 'retrieval_summary.md'), md);
+fs.writeFileSync(path.join(SUMDIR, 'retrieval_summary.md'), md);
 console.log(md);

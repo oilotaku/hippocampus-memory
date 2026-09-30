@@ -272,6 +272,7 @@ def main():
     ap.add_argument("--qa-per-session", type=int, default=8)
     ap.add_argument("--max-cost", type=float, default=5.0, help="API 等值成本上限（美元），超過即停並存檢查點")
     ap.add_argument("--resume", action="store_true")
+    ap.add_argument("--index", type=int, default=0, help="平行產生時的組別編號（每個程序各產生一組，用不同 --out 與 --index，最後用 merge_zh.py 合併）")
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
     ckpt = os.path.join(args.out, "checkpoint.json")
@@ -292,7 +293,8 @@ def main():
     for n in range(1, args.conversations + 1):
         if len(state["convs"]) < n:
             print(f"[計畫] 第 {n} 組", flush=True)
-            plan = call("C", PLAN_SYS, PLAN_USER.format(n=n, seed=f"zh-{n}-{int(time.time())}",
+            label = args.index or n
+            plan = call("C", PLAN_SYS, PLAN_USER.format(n=label, seed=f"zh-{label}-{int(time.time())}",
                                                         sessions=args.sessions, months=args.months), budget, expect_json=True)
             plan["sessions"] = sorted(plan["sessions"], key=lambda s: s["idx"])[: args.sessions]
             state["convs"].append({"plan": plan, "sessions": {}, "summaries": [], "facts": [], "edits": {}, "qa": None})
@@ -316,7 +318,7 @@ def main():
             conv["qa"] = make_qa(conv, plan, args, budget)
             save()
             print(f"[出題] 第 {n} 組：{len(conv['qa'])} 題", flush=True)
-    data = [to_locomo(c, c["plan"], f"zh-{i + 1}") for i, c in enumerate(state["convs"])]
+    data = [to_locomo(c, c["plan"], f"zh-{args.index or i + 1}") for i, c in enumerate(state["convs"])]
     out = os.path.join(args.out, "zh_synth.json")
     json.dump(data, open(out, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     u = state["usage"]

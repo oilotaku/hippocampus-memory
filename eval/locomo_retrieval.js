@@ -17,7 +17,7 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
-const OUT = path.join(__dirname, 'results', 'raw');
+const OUT = process.env.LOCOMO_OUT ? path.resolve(process.env.LOCOMO_OUT) : path.join(__dirname, 'results', 'raw');
 const KS = [5, 10, 20];
 const VARIANTS = ['A', 'B', 'C', 'D', 'E', 'A-S', 'A-N', 'A-SN', 'B-SN', 'C-S', 'C-N', 'C-SN', 'A-F', 'A-FN', 'B-FN', 'C-F', 'C-FN'];
 
@@ -145,7 +145,8 @@ function main() {
     if (a[0] === '--child') return runChild(a[1], parseInt(a[2], 10));
     const vi = a.indexOf('--variants');
     const variants = vi >= 0 ? a[vi + 1].split(',') : VARIANTS;
-    for (const v of variants) for (let i = 0; i < 10; i++) {
+    const nConv = require('./locomo_common').loadConversations().length;
+    for (const v of variants) for (let i = 0; i < nConv; i++) {
         if (fs.existsSync(path.join(OUT, `retr_${v}_${require('./locomo_common').loadConversations()[i].id}.json`)) && !a.includes('--force')) continue;
         const r = spawnSync(process.execPath, [__filename, '--child', v, String(i)], { stdio: 'inherit', env: process.env });
         if (r.status !== 0) { console.error('子行程失敗', v, i); process.exit(1); }
