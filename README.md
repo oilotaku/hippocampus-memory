@@ -30,6 +30,8 @@ A self-organizing long-term memory system for AI assistants and companions. It e
 | Eight-dimension emotion engine: per-fragment scores, personal time-of-day baselines, turning-point attribution to entities, anniversaries, fading | Working (on by default, `emotion.enabled`) |
 | Retrieval ranking v2: entities boost instead of flooding, no penalty for full-text-only hits, time decay orders but never filters | Working (on by default; `librarian.ranking=legacy` restores the old ranking) |
 | Retrieval benchmark on LoCoMo and a Traditional Chinese synthetic set (`eval/`) | Done; see [Retrieval evaluation](#retrieval-evaluation) |
+| Time information: local time and weekday for the extractor, per-memory conversation dates, dates shown when memories are injected | Working |
+| End-to-end evaluation (extraction, recall, answering, grading) with a long-context baseline | Done on the Chinese synthetic set; see [End-to-end evaluation](#end-to-end-evaluation) |
 
 ---
 
@@ -275,6 +277,36 @@ Results for the product default (evidence found in the top 20, and mean reciproc
 
 The legacy ranking scored far below plain full-text search (MRR 0.370 on LoCoMo) because the entity channel filled the top ranks with each entity's latest fragments. Tuning notes are in `eval/results/ranking_tuning.md`, full tables in `eval/results/*/retrieval_summary.md`.
 
+### End-to-end evaluation
+
+`eval/locomo_e2e.js` runs the whole pipeline on one conversation: the Scribe extracts memories batch by batch (`extract`), then each question is answered from the memories the recall gate injects and graded by an LLM (`qa`). The `longctx` mode is a baseline that skips the memory system and puts the whole transcript in the prompt.
+
+The extraction model, the answering model and the grader can be set separately (`E2E_LLM_BASE`/`E2E_MODEL`, `E2E_ANSWER_BASE`/`E2E_ANSWER_MODEL`, `E2E_JUDGE_BASE`/`E2E_JUDGE_MODEL`), so a comparison can change only the extractor. `eval/claude_shim.py` exposes the Claude CLI (`claude -p`) as a local OpenAI-compatible endpoint for these runs; it binds to 127.0.0.1 only and turns extended thinking off by default. Memories are sent to Anthropic in plain text this way, so use it with synthetic or public data only.
+
+```bash
+python3 eval/claude_shim.py                                   # 127.0.0.1:18765
+E2E_LLM_BASE=http://127.0.0.1:18765/v1 E2E_MODEL=haiku E2E_TAG=claude node eval/locomo_e2e.js extract 0
+E2E_LLM_BASE=http://127.0.0.1:18765/v1 E2E_MODEL=haiku E2E_TAG=claude \
+  E2E_ANSWER_BASE=http://127.0.0.1:18765/v1 E2E_ANSWER_MODEL=haiku node eval/locomo_e2e.js qa 0 C --vector
+E2E_LLM_BASE=http://127.0.0.1:18765/v1 E2E_MODEL=haiku node eval/locomo_e2e.js longctx 0 LC
+```
+
+Results on the Traditional Chinese synthetic set (3 conversations of about 7.8k tokens each, 144 questions). Answers were produced by Claude Haiku 4.5 and graded by Claude Sonnet; the memory system used full-text plus a bge-m3 vector channel:
+
+| Setup | Correct | Time questions |
+|---|---|---|
+| Whole transcript in the prompt (no memory system) | 86% | 17/30 |
+| Memory system, Claude Haiku extracting | 68–72% | 10–13/30 |
+| Memory system, qwen3-8b (local, CPU) extracting | 40% | 0/30 |
+
+What this shows:
+
+- **The extraction model matters most.** The 8B model wrote about half as many memories and none of the dates, and took 3.7 hours on CPU for what Claude did in 4 minutes.
+- **Extraction varies a lot between runs.** The same code on the same conversation scored 36 and 19 correct in two runs, a larger swing than any single change measured so far.
+- **The memory system refuses better.** On questions whose answer never came up it said "not mentioned" 35/35 times; the whole-transcript baseline invented an answer twice.
+- **Short histories do not need a memory system.** At under 10k tokens, putting the transcript in the prompt is simply more accurate. Whether the memory system catches up on much longer histories is still being measured.
+- **The time fix helped time questions slightly** (22/60 to 26/60 over two runs each); the overall score did not move beyond run-to-run noise.
+
 ---
 
 ## Known limitations
@@ -283,7 +315,8 @@ The legacy ranking scored far below plain full-text search (MRR 0.370 on LoCoMo)
 - **Local models need a context of at least 8k tokens.** The Scribe extraction prompt is about 5.4k tokens (Traditional Chinese tokenizes about 10% longer than Simplified). With Ollama's default `num_ctx` of 4096 the prompt is silently truncated and an 8B model stops returning `type`/`quote`, so every entry is dropped. Create a model variant with `PARAMETER num_ctx 8192` (or set `OLLAMA_CONTEXT_LENGTH`).
 - **Assistant replies get extracted.** In testing with an 8B local model, half of the extracted fragments were the assistant's own small talk. The small-talk word list is Chinese only, so English small talk is not filtered.
 - **Extraction is tuned for Chinese.** The 60-character limit on verbatim quotes is too short for English sentences, and the Scribe reserves 4,096 output tokens, which leaves little room for input in an 8k context.
-- **End-to-end quality is not yet measured.** The retrieval benchmark bypasses LLM extraction; a full run through a local 8B model on CPU was too slow to finish.
+- **Extraction is unstable and drops details.** Two runs of the same conversation can differ by a dozen memories, and small details (who did a chore, the name of a stretching exercise) are often skipped. See [End-to-end evaluation](#end-to-end-evaluation).
+- **English conversations are stored in Chinese.** The Scribe prompt is written in Chinese, so English conversations end up as Chinese memories that English questions rarely match. End-to-end evaluation on LoCoMo is paused until this and the quote length are fixed.
 - **Entity resolution is broken upstream.** `entityResolver.js` reads a column `related_entity_ids` that no migration creates.
 - **The vector channel needs ChromaDB.** Without it, search falls back to full text and entities only.
 - **The blind index leaks frequency.** The same two-character token always hashes to the same value within a column, so token frequencies and shared tokens between rows are visible to someone holding the database file.
@@ -318,6 +351,8 @@ This version would not exist without the foundation they built. The original doc
 | Resources | Deep-cycle memory threshold and memory token budget are configurable |
 | Structure | The 311 KB Archivist and 157 KB cognitive-model files were split into focused modules of at most 40 KB each, verified to be a pure move |
 | Retrieval ranking | Ranking v2 (entity boost, no full-text penalty, decay orders only), with a LoCoMo and Traditional Chinese retrieval benchmark |
+| Time information | Messages reach the extractor in local time with the weekday (they were in UTC), each memory keeps the date of the message its quote came from, and injected memories show that date instead of "0 days ago" |
+| Evaluation | End-to-end runner with separately configurable extractor, answerer and grader, a long-context baseline, and a Claude CLI shim |
 | Dependencies | `better-sqlite3` upgraded to 12 for prebuilt Node 24 binaries; license field corrected from ISC to MIT |
 
 ## License
