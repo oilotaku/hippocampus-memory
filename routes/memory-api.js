@@ -118,7 +118,7 @@ router.put('/api/memory/:id', requireAuth, async (req, res) => {
             return res.status(404).json({ error: "Memory not found" });
         }
         
-        const oldContent = encryption.decrypt(oldMemory.content);
+        const oldContent = encryption.decrypt(oldMemory.content); // 无法解密时为 null，视为内容已变更
         const oldTitle = oldMemory.title;
         const contentChanged = (oldContent !== content) || (oldTitle !== title);
         
@@ -411,9 +411,9 @@ router.get('/api/memory/universe', requireAuth, (req, res) => {
                 LIMIT 8
             `).all(ent.id).map(ep => {
                 let content = ep.content || '';
-                try { content = encryption.decrypt(content); } catch (_) {}
+                try { content = encryption.decryptForDisplay(content); } catch (_) {}
                 let title = ep.title || '';
-                try { title = encryption.decrypt(title); } catch (_) {}
+                try { title = encryption.decryptForDisplay(title); } catch (_) {}
                 return {
                     id: ep.id,
                     title: title.slice(0, 60),
@@ -644,7 +644,7 @@ router.get('/api/memory/:id', requireAuth, async (req, res, next) => {
             return res.status(404).json({ error: "Memory not found" });
         }
         
-        const decryptedContent = encryption.decrypt(memory.content);
+        const decryptedContent = encryption.decryptForDisplay(memory.content);
         const tags = JSON.parse(memory.tags || '[]');
 
         // 显式查看 = 访问记录，供生命周期衰减用
@@ -1143,7 +1143,7 @@ router.post('/api/extract-tags', requireAuth, async (req, res) => {
         if (config) {
             modelName = config.model_name;
             endpoint = config.endpoint || 'https://generativelanguage.googleapis.com/v1beta';
-            apiKey = encryption.decrypt(config.api_key);
+            apiKey = encryption.decrypt(config.api_key) || null;
         } else {
             modelName = 'gemini-3-flash-preview';
             endpoint = 'https://generativelanguage.googleapis.com/v1beta';

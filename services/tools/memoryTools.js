@@ -204,7 +204,7 @@ ${USER.name} 想看当时的原话、或要你复述细节 → include_source=tr
       if (!record) return { success: false, formatted: `记忆库中未找到ID为 ${args.memory_id} 的记忆。` };
 
       let content = record.content;
-      try { content = encryption.decrypt(content); } catch (_) {}
+      try { content = encryption.decryptForDisplay(content); } catch (_) {}
 
       let sourceMsgIds = [];
       try { sourceMsgIds = JSON.parse(record.source_msg_ids || '[]'); } catch (_) {}
@@ -318,7 +318,7 @@ ${USER.name} 想看当时的原话、或要你复述细节 → include_source=tr
 
         const keyword = args.query ? args.query.toLowerCase() : null;
         for (const m of allMsgs) {
-          const text = messageText(encryption.decrypt(m.content));
+          const text = messageText(encryption.decrypt(m.content) || '');
           if (!text) continue;
           if (keyword && !text.toLowerCase().includes(keyword)) continue;
           rawMessages.push({ sender: m.sender, content: text, timestamp: m.timestamp });
@@ -338,7 +338,7 @@ ${USER.name} 想看当时的原话、或要你复述细节 → include_source=tr
           LIMIT 200
         `).all(context.chatId);
         for (const m of recent7) {
-          const text = messageText(encryption.decrypt(m.content));
+          const text = messageText(encryption.decrypt(m.content) || '');
           if (!text || !text.toLowerCase().includes(kw)) continue;
           rawMessages.push({ sender: m.sender, content: text, timestamp: m.timestamp });
         }

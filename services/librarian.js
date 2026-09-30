@@ -305,7 +305,7 @@ function formatForContext(fragments) {
       try { incRead.run(f.id); } catch (e) { console.error(`Librarian: read_count更新失败 #${f.id}:`, e.message); }
     } else if (f.source_table === 'memory') {
       try { touchMemory.run(f.id); } catch (e) { console.error(`Librarian: last_accessed更新失败 #${f.id}:`, e.message); }
-      try { f.content = encryption.decrypt(f.content); } catch (_) {}
+      try { f.content = encryption.decryptForDisplay(f.content); } catch (_) {}
     }
 
     return `- ${f.content} ${date}`.trim();
@@ -609,7 +609,7 @@ function formatHybridContext(fragments) {
       try { incRead.run(f.id); } catch (e) { console.error(`Librarian: read_count更新失败 #${f.id}:`, e.message); }
     } else if (f.source_table === 'memory') {
       try { touchMemory.run(f.id); } catch (e) { console.error(`Librarian: last_accessed更新失败 #${f.id}:`, e.message); }
-      try { f.content = encryption.decrypt(f.content); } catch (_) {}
+      try { f.content = encryption.decryptForDisplay(f.content); } catch (_) {}
     }
 
     processed.push({

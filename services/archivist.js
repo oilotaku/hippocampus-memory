@@ -2545,6 +2545,7 @@ async function refreshIntuitionStopwords() {
         let text = messages[mi].content || '';
         if (text.startsWith('enc:')) {
             try { text = encryption.decrypt(text, { silent: true }); } catch (_) { continue; }
+            if (text === null) continue;
         }
         try { const j = JSON.parse(text); text = (j.components || []).filter(c => c.type === 'text').map(c => c.content || c.text || '').join(' '); } catch (_) {}
         if (!text || text.length < 4) continue;
@@ -2625,7 +2626,7 @@ async function auditNewEpisodes() {
         const origTexts = messages.map(m => {
             let text = m.content || '';
             if (text.startsWith('enc:')) {
-                try { text = encryption.decrypt(text, { silent: true }); } catch (_) { text = ''; }
+                try { text = encryption.decrypt(text, { silent: true }) || ''; } catch (_) { text = ''; }
             }
             try { const j = JSON.parse(text); text = (j.components || []).filter(c => c.type === 'text').map(c => c.content || c.text || '').join(' '); } catch (_) {}
             return `[${m.sender}] ${text.slice(0, 150)}`;

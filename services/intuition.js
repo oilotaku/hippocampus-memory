@@ -142,7 +142,7 @@ function buildContextText(userMessage, recentMsgCount = 10) {
     for (const m of recent.reverse()) {
       let text = (m.content || '').slice(0, 200);
       if (text.startsWith('enc:')) {
-        try { text = encryption.decrypt(text, { silent: true }); } catch (_) { text = ''; }
+        try { text = encryption.decrypt(text, { silent: true }) || ''; } catch (_) { text = ''; }
       }
       if (text) parts.push(text);
     }

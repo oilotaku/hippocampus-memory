@@ -432,7 +432,7 @@ async function getEntityRelationContext() {
 // 判断是否包含高情绪信号
 function hasHighEmotionSignal(messages) {
     return messages.some(m => {
-        const content = (m.is_encrypted && m.content) ? encryption.decrypt(m.content) : (m.content || '');
+        const content = (m.is_encrypted && m.content) ? (encryption.decrypt(m.content) || '') : (m.content || '');
         return SCRIBE_CONFIG.HIGH_EMOTION_KEYWORDS.some(kw => content?.includes(kw));
     });
 }
@@ -541,7 +541,7 @@ async function runScribe(messages, since) {
     `).all(since, SCRIBE_CONFIG.CONTEXT_BUFFER).reverse();
 
     // 拼对话文本（需解密）
-    const dec = (m) => (m.is_encrypted && m.content) ? encryption.decrypt(m.content) : (m.content || '');
+    const dec = (m) => (m.is_encrypted && m.content) ? (encryption.decrypt(m.content) || '') : (m.content || '');
     const sanitizeForJSON = (s) => {
         if (!s) return s;
         // 多道消毒，防止 DeepSeek JSON 解析器报 "unexpected end of hex escape"

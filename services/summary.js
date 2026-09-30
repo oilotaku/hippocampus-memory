@@ -57,7 +57,7 @@ async function generateChatSummary(chatId, startMessageId = null, endMessageId =
 
         // 辅助函数：提取消息文本
         const extractText = (msg) => {
-            let content = msg.is_encrypted === 1 ? encryption.decrypt(msg.content) : msg.content;
+            let content = msg.is_encrypted === 1 ? (encryption.decrypt(msg.content) || '') : msg.content;
             try {
                 const parsed = JSON.parse(content);
                 if (parsed.components && Array.isArray(parsed.components)) {

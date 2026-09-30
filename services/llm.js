@@ -112,7 +112,7 @@ function getEmbeddingAPIKey() {
     
     if (config) {
         return {
-            api_key: encryption.decrypt(config.api_key),
+            api_key: encryption.decrypt(config.api_key) || null,
             model_name: config.model_name,
             provider: config.provider,
             endpoint: config.endpoint
@@ -143,7 +143,7 @@ async function getEmbedding(text, embeddingConfig) {
             
             if (dbConfig) {
                 embeddingConfig = {
-                    api_key: dbConfig.api_key ? encryption.decrypt(dbConfig.api_key) : process.env.GEMINI_API_KEY,
+                    api_key: dbConfig.api_key ? (encryption.decrypt(dbConfig.api_key) || null) : process.env.GEMINI_API_KEY,
                     endpoint: dbConfig.endpoint,
                     model_name: dbConfig.model_name,
                     provider: dbConfig.provider || 'gemini'
@@ -241,6 +241,7 @@ async function callLLM(geminiMessages, systemPrompt, tools = null, generationCon
     if (apiConfig.api_key && apiConfig.api_key.startsWith('enc:')) {
         try {
             decryptedApiKey = encryption.decrypt(apiConfig.api_key);
+            if (decryptedApiKey === null) throw new Error('decrypt returned null');
         } catch (e) {
             console.error('API Key decryption failed:', e);
             throw new Error('API Key 解密失败，请重新配置连接');

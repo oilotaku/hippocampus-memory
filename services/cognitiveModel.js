@@ -46,6 +46,7 @@ function extractMessageText(rawContent) {
     // 1. Decrypt if encrypted
     if (text.startsWith('enc:')) {
         try { text = encryption.decrypt(text, { silent: true }); } catch (_) { return ''; }
+        if (text === null) return '';
     }
 
     // 2. Parse JSON components if present

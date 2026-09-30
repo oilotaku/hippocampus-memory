@@ -61,7 +61,9 @@ function searchMemoriesByHardTrigger(userMessage) {
                 if (memory.valid_from && memory.valid_from > today) continue;
 
                 try {
-                    memory.content = encryption.decrypt(memory.content);
+                    const dec = encryption.decrypt(memory.content);
+                    if (dec === null) { console.error(`Memory ID ${memory.id} decryption failed，已跳过`); continue; }
+                    memory.content = dec;
                     matchedMemories.push(memory);
                 } catch (err) {
                     console.error(`Memory ID ${memory.id} decryption failed`, err);
@@ -158,8 +160,8 @@ async function searchMemoriesByVector(query, nResults = 3) {
             const placeholders = memoryIds.map(() => '?').join(',');
             const episodes = db.prepare(`SELECT * FROM memories WHERE id IN (${placeholders}) AND layer = 'episode' AND status = 'permanent'`).all(...memoryIds);
             for (const m of episodes) {
-                try { m.content = encryption.decrypt(m.content); } catch (_) {}
-                try { m.title = encryption.decrypt(m.title); } catch (_) {}
+                try { m.content = encryption.decryptForDisplay(m.content); } catch (_) {}
+                try { m.title = encryption.decryptForDisplay(m.title); } catch (_) {}
                 const chromaId = `memory_${m.id}`;
                 results.push({ _table: 'memories', _similarity: idToSimilarity[chromaId] || 0, ...m });
             }

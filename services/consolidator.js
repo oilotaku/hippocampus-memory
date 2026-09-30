@@ -223,7 +223,7 @@ function fetchSourceMessages(msgIds) {
     return rows.map(r => ({
         id: r.id,
         sender: r.sender === 'user' ? USER.name : AI.name,
-        content: (r.is_encrypted && r.content) ? encryption.decrypt(r.content) : (r.content || ''),
+        content: (r.is_encrypted && r.content) ? (encryption.decrypt(r.content) || '') : (r.content || ''),
         timestamp: r.timestamp
     }));
 }
@@ -669,7 +669,7 @@ async function clusterSagas() {
     // 解密内容
     const decryptedEps = episodes.map(e => {
         let content = e.content;
-        try { content = encryption.decrypt(e.content); } catch (_) {}
+        try { content = encryption.decrypt(e.content) || ''; } catch (_) {}
         return { ...e, content };
     });
 
