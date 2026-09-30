@@ -1,8 +1,206 @@
 # Hippocampus Memory
 
-A self-organizing long-term memory system for AI assistants and companions. It extracts facts from conversations, organizes them into a star map of people, places, and events, recalls them during chat, and runs on local models, with encrypted memory storage in progress.
+A self-organizing long-term memory system for AI assistants and companions. It extracts facts from conversations, checks each fact against what was actually said, organizes facts into a star map of people, places, and events, and recalls them during chat. It can run fully on a local model, so conversations never leave your machine.
 
-> **This project is adapted from [Memory Constellations](https://github.com/ClaraShafiq/MemoryConstellations)** by **Clara Shafiq & Draco Malfoy**, released under the MIT License. The original copyright notice is preserved in full in [`LICENSE`](LICENSE), and the complete git history is kept.
+> **Adapted from [Memory Constellations](https://github.com/ClaraShafiq/MemoryConstellations)** by **Clara Shafiq & Draco Malfoy**, released under the MIT License. The original copyright notice is preserved in [`LICENSE`](LICENSE), and the complete git history is kept. See [Acknowledgments](#acknowledgments).
+
+---
+
+## Status
+
+| Area | State |
+|---|---|
+| Extract, organize, recall pipeline | Working |
+| Local model (Ollama) instead of cloud APIs | Working, verified end to end |
+| Verbatim-quote check on extracted facts | Working |
+| Cross-day deduplication with evidence counting | Working |
+| Two-character Chinese full-text search | Working |
+| Field encryption (fail-closed, v2 format, key rotation) | Working for chat messages and API keys |
+| SSRF protection for user-supplied endpoints | Working |
+| Encryption of memory content with a blind search index | In progress |
+| Splitting the large Archivist and cognitive-model modules | In progress |
+| All Chinese text in code, prompts, and UI in Traditional Chinese | Planned |
+
+---
+
+## How it works
+
+```
+Chat messages
+    │
+    ▼
+Scribe ── extracts short facts into memory_fragments
+    │    ── every fact must carry a verbatim quote; the code checks
+    │       that the quote really appears in the source messages
+    │    ── duplicates across days add evidence instead of new rows;
+    │       sentences that differ in numbers, weekdays, or nouns are never merged
+    │
+    ▼
+Archivist ── 2-minute tick
+    │    ├─ light mode: link fragments to entities, expire timed states, merge duplicate entities
+    │    └─ deep cycle (user idle ≥ 60 min, enough free RAM): classify, grow entities,
+    │       consolidate fragments into episodes, cluster episodes into sagas,
+    │       regenerate entity overviews
+    │
+    ▼
+Librarian ── at chat time
+    │    ── full-text (two-character Chinese tokens, bm25), vector, and entity channels
+    │    ── fused with RRF (k = 60); episodes weighted over raw fragments
+    │    ── each result tagged with a recall permission level
+    │
+    ▼
+System prompt ── relevant memories, entity profiles, and user state,
+                 kept within a configurable token budget
+```
+
+### Memory layers
+
+| Layer | Table | Contents |
+|---|---|---|
+| Fragments | `memory_fragments` | Single facts of at most 80 characters, each with its source `quote` and an `evidence_count` |
+| Entities | `entity_profiles` | People, places, events, hobbies, and projects, each with facts, current status, and judgment |
+| Episodes | `memories` (layer = episode) | Narratives merged from fragments, 100 to 250 characters |
+| Sagas | `memory_sagas` | Arcs across entities (experimental) |
+| User model | `user_model`, `user_patterns` | Timed states, recent developments, and long-term behavior patterns |
+
+Behavior-pattern confidence does not decay just because time passes. It rises with confirming evidence and drops mildly on contradiction, with a floor of 0.20. A contradiction from an independent source can flag the pattern for LLM review.
+
+### Recall permission levels
+
+| Level | Condition | How the assistant should use it |
+|---|---|---|
+| Cite | Hit by two channels and less than 30 days old | May state it as fact |
+| Cautious | One channel, or 30 to 90 days old | Phrase it as "I seem to recall…" |
+| Associate only | Older than 90 days, or surfaced at random | Internal context only; never assert it |
+
+Without a vector store, only one channel can hit, so no result reaches the Cite level.
+
+### Lifecycle
+
+| What | Active to cooling | Cooling to frozen | Frozen to tombstone |
+|---|---|---|---|
+| Fragments | 14 days without access | 30 more days; vector removed | 90 more days; content wiped |
+| Episodes | Permanent | 6 months to mature | 12 months to archived |
+
+Recalling a memory resets its timer.
+
+---
+
+## Security and privacy
+
+- **Fail-closed field encryption.** Values are encrypted with AES-256-GCM in the format `enc:v2:<key id>:<nonce>:<ciphertext>`. Encryption failures throw instead of writing plaintext. Decryption failures return nothing instead of placeholder text, so garbage is never written back or sent to a model. Ciphertext can be bound to its row with associated data, and keys can be rotated. The older v1 format is still readable.
+- **What is encrypted today.** Chat messages and stored API keys. Memory content, entity profiles, and the full-text index are still plaintext; encrypting them with a blind search index is in progress.
+- **SSRF protection.** Any endpoint a user can set is resolved through DNS first, and every resolved address is checked. Private, loopback, link-local, and reserved ranges are rejected, including encoded forms such as `http://2130706433/` and IPv4-mapped IPv6. Only HTTPS is allowed, credentials in URLs are rejected, redirects are refused, and connections are pinned to the verified address. A local model is allowed only through an exact-origin allowlist in `LLM_ENDPOINT_ALLOWLIST`.
+- **Local inference.** With Ollama, extraction, consolidation, and embeddings all run on your own machine.
+
+---
+
+## Quick start
+
+Requires Node.js 20 or newer. The native SQLite module ships prebuilt binaries, so no compiler is needed.
+
+```bash
+git clone https://github.com/oilotaku/hippocampus-memory.git
+cd hippocampus-memory
+bash scripts/setup.sh        # copies templates, installs dependencies, initializes the database
+```
+
+Edit three files:
+
+```bash
+.env                  # encryption key, session secret, login password, model settings
+memory_config.json    # names, relationship, rhythm, token budget
+core-prompt.txt       # the assistant's personality
+```
+
+### Option A: local model with Ollama (recommended for privacy)
+
+```bash
+# In Ollama: a chat model (for example qwen3:8b) and an embedding model (bge-m3)
+node scripts/setup_llm.js --provider ollama --model <your chat model>
+```
+
+Then add this to `.env` so the SSRF guard allows your local endpoint:
+
+```
+LLM_ENDPOINT_ALLOWLIST=http://127.0.0.1:11434
+```
+
+Set `OLLAMA_CONTEXT_LENGTH=16384` for Ollama itself; its default context is too small for a full extraction batch. On CPU, one extraction call for 10 messages took about 4.5 minutes in testing, so treat the pipeline as a background job.
+
+### Option B: cloud API
+
+Put an OpenRouter, DeepSeek, or Gemini key in `.env`. See `.env.example`.
+
+```bash
+npm start
+# open http://localhost:3000/memory.html
+```
+
+The full walkthrough is in [`OSS_SETUP.md`](OSS_SETUP.md).
+
+---
+
+## Configuration
+
+### `.env`
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `SANCTUARY_ENCRYPTION_KEY` | Yes | Current encryption key, 64 hex characters (`openssl rand -hex 32`) |
+| `SANCTUARY_ENCRYPTION_KEY_ID` | No | ID written into new ciphertext, default `k1` |
+| `SANCTUARY_ENCRYPTION_KEYS_OLD` | No | Older keys for decryption after rotation, as `kid=hex,kid=hex` |
+| `SESSION_SECRET` | Yes | Session secret, 64 hex characters |
+| `LOGIN_PASSWORD` | Yes | Web login password |
+| `API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `DEEPSEEK_API_KEY` | For cloud models | Model provider keys |
+| `LLM_ENDPOINT_ALLOWLIST` | For local models | Comma-separated exact origins allowed to be private or plain HTTP |
+| `LLM_REQUEST_TIMEOUT_MS` | No | Request timeout; local endpoints default to 5 minutes, cloud to 30 seconds |
+| `DB_PATH` | No | SQLite database path |
+| `CHROMA_URL` | No | ChromaDB address for the vector channel |
+| `PORT` | No | Web port, default 3000 |
+
+### `memory_config.json`
+
+Personalization lives here: user and assistant names, relationship, and colors. Settings added in this version:
+
+| Key | Default | Purpose |
+|---|---|---|
+| `rhythm.deep_cycle_idle_minutes` | 60 | Idle minutes before the deep cycle runs |
+| `rhythm.deep_cycle_min_free_mb` | 1200 | Skip the deep cycle below this much free RAM; lower it on small machines |
+| `context.memory_token_budget` | 1200 | Token budget for memory blocks in the system prompt; whole memories are dropped from the end, never cut in the middle |
+
+---
+
+## Assistant tools
+
+The assistant gets four memory tools automatically:
+
+- **`recall_memory`**: search memories by keyword, or trace a memory back to its source messages.
+- **`browse_memories`**: browse constellations, open an entity, or search within one.
+- **`update_current_state`**: record, update, or resolve a timed state about the user (up to 90 days), with optional recurring reminders.
+- **`correct_memory`**: record a correction. Ten active corrections are merged into editing guidelines that are fed back into extraction.
+
+---
+
+## Testing
+
+```bash
+npm test                      # unit and characterization tests
+node tests/smoke_memory.js    # memory pipeline smoke test (the ChromaDB check fails if Chroma is not running)
+node scripts/e2e_ollama.js    # end-to-end run against a real local Ollama
+```
+
+---
+
+## Known limitations
+
+- **Mixed scripts in search.** The model may write fragments in Simplified Chinese even when the conversation is in Traditional Chinese, so a Traditional-Chinese keyword query can miss them. Script normalization is planned together with the Traditional Chinese conversion.
+- **Assistant replies get extracted.** In testing with an 8B local model, half of the extracted fragments were the assistant's own small talk.
+- **Entity resolution is broken upstream.** `entityResolver.js` reads a column `related_entity_ids` that no migration creates.
+- **The vector channel needs ChromaDB.** Without it, search falls back to full text and entities only.
+- **Foreign keys are off.** Some child tables lack `ON DELETE` rules, so enabling them would break existing deletes.
+
+---
 
 ## Acknowledgments
 
@@ -15,372 +213,21 @@ Many thanks to Clara Shafiq and Draco Malfoy for open-sourcing Memory Constellat
 - **The lifecycle and correction flow**: memories cool, freeze, and expire, and user corrections accumulate into editing guidelines.
 - The authors' emotional state engine, [jiwen](https://github.com/ClaraShafiq/jiwen), is a separate project.
 
-This version would not exist without the foundation they built.
+This version would not exist without the foundation they built. The original documentation is available in the [upstream repository](https://github.com/ClaraShafiq/MemoryConstellations#readme).
 
 ## Changes from the original
 
 | Area | Change |
 |---|---|
-| Tests | Added characterization tests (`npm test`) covering encryption, retrieval, lifecycle, and the correction flow |
-| Encryption | Encryption failures now throw instead of writing plaintext (fail-closed); new v2 format with AAD binding and key rotation; the old format stays readable |
-| Chinese search | Full-text indexing now uses overlapping two-character tokens, and queries use OR with bm25 ranking, reducing false single-character matches |
-| Extraction quality | Every memory must carry a verbatim quote, and the code checks that the quote really appears in the conversation; deduplication now works across days and accumulates evidence, and sentences that differ in numbers, weekdays, or nouns are never merged |
-| Security | Fixed SSRF (CWE-918): DNS is resolved before blocking private ranges, redirects are refused, and connections are pinned to the verified IP; local models are allowed explicitly through `LLM_ENDPOINT_ALLOWLIST` |
-| Local models | A local Ollama can replace cloud APIs so conversations never leave the machine; memory blocks now have a token budget |
-| In progress | Splitting large modules, encrypting memory content with a blind index, and converting all Chinese text to Traditional Chinese |
-
-See [`OSS_SETUP.md`](OSS_SETUP.md) for setup details.
-
----
-
-## Original documentation (Memory Constellations)
-
-The original project's documentation is kept below. Some of it no longer matches this version; where they differ, "Changes from the original" above takes precedence.
-
-
-A self-organizing memory system for AI companions. Extracts facts from chat, groups them by topic, and merges them into coherent narratives — all on autopilot.
-
-Built by **Open Source Community**.
-
----
-
-## What it does
-
-Three things happen automatically while your companion runs:
-
-1. **Extract.** Scribe scans new chat messages and pulls out facts — who, where, what happened, what changed. Each fact is a short, third-person sentence with a link back to the original messages.
-
-2. **Organize.** Archivist runs every 2 minutes. It groups related facts into topics (constellations), merges tightly-related facts into narrative paragraphs (episodes), and periodically links related episodes into long-term story arcs (sagas — experimental, not yet running in production).
-
-3. **Retrieve.** When your companion needs context during a chat, Librarian searches across all three layers — raw facts, narrative episodes, and entity profiles — using a mix of keyword matching, vector similarity, and entity aggregation.
-
-(Optional) A 5-axis emotional state engine ([jiwen](https://github.com/ClaraShafiq/jiwen), a separate project) provides continuous emotional drift for companions that want affect modeling beyond memory alone.
-
----
-
-## What you see
-
-Open `/memory.html` — it renders a star map from the database:
-
-- Five galaxies (Social, Places, Events, Hobbies, Projects) orbit a binary core (you + your companion)
-- Each constellation is an entity — a person, place, event, or interest. Click to see its overview, linked memories, and narrative episodes
-- Bridges between constellations show when two entities share memories
-- Every memory traces back to its source conversation
-
-No manual curation. The map updates itself as the pipeline runs.
-
-**Note:** The star map is currently desktop-only (mouse + keyboard). Mobile support is planned but not yet implemented.
-
----
-
-## Who this is for
-
-**Good fit if you:**
-- Run an AI companion with a persistent personality you maintain
-- Want the companion's memory to affect its emotional state, not just surface in search
-- Are comfortable with a JSON config file and a text-based personality prompt
-- Have an LLM API key (OpenRouter, DeepSeek, or Gemini) and ~$7/month for the memory pipeline
-
-**Not a good fit if you:**
-- Want a general-purpose RAG pipeline for documents
-- Need a one-click SaaS with zero setup
-- Expect sub-100ms retrieval at production scale
-- Don't want to write or update a personality prompt
-
----
-
-## Quick Start
-
-```bash
-git clone <repo-url>
-cd Memory-Constellations
-bash scripts/setup.sh
-# → copies templates, installs deps, inits database
-
-# Edit these three files:
-nano .env                  # API keys, encryption key, password
-nano memory_config.json    # Your name, your companion's name
-nano core-prompt.txt       # Your companion's personality
-
-npm start
-# → http://localhost:3000/memory.html
-```
-
-Detailed walkthrough: [OSS_SETUP.md](OSS_SETUP.md) — covers every config field, how to verify the pipeline is working, common issues, and a setup script for AI coding agents.
-
----
-
-## Architecture
-
-```
-Chat messages
-    │
-    ▼
-Scribe ── triggered by silence ≥20min or backlog ≥100 messages
-    │    ── extracts facts → memory_fragments table
-    │    ── indexes to ChromaDB (vector) + FTS5 (keyword)
-    │
-    ▼
-Archivist ── 2-min tick loop
-    │
-    ├─ Lightweight mode (every tick, no LLM calls)
-    │   ├─ Link fragments to entities by name match
-    │   ├─ Update evidence counters for cognitive model
-    │   ├─ Maintain behavior patterns (bigram match, freshness refresh)
-    │   ├─ Expire time-based entries (TTL-based current_state expiry)
-    │   └─ Detect and merge duplicate entities
-    │
-    └─ Deep cycle (user idle ≥1 hour, LLM-heavy)
-        ├─ Classify unlinked fragments → assign to entities
-        ├─ Grow seeds (new entities) → graduate to active
-        ├─ Consolidate fragments per entity → episodes (narrative memories)
-        ├─ Cluster episodes across entities → sagas (experimental)
-        ├─ Discover emergent people/places/events
-        ├─ Regenerate entity overviews (facts + judgment + current status)
-        ├─ Detect new cognitive traits → refine companion's understanding
-        └─ Cross-reference current states with entity profiles
-    │
-    ▼
-Librarian ── called at chat-time
-    │       ── Hybrid search: FTS5 + vector + entity aggregation
-    │       ── RRF fusion, episodes weighted 1.5× over raw fragments
-    │       ── Results tagged with recall permission level
-    │
-    ▼
-System Prompt ── injected: relevant memories + entity profiles + user profile + companion profile
-    │
-    ▼
-jiwen (optional) ── separate project: github.com/ClaraShafiq/jiwen
-                ── 5-axis continuous emotional state engine
-                ── Not required for memory pipeline — both systems work independently
-```
-
----
-
-## Memory layers
-
-### Core memory layers
-
-| Layer | Storage | Contents | Update trigger |
-|-------|---------|----------|---------------|
-| Fragments | `memory_fragments` | Single facts, ≤80 chars, third-person, typed (observation/reflection/preference/event/state) | Scribe, per chat session |
-| Entities | `entity_profiles` | Named people/places/events/hobbies/projects, with three-field model (facts + current_status + judgment) | Archivist classify + graduate + overview regeneration |
-| Episodes | `memories` (layer=episode) | Merged fragment narratives, 100-250 chars, with date correction and contradiction detection | Deep cycle consolidate |
-| Sagas | `memory_sagas` | Cross-entity narrative arcs (experimental — clustering runs but not yet consumed in production) | Every 24h or on new episodes |
-
-### User model layers — what the companion knows about you
-
-The system maintains three layers of user understanding at different time scales. Each layer serves a distinct purpose and updates independently:
-
-| Layer | Storage | Timescale | Contents | Update mechanism |
-|-------|---------|-----------|----------|-----------------|
-| **current_state** (瞬态) | `user_model` type=current_state | Hours to days, TTL-expiring | Transient states the companion tracks: "she's on her period", "she just moved", "she's stressed about a deadline" | Companion writes via chat tools; auto-resolves on TTL expiry |
-| **current_status** (近期动态) | `entity_profiles.current_status` | Days to weeks | Recent developments per entity: "moved to a new apartment in July", "started a new project at work" | Archivist regenerates on significant change; companion can update mid-chat |
-| **behavior patterns** (行为模式) | `user_patterns` | Weeks to years, confidence-not-time-decayed | Long-term behavioral regularities: "prefers a particular character archetype", "has strong aesthetic preferences" | Auto-clustered from observation & preference fragments; bigram-matched every 6h; new patterns discovered every 24h deep cycle |
-
-**Key design principle:** Behavior pattern confidence is not eroded by the mere passage of time — a person doesn't "stop preferring something they have always liked" just because they haven't mentioned it in three months. Confidence rises with confirming evidence, and a contradiction only lowers it mildly (half the penalty applied to traits, floor 0.20; an independent-source contradiction may additionally flag the entry for LLM review). Freshness controls injection priority independently from confidence.
-
-### Entity three-field model
-
-Each entity (person, place, event, hobby, project) has three fields, all generated in a single LLM call during overview regeneration:
-
-| Field | What it is | Update rule |
-|-------|-----------|-------------|
-| **facts** | Objective facts about the entity — stable, verifiable information | Unconditional overwrite — new facts replace old |
-| **current_status** | Latest known development — what recently changed | Covering update — new status replaces old; companion can update mid-chat |
-| **judgment** | Companion's subjective impression — "what I feel about this person/place" | Evolutionary — old judgment shown as reference, can be revised or kept |
-
-### Companion profile
-
-The companion's own personality, self-understanding, and relationship context is stored in `persona_model` (five sections: identity, personality, relationship with user, self as AI, project context). This is injected into every system prompt and can be edited through a UI panel. In production, this replaces the static `core-prompt.txt` personality sections — but for open-source setup, `core-prompt.txt` remains the simplest starting point. See OSS_SETUP.md for both approaches.
-
----
-
-## Retrieval design
-
-Librarian uses RRF (Reciprocal Rank Fusion) to merge results from three independent channels: FTS5 keyword, vector similarity, and entity aggregation. Episodes get a 1.5× weight over raw fragments because a consolidated narrative carries more context than a single extracted fact.
-
-Retrieved memories are tagged with a **recall permission level** computed deterministically (not by LLM):
-
-| Permission | Condition | How the companion should use it |
-|-----------|-----------|--------------------------------|
-| **可引用** (cite) | Dual-channel hit + <30 days | Can directly reference as fact |
-| **需谨慎** (cautious) | Single-channel hit or 30-90 days | Use "I seem to recall…" framing, leave room for correction |
-| **仅联想** (associate-only) | >90 days or floated at random | Internal reference only — don't state as fact to the user |
-
-A **segmented decay function** determines sort order: within 3 days, freshness dominates; after 3 days, emotional intensity dominates. Results below a combined score floor (0.005) are silently dropped — better silence than noise.
-
----
-
-### Concurrency
-
-Scribe and Archivist both write to `memory_fragments` and `entity_profiles`. SQLite's WAL mode ensures readers don't block writers. In practice the two are naturally staggered: Scribe only triggers after ≥20 minutes of silence, while Archivist runs on a 2-minute tick. No explicit lock is needed at current scale.
-
----
-
-### Lifecycle (automatic cleanup)
-
-| What | Active → Cooling | Cooling → Frozen | Frozen → Tombstone |
-|------|-----------------|------------------|---------------------|
-| Fragments | 14 days no access | 30 days, vector deleted | 90 days, content wiped |
-| Episodes | permanent | 6 months → mature | 12 months → archived |
-
-Access resets the timer — memories that get recalled stay fresh. Cooling fragments that are accessed auto-revive to active.
-
----
-
-## Configuration
-
-### memory_config.json
-
-This is the only config file you need to touch for personalization. All hardcoded names in the code are replaced at runtime with these values.
-
-```json
-{
-  "user": {
-    "name": "Your name",
-    "pronoun": "she / he / they",
-    "short_desc": "One-line bio"
-  },
-  "ai": {
-    "name": "Companion name",
-    "pronoun": "she / he / they",
-    "core_traits": "Personality keywords",
-    "persona_note": "Longer description, used in extraction prompts"
-  },
-  "relationship": {
-    "type": "AI partner / friend / assistant",
-    "dynamics": "How the relationship works"
-  },
-  "project": {
-    "name": "Project name (shown in star map and system prompts)"
-  },
-  "ui": {
-    "user_color": "#e8b96d",
-    "ai_color": "#6d9e8b"
-  },
-  "rhythm": {
-    "deep_cycle_idle_minutes": 60
-  }
-}
-```
-
-### core-prompt.txt
-
-Your companion's personality prompt. Template variables from `memory_config.json` are available:
-
-- `{{user.name}}`, `{{user.pronoun}}`, `{{user.short_desc}}`
-- `{{ai.name}}`, `{{ai.pronoun}}`, `{{ai.core_traits}}`, `{{ai.persona_note}}`
-- `{{relationship.type}}`, `{{relationship.dynamics}}`
-- `{{project.name}}`
-
-Guidelines (from production experience):
-- Describe what the companion *would do*, not what it *must not do* — positive framing works better than rule walls
-- Keep it under 400 lines — long prompts dilute focus and eat thinking-token budget on some models
-- Don't try to cover every edge case in the prompt — the memory retrieval handles context
-
-See `core-prompt.example.txt` for a skeleton. `OSS_SETUP.md` has more detailed writing guidance.
-
-**Production note:** In Sanctuary's own deployment, the companion's personality sections have been migrated from `core-prompt.txt` into an editable `persona_model` database table, with a UI panel for live editing without restarting the server. The open-source version keeps `core-prompt.txt` as the simpler starting point — both paths are supported.
-
-### .env
-
-Copy `.env.example` → `.env` and fill in:
-
-```
-SANCTUARY_ENCRYPTION_KEY=<64-char hex: openssl rand -hex 32>
-SESSION_SECRET=<64-char hex>
-LOGIN_PASSWORD=<your password>
-API_KEY=<your LLM API key>
-```
-
-At least one LLM channel is required (Gemini, OpenRouter, or DeepSeek). See `.env.example` for all options.
-
----
-
-## Companion tools
-
-These are the tools your companion uses to interact with their memory system. They're injected into the system prompt automatically — you just need to write their personality in `core-prompt.txt` and they'll know when to use each one. Tools can be toggled on/off individually via the companion's settings UI or the `user_settings` database table.
-
-### `recall_memory` — Search memories
-
-Two modes:
-- **Keyword search** (`query`): Your companion searches their memory by keyword or phrase. Returns matching fragments and episodes.
-- **Source trace** (`memory_id` + `offset`): Given a memory ID, trace back to the original conversation messages that produced it.
-
-### `browse_memories` — Browse the constellations
-
-The memory palace is organized as constellations — one per entity (person, place, event, project…). Three ways in:
-
-- **No parameters**: the hall — every constellation, grouped by category, each with a memory count and a one-line summary.
-- **`path` only** (an entity name, e.g. `"someone they know"`): that entity's profile plus its most recent linked memories, each with the archivist's `※ insight` line where one exists.
-- **`path` + `query`**: semantic search within that entity's memories.
-
-Names match exactly first, then fuzzily; an ambiguous name returns a shortlist of candidates rather than guessing.
-
-### `manage_user_state` — Track user state
-
-Three actions your companion uses to maintain a current picture of you:
-- **set**: Record a new observation — "She started a new project, she's on her period, she just moved." Must include an expiry date (max 90 days). Optional `schedule` parameter for recurring reminders (e.g., medication: `{"type":"daily","windows":["08:00-10:00","19:00-21:00"]}`).
-- **update**: Modify an existing observation (by state ID) — "That deadline changed" or "She's feeling better now."
-- **resolve**: Mark something as ended — "She finished that project." Requires a brief reason. For scheduled reminders, resolve only acknowledges the current window — subsequent windows will continue to trigger.
-
-States auto-expire. Your companion sees active ones in their intuition block and uses them to calibrate their tone.
-
-### `correct_memory` — Handle corrections
-
-When you tell your companion they remembered something wrong, they call this to record the correction. The system gathers candidate memories (working-memory pool + vector search) and asks a model whether the wrong statement actually came from one of them — if it did, that memory is cooled down and a corrected fragment is written; if it didn't, the mistake is logged as a hallucination and the correct version is stored as a new memory.
-
-Corrections accumulate in `correction_log`. Once 10 are active they get merged into long-term "editing guidelines", and both the recent corrections and those guidelines are injected into Scribe's prompt — so the same mistake doesn't get re-extracted later. See `services/correction.js`.
-
----
-
-## Model recommendations
-
-| Pipeline stage | Recommended model tier | Why | Examples |
-|---------------|----------------------|-----|----------|
-| Scribe (fragment extraction) | flash-lite / flash | Structured JSON output, cheap, runs frequently | DeepSeek V4 Flash, Gemini 2.5 Flash |
-| Archivist classify / rematch / graduate | flash | Batch processing with entity context | DeepSeek V4 Flash |
-| consolidateCategory (fragments → episodes) | flash / pro | 150-word narrative merging needs coherence | DeepSeek V4 Flash/Pro |
-| clusterSagas (episodes → sagas) | flash / pro | 50-episode batch clustering, needs thematic abstraction | DeepSeek V4 Pro, Gemini 2.5 Pro |
-| Agent garden decisions | flash-lite | Short prompt, frequent, binary choices | DeepSeek V4 Flash |
-| Entity overview generation | flash | Short summaries from known fragments | DeepSeek V4 Flash |
-| Chat response | Your choice | Quality matters most here | Whatever you normally use |
-
----
-
-## Cost
-
-Memory pipeline only, excluding your chat model. Estimates based on an active user (several chat sessions per day):
-
-| Operation | Calls/day | Cost/day |
-|-----------|-----------|----------|
-| Fragment extraction | ~8 | ~$0.08 |
-| Deep cycle (classify + consolidate + saga) | ~15 | ~$0.10 |
-| Agent tick decisions + maintenance | ~40 | ~$0.04 |
-
-**Total: ~$0.22/day, ~$7/month** at June 2026 flash-lite pricing. Actual cost depends on chat volume and model choice.
-
----
-
-## Documentation
-
-| File | What |
-|------|------|
-| `OSS_SETUP.md` | Step-by-step deployment guide + AI agent setup script |
-| `docs/COST.md` | Per-model pricing and cost breakdown |
-
----
-
-## Testing
-
-```bash
-node tests/smoke.js         # End-to-end system check
-node tests/smoke_memory.js  # Memory pipeline only
-```
-
----
+| Tests | Added `npm test` with characterization and unit tests for encryption, retrieval, lifecycle, corrections, Chinese search, extraction quality, the SSRF guard, and token budgets |
+| Encryption | Fail-closed, v2 format with associated data and key rotation, v1 still readable, no per-call logging |
+| Chinese search | Overlapping two-character tokens for indexing and querying, with bm25 ranking; episode titles and tags are now tokenized too |
+| Extraction | Verbatim quotes checked in code; cross-day deduplication that adds evidence and never merges facts differing in numbers, weekdays, or nouns |
+| Security | SSRF fix for all user-supplied endpoints, with DNS resolution, redirect refusal, and IP pinning |
+| Local models | Ollama setup preset, no auth header without a key, longer local timeouts, fallback to the default model config |
+| Resources | Deep-cycle memory threshold and memory token budget are configurable |
+| Dependencies | `better-sqlite3` upgraded to 12 for prebuilt Node 24 binaries; license field corrected from ISC to MIT |
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE). The original copyright of Clara Shafiq & Draco Malfoy is retained alongside the copyright for this adaptation.
