@@ -12,6 +12,7 @@
 
 const { getDb } = require('../database');
 const { encryption } = require('../encryption');
+const { toTraditionalChars } = require('../utils/zhNormalize');
 
 // ── TTL helpers for current_state display ──
 const TTL_LABELS = {
@@ -102,26 +103,30 @@ function getIntuitionStopwords() {
 
 function isTriggered(entry, contextText) {
   const stopwords = getIntuitionStopwords();
+  // W9：標籤與對話文字可能一簡一繁（舊資料是簡體、新寫入是繁體），比對前先逐字簡繁正規化（一對一，不改長度）
+  const ctx = toTraditionalChars(contextText);
+  const isStop = (w) => stopwords.has(w) || stopwords.has(toTraditionalChars(w));
   // Layer 1: keyword hit — exact or partial (≥3 char substring of ≥4 char keywords)
   try {
     const tags = JSON.parse(entry.tags || '[]');
     if (tags.length > 0) {
-      for (const tag of tags) {
-        if (stopwords.has(tag)) continue; // 高頻詞不觸發
-        if (contextText.includes(tag)) return true;
+      for (const rawTag of tags) {
+        if (isStop(rawTag)) continue; // 高頻詞不觸發
+        const tag = toTraditionalChars(rawTag);
+        if (ctx.includes(tag)) return true;
         // Partial: for longer keywords, match 3-char substrings (handles "這個bug修完就睡" vs "這個bug修了一晚上")
         if (tag.length >= 4) {
           for (let i = 0; i <= tag.length - 3; i++) {
             const sub = tag.slice(i, i + 3);
-            if (stopwords.has(sub)) continue;
-            if (contextText.includes(sub)) return true;
+            if (isStop(sub)) continue;
+            if (ctx.includes(sub)) return true;
           }
         }
       }
     }
   } catch (_) {}
   // Layer 2: bigram fallback for out-of-vocabulary expressions
-  return bigramOverlap(entry.content, contextText) >= BIGRAM_THRESHOLD;
+  return bigramOverlap(toTraditionalChars(entry.content), ctx) >= BIGRAM_THRESHOLD;
 }
 
 // ═══════════════════════════════════════════════════════════════

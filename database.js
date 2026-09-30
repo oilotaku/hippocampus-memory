@@ -293,7 +293,7 @@ function initDatabase() {
     // 版本化遷移 — 每條只跑一次
     // ═══════════════════════════════════════════════════════════
 
-    // v1: 早期表結構擴充套件
+    // v1: 早期表結構擴充
     runMigration(1, 'companion_inner_log.tick_id',
         "ALTER TABLE companion_inner_log ADD COLUMN tick_id TEXT DEFAULT ''");
 
@@ -311,10 +311,10 @@ function initDatabase() {
 
 
 
-    // v8-v9: Snitch 擴充套件
+    // v8-v9: Snitch 擴充
 
 
-    // v10-v15: Memory fragments 擴充套件
+    // v10-v15: Memory fragments 擴充
     runMigration(10, 'memory_fragments.read_count',
         'ALTER TABLE memory_fragments ADD COLUMN read_count INTEGER DEFAULT 0');
 
@@ -333,7 +333,7 @@ function initDatabase() {
     runMigration(15, 'memories.source_msg_ids',
         "ALTER TABLE memories ADD COLUMN source_msg_ids TEXT DEFAULT '[]'");
 
-    // v16-v17: Memories 擴充套件
+    // v16-v17: Memories 擴充
     runMigration(16, 'memories.last_accessed_at',
         'ALTER TABLE memories ADD COLUMN last_accessed_at DATETIME');
 

@@ -19,7 +19,7 @@ A self-organizing long-term memory system for AI assistants and companions. It e
 | SSRF protection for user-supplied endpoints | Working |
 | Encryption of memory content with a blind search index | Working (on by default) |
 | Archivist and cognitive model split into focused modules | Done |
-| All Chinese text in code, prompts, and UI in Traditional Chinese | Planned |
+| All Chinese text in code, prompts, and UI in Traditional Chinese (Simplified input still matches) | Done |
 
 ---
 
@@ -197,7 +197,8 @@ node scripts/e2e_ollama.js    # end-to-end run against a real local Ollama
 
 ## Known limitations
 
-- **Mixed scripts in search.** The model may write fragments in Simplified Chinese even when the conversation is in Traditional Chinese, so a Traditional-Chinese keyword query can miss them. Script normalization is planned together with the Traditional Chinese conversion.
+- **Mixed scripts in search (mitigated).** Indexing and querying fold Simplified and Traditional characters together (character-by-character, `utils/zhNormalize.js`), so a Traditional query finds Simplified fragments and vice versa. Folding is per character, not per word, so regional vocabulary differences (e.g. 软件 / 軟體) are not bridged. Existing databases rebuild their search index once on the first start after upgrading.
+- **Local models need a context of at least 8k tokens.** The Scribe extraction prompt is about 5.4k tokens (Traditional Chinese tokenizes about 10% longer than Simplified). With Ollama's default `num_ctx` of 4096 the prompt is silently truncated and an 8B model stops returning `type`/`quote`, so every entry is dropped. Create a model variant with `PARAMETER num_ctx 8192` (or set `OLLAMA_CONTEXT_LENGTH`).
 - **Assistant replies get extracted.** In testing with an 8B local model, half of the extracted fragments were the assistant's own small talk.
 - **Entity resolution is broken upstream.** `entityResolver.js` reads a column `related_entity_ids` that no migration creates.
 - **The vector channel needs ChromaDB.** Without it, search falls back to full text and entities only.

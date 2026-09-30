@@ -299,7 +299,7 @@ action: extend=舊便籤還夠用，只續命。create=狀態變了或上次判�
         };
         } // end if (action !== 'extend' || !prevState)
 
-        // extend 路徑：不建立新條目，返回擴充套件結果
+        // extend 路徑：不建立新條目，返回擴充結果
         if (action === 'extend' && prevState) {
             return {
                 extended: prevState.id,

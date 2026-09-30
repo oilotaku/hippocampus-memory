@@ -93,6 +93,7 @@ async function main() {
     console.log(`模型提出條目: ${proposed}`);
     console.log(`寫入: ${r?.written}  |  quote 驗證丟棄: ${r?.quoteDropped} ${JSON.stringify(r?.quoteDroppedByType || {})}  |  重複: ${r?.duplicates}`);
     console.log(`Scribe 總耗時: ${(scribeMs / 1000).toFixed(1)}s`);
+    if (!r?.written || process.env.E2E_SHOW_REPLY) console.log('模型原始輸出（前 3000 字）:\n' + String(llmLog[llmLog.length - 1]?.reply || '').slice(0, 3000));
 
     }
     const rows = db.prepare('SELECT id, type, entity, content, quote, emotional_weight FROM memory_fragments ORDER BY id').all();
@@ -100,8 +101,8 @@ async function main() {
     for (const f of rows) console.log(`  #${f.id} [${f.type}] ${f.entity}: ${f.content}  （quote: ${f.quote}）`);
 
     console.log('\n===== Librarian 查詢 =====');
-    // 前三個是題目指定的查詢；後兩個是簡體寫法對照（模型寫入的碎片是簡體，見回報解讀）
-    for (const q of ['我住哪', '媽媽生日', '我對什麼過敏', '我住在哪裡', '我對什麼過敏']) {
+    // 前三個是繁體查詢；後三個是簡體寫法對照（W9：斷詞前逐字簡繁正規化，簡繁查詢都應命中，與碎片本身是哪種字體無關）
+    for (const q of ['我住在哪裡', '媽媽生日', '我對什麼過敏', '我住在哪里', '妈妈生日', '我对什么过敏']) {
         const t1 = Date.now();
         const hits = await searchHybrid(q, 8);
         console.log(`\n查詢「${q}」 (${Date.now() - t1}ms，命中 ${hits.length})`);

@@ -12,7 +12,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
 
-# ── 全域性狀態（程序生命週期內複用）──
+# ── 全域狀態（程序生命週期內複用）──
 _embed_model = None
 _chroma_client = None
 

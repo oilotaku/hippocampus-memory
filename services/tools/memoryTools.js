@@ -581,7 +581,7 @@ const browseMemories = {
       const entityProfile = db.prepare('SELECT * FROM entity_profiles WHERE name = ? OR aliases LIKE ?')
         .get(path, `%${path}%`);
       if (!entityProfile) {
-        return { success: true, formatted: `「${path}」這個記憶分割槽還不存在。` };
+        return { success: true, formatted: `「${path}」這個記憶分區還不存在。` };
       }
       const hybridResults = await searchHybrid(query, limit * 2);
       const formatted = formatHybridContext(hybridResults.slice(0, limit));
@@ -598,7 +598,7 @@ const browseMemories = {
       const entityProfile = db.prepare('SELECT * FROM entity_profiles WHERE name = ? OR aliases LIKE ?')
         .get(path, `%${path}%`);
       if (!entityProfile) {
-        return { success: true, formatted: `「${path}」這個記憶分割槽還不存在。` };
+        return { success: true, formatted: `「${path}」這個記憶分區還不存在。` };
       }
       const fragments = db.prepare(`
         SELECT mf.content, mf.insight
@@ -619,7 +619,7 @@ const browseMemories = {
           if (f.insight) output += `  ※ ${f.insight}\n`;
         }
       } else {
-        output += '這個分割槽還是空的。';
+        output += '這個分區還是空的。';
         captureMemoryGap(context.chatId, context.lastUserMessage, 'browse_memories',
           { formatted: output });
       }

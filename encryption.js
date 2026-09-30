@@ -195,7 +195,7 @@ class SanctuaryEncryption {
     }
 }
 
-// 建立全域性加密例項
+// 建立全域加密例項
 const encryption = new SanctuaryEncryption();
 
 // 匯出供index.js使用

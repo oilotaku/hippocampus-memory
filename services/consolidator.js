@@ -871,7 +871,7 @@ async function consolidateFlash(highEWFragments, windowMsgIds) {
     const spike = highEWFragments.reduce((a, b) => a.emotional_weight > b.emotional_weight ? a : b);
     console.log(`[Flash] 觸發！${highEWFragments.length}條高能碎片，尖峰=${spike.emotional_weight.toFixed(2)} "${spike.content.slice(0, 60)}..."`);
 
-    // 擴充套件視窗：拉入同批次中與高EW碎片共享 source_msg_ids 的其他碎片
+    // 擴充視窗：拉入同批次中與高EW碎片共享 source_msg_ids 的其他碎片
     const highEWIds = new Set(highEWFragments.map(f => f.id));
     let relatedFragments = [];
     try {
@@ -888,7 +888,7 @@ async function consolidateFlash(highEWFragments, windowMsgIds) {
             `).all(...highEWFragments.map(f => f.id));
         }
     } catch (e) {
-        console.warn('[Flash] 擴充套件視窗失敗，僅用高EW碎片:', e.message);
+        console.warn('[Flash] 擴充視窗失敗，僅用高EW碎片:', e.message);
     }
 
     const allFragments = [...highEWFragments, ...relatedFragments];
