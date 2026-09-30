@@ -66,7 +66,7 @@ async function buildGatedMemory(userMessage, o = {}) {
     const rng = o.rng || Math.random;
     const { searchMemoriesByHardTrigger } = require('./memory');
     const { searchHybrid, formatHybridContext, classifyIntent } = require('../../librarian');
-    const { getEntityContext } = require('../../entityProfile');
+    const { getEntityContext } = require('../cortex/entityProfile');
     const { AI } = require('../../nameResolver');
 
     const parts = [];
