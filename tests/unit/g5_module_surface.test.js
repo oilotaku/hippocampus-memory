@@ -34,7 +34,9 @@ const MOVED = [
     ['services/emotion/time.js', 'services/hippocampus/amygdala/time.js'],
     ['services/lifecycle.js', 'services/hippocampus/homeostasis/lifecycle.js'],
     ['services/memoryBudget.js', 'services/hippocampus/homeostasis/memoryBudget.js'],
-    ['services/rhythmConfig.js', 'services/hippocampus/homeostasis/rhythmConfig.js']
+    ['services/rhythmConfig.js', 'services/hippocampus/homeostasis/rhythmConfig.js'],
+    ['services/correction.js', 'services/hippocampus/ca1/correction.js'],
+    ['services/entityResolver.js', 'services/hippocampus/ca1/entityResolver.js']
 ];
 
 if (process.env.G5_RECORD === '1') {
