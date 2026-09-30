@@ -181,6 +181,13 @@ ${AI.name}的發言只提取以下兩類，其餘全部忽略：
 | 6 | ${AI.name}的音樂泛評 | 複述歌詞、隨口點評歌曲（如"旋律不錯""畫面感強"） | 表達強烈個人情感時按審美反應提取，ew≤0.3（如"這首歌讓我想起${USER.name}"） |
 | 7 | 遊戲機制內容（chat_mode=game） | 卡牌、遺物、怪物、HP值、金幣數字、地圖節點等虛擬遊戲機制 | 只提取${USER.name}本人的真實想法/情緒/偏好（如"我好喜歡這張卡""這遊戲好難""我打牌太激進了"），遊戲機制內容視為上下文非事實 |
 
+**助理自己的話一律不抽（除非上面兩類）**：${AI.name}的建議、提醒、承諾（「之後會避開花生」）、客套、稱讚、附和使用者的回應（「三重交通很方便」「好的我記住了」）都不是記憶，即使話裡提到${USER.name}的事也不抽——那件事若有價值，會在${USER.name}自己的發言裡出現，請引用${USER.name}的原話。
+反例（全部不要輸出）：
+- ${AI.name}說「記得帶外套喔」→ 不要寫「${AI.name}提醒${USER.name}帶外套」
+- ${AI.name}說「三重交通很方便呢」→ 不要寫「${AI.name}說三重交通方便」
+- ${AI.name}說「之後推薦食物我會避開花生」→ 不要寫「${AI.name}承諾避開花生」
+唯一可用 quote_from=ai 的情況：內容本身是在描述${USER.name}的情緒／心理狀態（如「你聽起來很累」→「${USER.name}今天很疲憊」）。
+
 判斷口訣：這條內容離開${AI.name}和${USER.name}的這次對話後，還有獨立存在的意義嗎？沒有 → 不提取。
 
 ## 已有記憶 — 避免重複提取
@@ -753,6 +760,7 @@ async function runScribe(messages, since) {
     // ── 原話佐證：quote 必須是來源訊息的逐字子串，否則丟棄（防幻覺寫入記憶）──
     // 來源只取本次處理的訊息（buffer 僅作背景），截斷長度與餵給 LLM 的一致（500 字）。
     let quoteDropped = 0, quoteDroppedByType = {};
+    let aiChitchatDropped = 0, aiChitchatDroppedByType = {};
     if (Array.isArray(result.entries) && result.entries.length) {
         const srcs = { user: [], ai: [] };
         for (const m of messages) {
@@ -763,6 +771,12 @@ async function runScribe(messages, since) {
         result.entries = f.kept;
         quoteDropped = f.dropped;
         quoteDroppedByType = f.droppedByType;
+        aiChitchatDropped = f.aiChitchatDropped;
+        aiChitchatDroppedByType = f.aiChitchatDroppedByType;
+        if (aiChitchatDropped > 0) {
+            const d2 = Object.entries(aiChitchatDroppedByType).map(([t, n]) => `${t}:${n}`).join(',');
+            console.log(`[Scribe] 助理閒聊過濾：丟棄 ${aiChitchatDropped} 條（${d2}）`);
+        }
         if (quoteDropped > 0) {
             const detail = Object.entries(quoteDroppedByType).map(([t, n]) => `${t}:${n}`).join(',');
             console.log(`[Scribe] 原話佐證：丟棄 ${quoteDropped} 條（無/偽造 quote；${detail}）`);
@@ -995,7 +1009,7 @@ async function runScribe(messages, since) {
             console.error('[Scribe] Archivist 事件傳送失敗:', e.message);
         }
     }
-    return { written, duplicates: hashDedupCount, evidenceMerged, quoteDropped, quoteDroppedByType };
+    return { written, duplicates: hashDedupCount, evidenceMerged, quoteDropped, quoteDroppedByType, aiChitchatDropped, aiChitchatDroppedByType };
 }
 
 module.exports = { checkAndRunScribe, indexNewFragments, runScribe };

@@ -16,17 +16,59 @@ function normalizeText(s) {
         .replace(/[\s\p{P}\p{S}]+/gu, '');
 }
 
-// entry 的引用來源：預設只能來自使用者；quote_from='ai' 且 type 屬於觀察型才可查 AI 發言
-function quoteSource(entry) {
-    if (String(entry?.quote_from || '').toLowerCase() === 'ai' && AI_QUOTE_TYPES.has(entry.type)) return 'ai';
-    if (String(entry?.quote_from || '').toLowerCase() === 'ai') return 'invalid';
-    return 'user';
+// ── F2：以 quote 實際出現的訊息方為準判斷來源（不信任模型自報的 quote_from）──
+// 使用者訊息有（含兩邊都有）→ 'user'；只在助理訊息出現 → 'ai'；都沒有 → null
+function detectQuoteSource(entry, sources) {
+    const q = normalizeText(entry?.quote);
+    const has = (pool) => (pool || []).some(t => normalizeText(t).includes(q));
+    if (has(sources && sources.user)) return 'user';
+    if (has(sources && sources.ai)) return 'ai';
+    return null;
+}
+
+// AI 來源 entry 要保留，content 必須真的在描述「使用者」的情緒／狀態。
+// 詞表簡繁並存，比對前先過 normalizeText（逐字簡轉繁）。寧可少收。
+const EMOTION_WORDS = [
+    '委屈', '難過', '傷心', '悲傷', '沮喪', '失落', '低落', '焦慮', '緊張', '不安', '擔心', '害怕', '恐懼', '恐慌',
+    '生氣', '憤怒', '煩躁', '煩悶', '崩潰', '壓抑', '隱忍', '疲憊', '疲倦', '很累', '好累', '累了', '倦怠', '孤單', '孤獨', '寂寞',
+    '無助', '無力', '挫折', '自責', '愧疚', '內疚', '羞愧', '尷尬', '失望', '絕望', '痛苦', '難受', '不開心', '不快樂',
+    '開心', '快樂', '高興', '興奮', '期待', '滿足', '放鬆', '安心', '感動', '感激', '自豪', '驕傲', '依賴', '信任', '在意',
+    '情緒', '心情', '心事', '低潮', '脆弱', '逞強', '強撐',
+];
+// 助理自己的建議／提醒／承諾／客套／稱讚：出現就丟棄
+const CHITCHAT_WORDS = [
+    '提醒', '建議', '推薦', '承諾', '答應', '保證', '會避開', '會幫', '幫你', '之後會', '下次會', '記得', '別忘', '謝謝', '感謝', '不客氣',
+    '稱讚', '誇獎', '誇讚', '歡迎', '加油', '祝', '晚安', '早安', '交通方便', '應該要', '需要帶',
+];
+
+function includesAny(text, words) {
+    return words.some(w => text.includes(normalizeText(w)));
+}
+
+/**
+ * 助理視角的 entry 是否只是閒聊／客套／建議（true = 應丟棄）。
+ * 保留條件：type 屬觀察型 ∧ 含情緒詞 ∧ 不含閒聊詞 ∧（若提到助理自己則必須同時提到使用者）
+ */
+function isAiChitchat(entry) {
+    if (!AI_QUOTE_TYPES.has(entry?.type)) return true;
+    const c = normalizeText(entry?.content);
+    if (!c) return true;
+    if (!includesAny(c, EMOTION_WORDS)) return true;
+    if (includesAny(c, CHITCHAT_WORDS)) return true;
+    const { AI, USER } = require('./memoryConfig');
+    const aiName = normalizeText(AI.name);
+    if (aiName && c.includes(aiName)) {
+        const rest = c.split(aiName).join('');
+        const userRefs = [USER.name, 'user', '使用者', '用戶', '你'].filter(Boolean).map(normalizeText);
+        if (!userRefs.some(u => rest.includes(u))) return true;
+    }
+    return false;
 }
 
 /**
  * 驗證 entry.quote 是來源訊息的逐字子串（正規化後）。
  * sources = { user: [文本...], ai: [文本...] }
- * 返回 { ok, reason }
+ * 返回 { ok, reason, source }；reason 可為 ai_chitchat（助理閒聊，非偽造）
  */
 function validateQuote(entry, sources) {
     const raw = entry?.quote;
@@ -34,29 +76,34 @@ function validateQuote(entry, sources) {
     if (raw.trim().length > MAX_QUOTE_LEN) return { ok: false, reason: 'too_long' };
     const q = normalizeText(raw);
     if (q.length < 2) return { ok: false, reason: 'too_short' };
-    const src = quoteSource(entry);
-    if (src === 'invalid') return { ok: false, reason: 'ai_type_not_allowed' };
-    const pool = (sources && sources[src]) || [];
-    for (const text of pool) {
-        if (normalizeText(text).includes(q)) return { ok: true, reason: null };
+    const source = detectQuoteSource(entry, sources);
+    if (!source) return { ok: false, reason: 'not_found' };
+    if (source === 'ai') {
+        if (!AI_QUOTE_TYPES.has(entry.type)) return { ok: false, reason: 'ai_type_not_allowed', source };
+        if (isAiChitchat(entry)) return { ok: false, reason: 'ai_chitchat', source };
     }
-    return { ok: false, reason: 'not_found' };
+    return { ok: true, reason: null, source };
 }
 
-/** 過濾 entries；返回 { kept, dropped, droppedByType } */
+/** 過濾 entries；返回 { kept, dropped, droppedByType, aiChitchatDropped, aiChitchatDroppedByType } */
 function filterEntriesByQuote(entries, sources) {
     const kept = [];
     const droppedByType = {};
-    let dropped = 0;
+    const aiChitchatDroppedByType = {};
+    let dropped = 0, aiChitchatDropped = 0;
     for (const e of entries || []) {
-        if (e && validateQuote(e, sources).ok) kept.push(e);
-        else {
+        const v = e ? validateQuote(e, sources) : { ok: false };
+        const t = (e && e.type) || 'unknown';
+        if (v.ok) kept.push(e);
+        else if (v.reason === 'ai_chitchat') {
+            aiChitchatDropped++;
+            aiChitchatDroppedByType[t] = (aiChitchatDroppedByType[t] || 0) + 1;
+        } else {
             dropped++;
-            const t = (e && e.type) || 'unknown';
             droppedByType[t] = (droppedByType[t] || 0) + 1;
         }
     }
-    return { kept, dropped, droppedByType };
+    return { kept, dropped, droppedByType, aiChitchatDropped, aiChitchatDroppedByType };
 }
 
 // ── 去重 ─────────────────────────────────────────────────────────
@@ -129,7 +176,7 @@ function findDuplicate(entity, content, candidates) {
 }
 
 module.exports = {
-    normalizeText, validateQuote, filterEntriesByQuote,
+    normalizeText, validateQuote, filterEntriesByQuote, detectQuoteSource, isAiChitchat,
     normalizedContentHash, isNearDuplicate, findDuplicate,
     AI_QUOTE_TYPES, MAX_QUOTE_LEN,
 };
