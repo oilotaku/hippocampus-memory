@@ -42,7 +42,10 @@ const MOVED = [
     ['services/recallPipeline.js', 'services/hippocampus/ca3/recallPipeline.js'],
     ['services/workingMemory.js', 'services/hippocampus/ca3/workingMemory.js'],
     ['services/memory.js', 'services/hippocampus/ca3/memory.js'],
-    ['services/intuition.js', 'services/hippocampus/ca3/intuition.js']
+    ['services/intuition.js', 'services/hippocampus/ca3/intuition.js'],
+    ['services/scribe.js', 'services/hippocampus/entorhinal/scribe.js'],
+    ['services/chatParser.js', 'services/hippocampus/entorhinal/chatParser.js'],
+    ['services/chatImport.js', 'services/hippocampus/entorhinal/chatImport.js']
 ];
 
 if (process.env.G5_RECORD === '1') {
