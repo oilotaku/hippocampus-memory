@@ -4,6 +4,7 @@ const { fragmentsMatchQuery, memoriesMatchQuery } = require('./memoryCrypto');
 const { AI } = require('./nameResolver');
 const { toQueryTokens } = require('../utils/cjkTokenize');
 const { toTraditionalChars } = require('../utils/zhNormalize');
+const { parseDbTime } = require('../utils/time');
 const { getRecallConfig } = require('./recallGate');
 
 // ── 檢索排除源（從 memory_config.json 讀取）──
@@ -72,15 +73,7 @@ function noveltyPenalty(readCount) {
   return 1 / (1 + Math.log10(readCount + 1));
 }
 
-// DB 的 datetime('now') 字串（'YYYY-MM-DD HH:MM:SS'，無時區）是 UTC；
-// 直接 new Date() 會被當本地時間，非 UTC 時區天數偏差。無時區標記者一律補 Z 以 UTC 解析。
-function parseDbTime(label) {
-  if (typeof label === 'string') {
-    const m = label.trim().match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)$/);
-    if (m) return new Date(`${m[1]}T${m[2]}Z`);
-  }
-  return new Date(label);
-}
+// parseDbTime：DB 的無時區時間字串是 UTC，見 utils/time.js
 
 function daysAgo(dateLabel) {
   if (!dateLabel) return 365;

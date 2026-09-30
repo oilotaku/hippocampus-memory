@@ -5,6 +5,7 @@
 // 替代 core-prompt.txt 中手動維護的 <使用者核心資訊>。
 
 const { getDb } = require('../database');
+const { parseDbTime } = require('../utils/time');
 const { fillPrompt, USER, AI } = require('./nameResolver');
 
 // ── 分類標籤 → 顯示名稱 ──
@@ -189,10 +190,10 @@ function _isStale(entry) {
     if (!entry.last_evidence_at) {
         // Check created_at instead
         if (!entry.created_at) return false;
-        const created = new Date(entry.created_at);
+        const created = parseDbTime(entry.created_at);
         return (Date.now() - created) > 90 * 24 * 60 * 60 * 1000;
     }
-    const last = new Date(entry.last_evidence_at);
+    const last = parseDbTime(entry.last_evidence_at);
     return (Date.now() - last) > 90 * 24 * 60 * 60 * 1000;
 }
 

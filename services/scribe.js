@@ -2,6 +2,7 @@
 // Scribe（書記員）：對話記憶提取系統
 // =================================================================
 const { getDb } = require('../database');
+const { parseDbTime } = require('../utils/time');
 const { callLLM } = require('./llm');
 const { fillPrompt, USER, AI } = require('./nameResolver');
 const { encryption } = require('../encryption');
@@ -114,7 +115,7 @@ const SCRIBE_CONFIG = {
 // 校驗 processed_until 是否為有效日期字串（防止非日期值寫入導致 Scribe 永久跳過）
 function isValidTimestamp(ts) {
     if (!ts || typeof ts !== 'string') return false;
-    const d = new Date(ts);
+    const d = parseDbTime(ts);
     return !isNaN(d.getTime()) && ts.startsWith('20'); // 簡單但有效：必須是可解析日期且以年份開頭
 }
 
@@ -487,7 +488,7 @@ async function checkAndRunScribe() {
     if (!unprocessed.length) return;
 
     const count = unprocessed.length;
-    const lastTimestamp = new Date(unprocessed[unprocessed.length - 1].timestamp);
+    const lastTimestamp = parseDbTime(unprocessed[unprocessed.length - 1].timestamp);
     const minutesSinceLast = (Date.now() - lastTimestamp) / 60000;
 
     const silenceReached = minutesSinceLast >= SCRIBE_CONFIG.SILENCE_MINUTES;
@@ -497,7 +498,7 @@ async function checkAndRunScribe() {
     // 時間兜底：距上次Scribe超過MAX_HOURS_STALE且有足夠未處理訊息→觸發
     // 防止連續聊天（無20分鐘空檔）時Scribe永遠不觸發
     const hoursSinceLastRun = lastRun
-        ? (Date.now() - new Date(lastRun.processed_until).getTime()) / 3600000
+        ? (Date.now() - parseDbTime(lastRun.processed_until).getTime()) / 3600000
         : Infinity;
     const staleTriggered = hoursSinceLastRun >= SCRIBE_CONFIG.MAX_HOURS_STALE
         && count >= SCRIBE_CONFIG.STALE_MIN_MESSAGES;

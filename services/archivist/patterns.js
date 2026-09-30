@@ -4,6 +4,7 @@
 // =================================================================
 
 const { getDb } = require('../../database');
+const { parseDbTime } = require('../../utils/time');
 const { callLLM } = require('../llm');
 const { USER } = require('../memoryConfig');
 const { ARCHIVIST_LLM_CONFIG_ID } = require('./constants');
@@ -43,8 +44,8 @@ const TEMPORAL_COMPLETE = /已經.*不|完全不|再也不|已经.*不|完全不
 // ── Confidence 公式（只升不降）──
 function _calcPatternConfidence(evidenceCount, firstSeen, lastSeen) {
     if (!firstSeen || !lastSeen) return 0.15 + Math.min(0.40, evidenceCount * 0.04);
-    const first = new Date(firstSeen);
-    const last = new Date(lastSeen);
+    const first = parseDbTime(firstSeen);
+    const last = parseDbTime(lastSeen);
     const spanDays = Math.max(1, (last - first) / (1000 * 60 * 60 * 24));
     // 來源多樣性：從 source_fragment_ids 中統計不同日期的碎片數——呼叫方傳入
     return Math.min(0.90,
@@ -59,7 +60,7 @@ function _calcPatternConfidence(evidenceCount, firstSeen, lastSeen) {
 // ── Freshness 衰減係數（用於注入排序，不影響 confidence）──
 function _freshnessDecay(lastSeen) {
     if (!lastSeen) return 0.10;
-    const daysSince = Math.max(0, (Date.now() - new Date(lastSeen).getTime()) / (1000 * 60 * 60 * 24));
+    const daysSince = Math.max(0, (Date.now() - parseDbTime(lastSeen).getTime()) / (1000 * 60 * 60 * 24));
     if (daysSince <= 7) return 1.00;
     if (daysSince <= 30) return 0.85;
     if (daysSince <= 90) return 0.60;
@@ -106,7 +107,7 @@ function refreshPatternStates() {
     for (const p of allPatterns) {
         try {
             const daysSince = p.last_seen
-                ? Math.max(0, (Date.now() - new Date(p.last_seen).getTime()) / (1000 * 60 * 60 * 24))
+                ? Math.max(0, (Date.now() - parseDbTime(p.last_seen).getTime()) / (1000 * 60 * 60 * 24))
                 : 999;
             const conf = p.confidence || 0.15;
 

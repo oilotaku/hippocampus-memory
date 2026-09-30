@@ -6,6 +6,7 @@ const { get_encoding } = require('tiktoken');
 const { encryption } = require('../encryption');
 const { callLLM } = require('./llm');
 const { getDb } = require('../database');
+const { parseDbTime } = require('../utils/time');
 const { fillPrompt, USER, AI } = require('./nameResolver');
 
 const enc = get_encoding('cl100k_base');
@@ -142,11 +143,10 @@ async function generateChatSummary(chatId, startMessageId = null, endMessageId =
 
         // 4. 構建總結prompt
         const parseTs = (ts) => {
-            const d = new Date(ts.includes('T') ? ts : ts.replace(' ', 'T'));
-            return {
-                date: d.toISOString().split('T')[0],
-                time: d.toTimeString().substring(0, 5)
-            };
+            // DB 時間是 UTC；prompt 給模型看的用 UTC+8（與 getTimeOfDay 一致），且不受伺服器 TZ 影響
+            const d = parseDbTime(ts);
+            const s = new Date(d.getTime() + 8 * 3600000).toISOString();
+            return { date: s.slice(0, 10), time: s.slice(11, 16) };
         };
         const startParsed = parseTs(firstTimestamp);
         const endParsed = parseTs(lastTimestamp);

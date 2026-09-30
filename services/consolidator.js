@@ -11,6 +11,7 @@
 // =================================================================
 
 const { getDb } = require('../database');
+const { parseDbTime } = require('../utils/time');
 const { sealField } = require('./memoryCrypto');
 const { callLLM } = require('./llm');
 const { fillPrompt, USER, AI } = require('./nameResolver');
@@ -645,7 +646,7 @@ async function clusterSagas() {
     // 檢查上次聚類時間（24h內不重複跑）
     const lastRun = db.prepare("SELECT run_at FROM consolidation_runs WHERE status = 'done' AND groups_consolidated = -1 ORDER BY run_at DESC LIMIT 1").get();
     if (lastRun) {
-        const hoursAgo = (Date.now() - new Date(lastRun.run_at + '+08:00').getTime()) / 3600000;
+        const hoursAgo = (Date.now() - parseDbTime(lastRun.run_at).getTime()) / 3600000;
         if (hoursAgo < 24) {
             console.log(`[Saga] 距上次聚類僅${Math.floor(hoursAgo)}h，跳過（≥24h才觸發）`);
             return { sagasWritten: 0 };

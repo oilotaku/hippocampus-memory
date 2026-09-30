@@ -66,4 +66,26 @@ const sqlDaysAgo = (days) => sqlTimeAgo(days * DAY_MS);
 /** N 毫秒後，同上格式（有效期上限之類的未來時間點） */
 const sqlTimeAhead = (ms) => sqlTimeAgo(-ms);
 
-module.exports = { getShanghaiTime, getTimeOfDay, sqlNow, sqlTimeAgo, sqlDaysAgo, sqlTimeAhead, DAY_MS };
+/**
+ * 解析 DB 存的時間字串。SQLite 的 datetime('now') 與本專案寫庫工具（sqlNow 等）產生的
+ * 'YYYY-MM-DD HH:MM[:SS]'（無時區標記）是 UTC；直接 new Date() 會被當成伺服器本地時間，
+ * 非 UTC 時區的天數／時段就會偏差。無時區標記者一律補 Z 以 UTC 解析；純日期 'YYYY-MM-DD' 視為 UTC 當天 00:00；
+ * 已帶時區（Z 或 ±hh:mm）、數字（epoch）、Date 物件則照原樣處理。無法解析時回傳 Invalid Date。
+ */
+function parseDbTime(label) {
+    if (label instanceof Date) return label;
+    if (typeof label === 'string') {
+        const s = label.trim();
+        const m = s.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)$/);
+        if (m) return new Date(`${m[1]}T${m[2]}Z`);
+        const d = s.match(/^(\d{4}-\d{2}-\d{2})$/);
+        if (d) return new Date(`${d[1]}T00:00:00Z`);
+        return new Date(s);
+    }
+    return new Date(label);
+}
+
+/** parseDbTime 的毫秒值；無法解析回傳 NaN（呼叫端自行決定預設） */
+const dbTimeMs = (label) => parseDbTime(label).getTime();
+
+module.exports = { parseDbTime, dbTimeMs, getShanghaiTime, getTimeOfDay, sqlNow, sqlTimeAgo, sqlDaysAgo, sqlTimeAhead, DAY_MS };

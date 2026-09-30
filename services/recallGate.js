@@ -14,6 +14,7 @@
 // =================================================================
 
 const { toTraditionalChars } = require('../utils/zhNormalize');
+const { parseDbTime } = require('../utils/time');
 const { toIndexTokenList } = require('../utils/cjkTokenize');
 
 // ── 預設設定與詞表（簡繁並存；比對前一律逐字轉繁體，所以這裡寫繁體即可） ──
@@ -115,17 +116,6 @@ const stripPunct = (s) => norm(s).replace(PUNCT_RE, '');
 
 const DAY_MS = 86400000;
 
-// DB 的 'YYYY-MM-DD HH:MM:SS'（無時區）是 UTC；與 librarian.parseDbTime 同規則
-function parseDbTime(label) {
-    if (label instanceof Date) return label;
-    if (typeof label === 'string') {
-        const m = label.trim().match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)$/);
-        if (m) return new Date(`${m[1]}T${m[2]}Z`);
-        const d = label.trim().match(/^(\d{4}-\d{2}-\d{2})$/);
-        if (d) return new Date(`${d[1]}T00:00:00Z`);
-    }
-    return new Date(label);
-}
 const sqlTime = (d) => d.toISOString().slice(0, 19).replace('T', ' ');
 const utcDay = (d) => Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
 const dayIndex = (d) => Math.floor(utcDay(d) / DAY_MS);

@@ -21,22 +21,27 @@
 
 const express = require('express');
 const { getDb } = require('../database');
+const { parseDbTime } = require('../utils/time');
 const router = express.Router();
 
-// 歸一化時間戳 → 'YYYY-MM-DD HH:MM:SS'
+// 歸一化時間戳 → 'YYYY-MM-DD HH:MM:SS'（UTC，與 datetime('now') 同格式；DB 的訊息時間一律是 UTC）
+// - 數字（epoch 秒或毫秒）→ 直接換成 UTC
+// - 帶時區的字串（Z、+08:00）→ 換成 UTC
+// - 不帶時區的字串（'2026-06-01 12:00:00'）：來源不明，視為伺服器本地時間（與過去行為一致）再換成 UTC
 function normalizeTime(ts) {
-    if (!ts) return null;
+    if (!ts && ts !== 0) return null;
     let d = null;
     const s = String(ts).trim();
     if (/^\d+$/.test(s)) {
         const n = parseInt(s, 10);
         d = new Date(n > 1e12 ? n : n * 1000); // 秒或毫秒
+    } else if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(s)) {
+        d = new Date(s.replace(' ', 'T')); // 無時區標記 → ECMAScript 規定當本地時間
     } else {
-        d = new Date(s.replace(' ', 'T'));
+        d = new Date(s);
     }
     if (!d || isNaN(d.getTime())) return null;
-    const p = (x) => String(x).padStart(2, '0');
-    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+    return d.toISOString().slice(0, 19).replace('T', ' ');
 }
 
 // 簡單格式的 sender → 'user'/'ai'
@@ -88,7 +93,7 @@ router.post('/messages', (req, res) => {
             msgs[i].timestamp = normalizeTime(cursor);
             cursor -= 1000;
         } else {
-            cursor = new Date(msgs[i].timestamp.replace(' ', 'T')).getTime() - 1000;
+            cursor = parseDbTime(msgs[i].timestamp).getTime() - 1000;
         }
     }
 
@@ -108,3 +113,4 @@ router.post('/messages', (req, res) => {
 });
 
 module.exports = router;
+module.exports.normalizeTime = normalizeTime;

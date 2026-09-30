@@ -13,6 +13,7 @@
 const { getDb } = require('../database');
 const { encryption } = require('../encryption');
 const { toTraditionalChars } = require('../utils/zhNormalize');
+const { parseDbTime } = require('../utils/time');
 
 // ── TTL helpers for current_state display ──
 const TTL_LABELS = {
@@ -21,7 +22,7 @@ const TTL_LABELS = {
 
 function formatTimeAgo(dateStr) {
     if (!dateStr) return '近期';
-    const minutesAgo = Math.round((Date.now() - new Date(dateStr)) / (1000 * 60));
+    const minutesAgo = Math.round((Date.now() - parseDbTime(dateStr).getTime()) / (1000 * 60));
     if (minutesAgo < 60) return `${minutesAgo}分鐘前`;
     const hoursAgo = Math.round(minutesAgo / 60);
     if (hoursAgo < 24) return `${hoursAgo}小時前`;
@@ -37,7 +38,7 @@ function formatTtlHint(createdAt, decayParams) {
     const TTL_HOURS = { hours: 8, day: 24, days: 72 };
     const ttlHours = TTL_HOURS[ttlCat];
     if (!ttlHours) return '';
-    const expiresAt = new Date(new Date(createdAt).getTime() + ttlHours * 60 * 60 * 1000);
+    const expiresAt = new Date(parseDbTime(createdAt).getTime() + ttlHours * 60 * 60 * 1000);
     const remainingMs = expiresAt - Date.now();
     if (remainingMs <= 0) return '，即將過期';
     const remainingH = Math.round(remainingMs / (1000 * 60 * 60));
@@ -258,7 +259,7 @@ function getTriggeredIntuition(userMessage, maxTokens = 800) {
       // v5.0: prefer explicit expires_at over legacy TTL calculation
       let ttlHint = '';
       if (s.expires_at) {
-        const remainingMs = new Date(s.expires_at) - Date.now();
+        const remainingMs = parseDbTime(s.expires_at).getTime() - Date.now();
         if (remainingMs <= 0) {
           ttlHint = '，已過期';
         } else {
@@ -297,7 +298,7 @@ function getTriggeredIntuition(userMessage, maxTokens = 800) {
     for (const e of allEntities.slice(0, 5)) {
       const cached = _entityCache.has(e.id) && !matchedEntities.find(m => m.id === e.id);
       const updatedAgo = e.overview_updated_at
-        ? Math.round((Date.now() - new Date(e.overview_updated_at)) / (1000*60*60*24))
+        ? Math.round((Date.now() - parseDbTime(e.overview_updated_at).getTime()) / (1000*60*60*24))
         : null;
       const freshness = cached ? '（從快取保留）'
         : updatedAgo !== null && updatedAgo > 3 ? `（${updatedAgo}天前更新）`
@@ -335,7 +336,7 @@ function getTriggeredIntuition(userMessage, maxTokens = 800) {
       for (const bg of msgBigrams) { if (pBigrams.has(bg)) overlap++; }
       if (overlap >= 3) {
         const spanMonths = p.first_seen && p.last_seen
-          ? Math.round((new Date(p.last_seen) - new Date(p.first_seen)) / (1000 * 60 * 60 * 24 * 30))
+          ? Math.round((parseDbTime(p.last_seen) - parseDbTime(p.first_seen)) / (1000 * 60 * 60 * 24 * 30))
           : 0;
         const spanLabel = spanMonths > 0 ? `，跨${spanMonths}個月` : '';
         lines.push(`◇ ${p.content}（${p.evidence_count}次觀察${spanLabel}）`);

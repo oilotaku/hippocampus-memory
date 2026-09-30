@@ -4,6 +4,7 @@
 // =================================================================
 
 const { getDb } = require('../../database');
+const { parseDbTime } = require('../../utils/time');
 const { callLLM } = require('../llm');
 const { SKIP_NAMES, USER, AI } = require('../memoryConfig');
 const { runUserModelCycle, matchEvidenceFromFragments, processModelDecay, resolveExpiredStates, MIN_GAP_USER_MODEL } = require('../cognitiveModel');
@@ -164,7 +165,7 @@ function scheduleTick() {
 function getLastUserMessageTime() {
     const db = getDb();
     const row = db.prepare("SELECT timestamp FROM messages WHERE sender = 'user' ORDER BY id DESC LIMIT 1").get();
-    return row ? new Date(row.timestamp).getTime() : 0;
+    return row ? parseDbTime(row.timestamp).getTime() : 0;
 }
 
 
