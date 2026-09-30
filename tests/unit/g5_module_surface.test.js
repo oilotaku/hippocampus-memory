@@ -22,7 +22,7 @@ const load = (p) => require(path.join(ROOT, p));
 
 // 舊路徑 → 新路徑（已搬的群）
 const MOVED = [
-
+    ['services/scribeQuality.js', 'services/hippocampus/dentate/scribeQuality.js']
 ];
 
 if (process.env.G5_RECORD === '1') {
