@@ -64,11 +64,11 @@ async function main() {
         if (!fragId) throw new Error('写入失败');
     });
     test('FTS5 索引同步', () => {
-        // 索引侧是 splitCJK 展开的单字形态（中文按单字切），查整串「冒烟测试」永远查不到。
-        // 这里必须按 librarian 的方式查：拆成单字再 OR。
-        const matchStr = [...'冒烟测试'].map(c => `"${c}"`).join(' OR ');
+        // 索引侧是 splitCJK 展开的两字组形态，查整串「冒烟测试」永远查不到。
+        // 这里必须按 librarian 的方式查：切成两字组再 OR。
+        const matchStr = require('../utils/cjkTokenize').toMatchQuery('冒烟测试');
         const r = db.prepare('SELECT COUNT(*) c FROM memory_fragments_fts WHERE memory_fragments_fts MATCH ?').get(matchStr);
-        if (r.c === 0) throw new Error('FTS5 未索引（单字检索无命中）');
+        if (r.c === 0) throw new Error('FTS5 未索引（两字组检索无命中）');
     });
     test('清理测试碎片', () => {
         db.prepare('DELETE FROM memory_fragments WHERE id = ?').run(fragId);

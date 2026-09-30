@@ -1,6 +1,7 @@
 const { getDb } = require('../database');
 const { encryption } = require('../encryption');
 const { AI } = require('./nameResolver');
+const { toQueryTokens } = require('../utils/cjkTokenize');
 
 // ── 检索排除源（从 memory_config.json 读取）──
 const EXCLUDED_SOURCES = (() => {
@@ -202,24 +203,13 @@ function tokenize(userMessage) {
     .filter(t => t.length >= 2 && !stopWords.has(t));
 }
 
-// CJK单字分割（给memory_fragments_fts用，它的索引是单字粒度）
-// 过滤高频停用字，避免「上/了/的」等字匹配几乎所有碎片
-const CJK_STOP_CHARS = new Set(['的','了','在','是','我','你','他','她','它','们','和','与','或','但','而','也','都','就','把','被','让','给','从','到','对','为','以','及','等','这','那','有','没','不','很','太','更','最','会','能','要','想','说','去','来','看','做','用','中','上','下','里','外','吗','呢','吧','啊','哦','嗯','啦','嘛','哈','呀','哇','呵','嗨','哟','嘿','噢']);
+// CJK 两字组切分（memory_fragments_fts / memories_fts 的索引是重叠两字组，见 utils/cjkTokenize.js）
+// 停用字：整个 token 全由停用字组成（单字，或两字都是）时丢弃，避免「在哪」「什么」之类噪声
+const CJK_STOP_CHARS = new Set(['的','了','在','是','我','你','他','她','它','们','和','与','或','但','而','也','都','就','把','被','让','给','从','到','对','为','以','及','等','这','那','有','没','不','很','太','更','最','会','能','要','想','说','去','来','看','做','用','中','上','下','里','外','吗','呢','吧','啊','哦','嗯','啦','嘛','哈','呀','哇','呵','嗨','哟','嘿','噢',
+  // 繁体对应
+  '們','與','為','對','沒','會','說','來','裡','裏','過','著','嗎','喔','哪','麼','么','什']);
 function tokenizeCJK(userMessage) {
-  const wordTokens = tokenize(userMessage);
-  const cjkRe = /[一-鿿㐀-䶿]/g;
-  const tokens = [];
-  for (const t of wordTokens) {
-    const chars = t.match(cjkRe);
-    if (chars) {
-      for (const ch of chars) {
-        if (!CJK_STOP_CHARS.has(ch)) tokens.push(ch);
-      }
-    } else {
-      tokens.push(t);
-    }
-  }
-  return tokens;
+  return toQueryTokens(userMessage, { stopChars: CJK_STOP_CHARS, minWordLen: 2 });
 }
 
 function searchFragments(userMessage, limit = 8) {
@@ -257,10 +247,10 @@ function searchFragments(userMessage, limit = 8) {
     // v5.3: 重新启用 episode（memories 表）FTS5 检索
     // v5.0 退役旧冥想盆是因为 episode 来源（旧知识树）已废弃
     // v5.3 consolidateCategory 改为从 entity_profiles 星座产出，episode 质量可靠
-    const wordTokens = tokenize(userMessage);
-    if (wordTokens.length > 0) {
+    // memories_fts 同样是两字组索引（v104），与碎片通道共用 token
+    if (cjkTokens.length > 0) {
       try {
-        const matchStr = wordTokens.map(t => `"${t.replace(/"/g, '""')}"*`).join(' OR ');
+        const matchStr = cjkTokens.map(t => `"${t.replace(/"/g, '""')}"`).join(' OR ');
         const rows = db.prepare(`
           SELECT m.id, m.title AS content, (m.weight / 10.0) AS weight,
                  m.valid_from AS date_label, m.created_at,
@@ -706,4 +696,4 @@ function formatHybridContext(fragments) {
   return output.join('\n');
 }
 
-module.exports = { searchFragments, formatForContext, searchHybrid, formatHybridContext, classifyIntent, lookupEntityIds, getEntityFragments };
+module.exports = { tokenizeCJK, searchFragments, formatForContext, searchHybrid, formatHybridContext, classifyIntent, lookupEntityIds, getEntityFragments };

@@ -5,10 +5,10 @@
 // 这带来两个坑：
 //   1. 用 COUNT(*) / rowid 查询验证同步状态是**量不到**的——它会委托到内容表，永远返回"看起来对"。
 //      真正可信的是 _docsize 影子表（每个被索引的文档一行）。
-//   2. 索引里的文本是 splitCJK 展开过的（中文按单字切），而 FTS5 自带的 'rebuild' 指令
-//      是拿内容表**原文**重新分词——跑一次，单字索引整条失效，而且零报错。
+//   2. 索引里的文本是 splitCJK 展开过的（中文按重叠两字组切），而 FTS5 自带的 'rebuild' 指令
+//      是拿内容表**原文**重新分词——跑一次，两字组索引整条失效，而且零报错。
 //
-// 所以本脚本不用 'rebuild' 指令，而是 DROP + CREATE + 按 splitCJK 回补，最后用 _docsize 验证。
+// 所以本脚本不用 'rebuild' 指令，而是 DROP + CREATE + 按 splitCJK（两字组）回补，最后用 _docsize 验证。
 //
 // 什么时候要跑：检索结果对不上、搜旧词还能命中已删的记忆、数据库损坏恢复之后。
 //
@@ -18,28 +18,26 @@
 
 require('dotenv').config();
 const { initDatabase, getDb } = require('../database');
+const { toIndexTokens } = require('../utils/cjkTokenize');
 
 const CHECK_ONLY = process.argv.includes('--check');
 
 initDatabase();
 const db = getDb();
 
-// CJK 单字分割（与 database.js 里注册的 splitCJK SQL 函数保持一致）
-const CJK_RE = /[一-鿿㐀-䶿豈-﫿]/g;
-function splitCJK(text) {
-    return text ? text.replace(CJK_RE, ' $& ') : '';
-}
+// 两字组切分（与 database.js 里注册的 splitCJK SQL 函数共用同一实作）
+const splitCJK = toIndexTokens;
 
 // ── 体检：用 _docsize 影子表，而不是 COUNT(*) ──
 function health() {
     const fragIndexed = db.prepare('SELECT COUNT(*) c FROM memory_fragments_fts_docsize').get().c;
-    const fragActive  = db.prepare("SELECT COUNT(*) c FROM memory_fragments WHERE status = 'active'").get().c;
+    const fragActive  = db.prepare('SELECT COUNT(*) c FROM memory_fragments').get().c;
     const memIndexed  = db.prepare('SELECT COUNT(*) c FROM memories_fts_docsize').get().c;
     const memTotal    = db.prepare('SELECT COUNT(*) c FROM memories').get().c;
     const triggers    = db.prepare("SELECT COUNT(*) c FROM sqlite_master WHERE type = 'trigger'").get().c;
 
     console.log('── FTS 体检 ──');
-    console.log(`  memory_fragments_fts 已索引 ${fragIndexed} 条（活跃碎片 ${fragActive}）${fragIndexed === fragActive ? ' ✅' : ' ❌ 不一致'}`);
+    console.log(`  memory_fragments_fts 已索引 ${fragIndexed} 条（碎片总数 ${fragActive}，触发器对所有状态建索引）${fragIndexed === fragActive ? ' ✅' : ' ❌ 不一致'}`);
     console.log(`  memories_fts 已索引 ${memIndexed} 条（源表 ${memTotal}）${memIndexed === memTotal ? ' ✅' : ' ❌ 不一致'}`);
     console.log(`  触发器 ${triggers} 个（应为 6）${triggers === 6 ? ' ✅' : ' ❌'}`);
     console.log('  （注：COUNT(*) 查 FTS 表会委托到内容表，量不到不一致——所以这里必须看 _docsize）');
@@ -76,9 +74,9 @@ db.exec(`
         USING fts5(title, tags_text);
 `);
 
-// 3. 回补 memory_fragments_fts（活跃碎片 + CJK 单字分割）
+// 3. 回补 memory_fragments_fts（全部碎片 + CJK 两字组）
 const frags = db.prepare(
-    "SELECT id, content, COALESCE(entity, '') AS entity FROM memory_fragments WHERE status = 'active'"
+    "SELECT id, content, COALESCE(entity, '') AS entity FROM memory_fragments"
 ).all();
 const insFrag = db.prepare('INSERT INTO memory_fragments_fts(rowid, content, entity) VALUES (?, ?, ?)');
 db.transaction((rows) => {
@@ -92,7 +90,7 @@ const insMem = db.prepare('INSERT INTO memories_fts(rowid, title, tags_text) VAL
 db.transaction((rows) => {
     for (const r of rows) {
         const tagsText = r.tags.replace(/\["/g, '').replace(/"\]/g, '').replace(/","/g, ' ').replace(/"/g, '');
-        insMem.run(r.id, r.title, tagsText);
+        insMem.run(r.id, splitCJK(r.title), splitCJK(tagsText));
     }
 })(mems);
 console.log(`  回补 memories_fts: ${mems.length} 条`);
@@ -119,8 +117,8 @@ db.exec(`
     CREATE TRIGGER memories_fts_insert
         AFTER INSERT ON memories BEGIN
             INSERT INTO memories_fts(rowid, title, tags_text)
-            VALUES (new.id, COALESCE(new.title, ''),
-                COALESCE(REPLACE(REPLACE(REPLACE(REPLACE(new.tags, '["', ''), '"]', ''), '","', ' '), '"', ''), ''));
+            VALUES (new.id, splitCJK(COALESCE(new.title, '')),
+                splitCJK(COALESCE(REPLACE(REPLACE(REPLACE(REPLACE(new.tags, '["', ''), '"]', ''), '","', ' '), '"', ''), '')));
         END;
     CREATE TRIGGER memories_fts_delete
         AFTER DELETE ON memories BEGIN
@@ -129,8 +127,8 @@ db.exec(`
     CREATE TRIGGER memories_fts_update
         AFTER UPDATE ON memories BEGIN
             UPDATE memories_fts
-            SET title = COALESCE(new.title, ''),
-                tags_text = COALESCE(REPLACE(REPLACE(REPLACE(REPLACE(new.tags, '["', ''), '"]', ''), '","', ' '), '"', ''), '')
+            SET title = splitCJK(COALESCE(new.title, '')),
+                tags_text = splitCJK(COALESCE(REPLACE(REPLACE(REPLACE(REPLACE(new.tags, '["', ''), '"]', ''), '","', ' '), '"', ''), ''))
             WHERE rowid = new.id;
         END;
 `);

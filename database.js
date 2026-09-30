@@ -5,6 +5,7 @@
 const Database = require('better-sqlite3');
 const { encryption } = require('./encryption');
 const { sqlNow } = require('./utils/time');
+const { toIndexTokens } = require('./utils/cjkTokenize');
 
 let db;
 let _initialized = false;
@@ -280,10 +281,7 @@ function initDatabase() {
     // （ingest 的默认频道是 1）。已移除。
 
     // ── CJK 函数（每次注册，幂等） ──
-    db.function('splitCJK', (text) => {
-        if (!text) return '';
-        return text.replace(/[一-鿿㐀-䶿豈-﫿]/g, ' $& ');
-    });
+    db.function('splitCJK', (text) => toIndexTokens(text));
 
     // ═══════════════════════════════════════════════════════════
     // 版本化迁移 — 每条只跑一次
@@ -1166,6 +1164,50 @@ function initDatabase() {
     // 都会报 no such column。单开一条迁移补上（列已存在时自动跳过）。
     runMigration(103, 'v5.17: 补 memory_fragments.insight（v63 整块被跳过导致漏建）',
         `ALTER TABLE memory_fragments ADD COLUMN insight TEXT;`);
+
+    // v104: FTS 改为中文两字组（bigram）索引。
+    // splitCJK 现在产出重叠两字组；memories_fts 触发器也改走 splitCJK（原先未切分，
+    // 中文整串成一个 token，只能靠前缀匹配）。存量索引全部重建。
+    // 触发器对所有碎片建索引（与 insert/update/delete 触发器一致，不看 status）。
+    if (!db.prepare('SELECT 1 FROM schema_version WHERE version = 104').get()) {
+        try {
+            const tagsExpr = (c) => `COALESCE(REPLACE(REPLACE(REPLACE(REPLACE(${c}, '["', ''), '"]', ''), '","', ' '), '"', ''), '')`;
+            db.transaction(() => {
+                db.exec(`
+                    DROP TRIGGER IF EXISTS memories_fts_insert;
+                    DROP TRIGGER IF EXISTS memories_fts_update;
+                    DROP TRIGGER IF EXISTS memories_fts_delete;
+                    CREATE TRIGGER memories_fts_insert
+                        AFTER INSERT ON memories BEGIN
+                            INSERT INTO memories_fts(rowid, title, tags_text)
+                            VALUES (new.id, splitCJK(COALESCE(new.title, '')), splitCJK(${tagsExpr('new.tags')}));
+                        END;
+                    CREATE TRIGGER memories_fts_update
+                        AFTER UPDATE ON memories BEGIN
+                            UPDATE memories_fts
+                            SET title = splitCJK(COALESCE(new.title, '')),
+                                tags_text = splitCJK(${tagsExpr('new.tags')})
+                            WHERE rowid = new.id;
+                        END;
+                    CREATE TRIGGER memories_fts_delete
+                        AFTER DELETE ON memories BEGIN
+                            DELETE FROM memories_fts WHERE rowid = old.id;
+                        END;
+                    INSERT INTO memory_fragments_fts(memory_fragments_fts) VALUES ('delete-all');
+                    INSERT INTO memory_fragments_fts(rowid, content, entity)
+                        SELECT id, splitCJK(content), splitCJK(COALESCE(entity, '')) FROM memory_fragments;
+                    DELETE FROM memories_fts;
+                    INSERT INTO memories_fts(rowid, title, tags_text)
+                        SELECT id, splitCJK(COALESCE(title, '')), splitCJK(${tagsExpr('tags')}) FROM memories;
+                `);
+                db.prepare('INSERT OR IGNORE INTO schema_version (version, name, applied_at) VALUES (?, ?, ?)')
+                  .run(104, 'v5.18: FTS 中文两字组索引重建', sqlNow());
+            })();
+            console.log('[DB] v104 FTS 中文两字组索引重建 ✓');
+        } catch (e) {
+            console.error('[DB] v104 FTS 两字组重建失败:', e.message);
+        }
+    }
 
     // 种子数据：初始本体论类别（仅当表为空时插入）
     try {
