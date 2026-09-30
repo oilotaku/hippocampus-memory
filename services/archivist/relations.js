@@ -13,13 +13,13 @@ const { AUTO_LINK_ALIAS_MIN_WEIGHT, _mentionWeight, _entityMentionOwners, _alias
 
 
 // ═══════════════════════════════════════════════════════
-// v4.8: discoverRelatedEntities — 实体关系发现
+// v4.8: discoverRelatedEntities — 實體關係發現
 //
-// 共享碎片 ≥2 的实体对 → LLM 写一句关系描述 → 双方
-// related_entities。星图桥线 + 聊天 entity context 共用。
+// 共享碎片 ≥2 的實體對 → LLM 寫一句關係描述 → 雙方
+// related_entities。星圖橋線 + 聊天 entity context 共用。
 // ═══════════════════════════════════════════════════════
 
-// 写实体关系到双方 related_entities（新增或更新）
+// 寫實體關係到雙方 related_entities（新增或更新）
 // opts.reviewed = 'YYYY-MM-DD' stamps `last_reviewed` — for relations that have no
 // co-occurring fragments by construction (tag-derived ones). Without the stamp they'd
 // be re-judged as dead by reviewEntityRelations() on the very next run.
@@ -158,9 +158,9 @@ async function reviewEntityRelations({ dryRun = false, maxAgeDays = RELATION_MAX
     // ── ① dead pointers: free, remove directly ──
     let dropped = 0;
     for (const d of deadPtrs) {
-        if (dryRun) { dropped++; console.log(`[Archivist] ✂️ (dry) 断桥（对端${d.peerStatus}）: ${d.ent.name} ↔ ${d.rel.name}`); continue; }
+        if (dryRun) { dropped++; console.log(`[Archivist] ✂️ (dry) 斷橋（對端${d.peerStatus}）: ${d.ent.name} ↔ ${d.rel.name}`); continue; }
         if (_dropEntityRelation(d.ent.id, d.rel.id)) dropped++;
-        console.log(`[Archivist] ✂️ 断桥（对端${d.peerStatus}）: ${d.ent.name} ↔ ${d.rel.name} — 「${(d.rel.relation || '').slice(0, 30)}」`);
+        console.log(`[Archivist] ✂️ 斷橋（對端${d.peerStatus}）: ${d.ent.name} ↔ ${d.rel.name} — 「${(d.rel.relation || '').slice(0, 30)}」`);
     }
 
     // ── ② review queue, deduped by pair (A→B and B→A are one judgement, not two) ──
@@ -192,23 +192,23 @@ async function reviewEntityRelations({ dryRun = false, maxAgeDays = RELATION_MAX
             const frags = sideFrags.all(ent.id)
                 .map(f => `      · [${String(f.source_date || '').slice(5, 10)}] ${(f.content || '').slice(0, 80)}`)
                 .join('\n');
-            return `【${ent.name}】(${ent.category})\n    近况：${st}\n    最近素材：\n${frags || '      （无）'}`;
+            return `【${ent.name}】(${ent.category})\n    近況：${st}\n    最近素材：\n${frags || '      （無）'}`;
         };
 
-        const prompt = `有两个"记忆星座"，它们之间记着一条关系。请复审这条关系**现在还成不成立**。
+        const prompt = `有兩個"記憶星座"，它們之間記著一條關係。請複審這條關係**現在還成不成立**。
 
 ${fmtSide(a)}
 
 ${fmtSide(b)}
 
-记录的关系：「${q.rel.relation}」（当初共享 ${q.rel.shared_count || 0} 条记忆，最近一次共现：${q.days != null ? q.days + ' 天前' : '已经没有共现'}）
+記錄的關係：「${q.rel.relation}」（當初共享 ${q.rel.shared_count || 0} 條記憶，最近一次共現：${q.days != null ? q.days + ' 天前' : '已經沒有共現'}）
 
-⚠️ 判据只有一条：**如果这两个星座从此不再关联，会影响其中一方「近况」的更新吗？**
-  · **会影响** → 留着（同一位房东与住处、同一个项目的两个环节、天天在一起的人）
-  · **不影响** → 断掉（某天顺路去过一次的地方、某句话里顺口提到的两只猫、一次性的活动参与）
-    ——那类关系记在过去就够了，不需要一直挂在星座上
+⚠️ 判據只有一條：**如果這兩個星座從此不再關聯，會影響其中一方「近況」的更新嗎？**
+  · **會影響** → 留著（同一位房東與住處、同一個專案的兩個環節、天天在一起的人）
+  · **不影響** → 斷掉（某天順路去過一次的地方、某句話裡順口提到的兩隻貓、一次性的活動參與）
+    ——那類關係記在過去就夠了，不需要一直掛在星座上
 
-只输出JSON: {"keep":true|false,"why":"十个字以内"}`;
+只輸出JSON: {"keep":true|false,"why":"十個字以內"}`;
 
         try {
             const raw = await callLLM(
@@ -230,14 +230,14 @@ ${fmtSide(b)}
                     if (i >= 0) { rels[i] = { ...rels[i], last_reviewed: stamp }; _writeRelations(self.id, rels); }
                 }
                 kept++;
-                console.log(`[Archivist] 🌉 复审判留${dryRun ? '(dry)' : ''}: ${a.name} ↔ ${b.name} — ${v.why || ''}`);
+                console.log(`[Archivist] 🌉 複審判留${dryRun ? '(dry)' : ''}: ${a.name} ↔ ${b.name} — ${v.why || ''}`);
             } else {
                 if (!dryRun) { _dropEntityRelation(a.id, b.id); _dropEntityRelation(b.id, a.id); }
                 cut++;
-                console.log(`[Archivist] ✂️ 断桥（复审）${dryRun ? '(dry)' : ''}: ${a.name} ↔ ${b.name} — ${v.why || ''}（原关系：「${(q.rel.relation || '').slice(0, 30)}」）`);
+                console.log(`[Archivist] ✂️ 斷橋（複審）${dryRun ? '(dry)' : ''}: ${a.name} ↔ ${b.name} — ${v.why || ''}（原關係：「${(q.rel.relation || '').slice(0, 30)}」）`);
             }
         } catch (err) {
-            console.error('[Archivist] 关系复审 LLM 失败:', err.message);
+            console.error('[Archivist] 關係複審 LLM 失敗:', err.message);
         }
     }
 
@@ -246,7 +246,7 @@ ${fmtSide(b)}
     //      it; logging the backlog is the cheapest way to keep that visible. ──
     const backlog = queue.length - willReview.length;
     if (dropped || cut || kept || backlog) {
-        console.log(`[Archivist] 🌉 关系表体检：露得出来的 ${totalLive} 条（含归档共 ${total}）→ 死指针摘 ${dropped} → 待复审 ${queue.length}（本轮判留 ${kept} / 断 ${cut}，还剩 ${backlog} 条排队）→ 共现还活的 ${alive.length} 条`);
+        console.log(`[Archivist] 🌉 關係表體檢：露得出來的 ${totalLive} 條（含歸檔共 ${total}）→ 死指標摘 ${dropped} → 待複審 ${queue.length}（本輪判留 ${kept} / 斷 ${cut}，還剩 ${backlog} 條排隊）→ 共現還活的 ${alive.length} 條`);
     }
     if (dropped && !dryRun) {
         try {
@@ -259,25 +259,25 @@ ${fmtSide(b)}
 
 
 // ═══════════════════════════════════════════════════════
-// v5.4: discoverTagRelations — 第三条建关系的路（标签桥）
+// v5.4: discoverTagRelations — 第三條建關係的路（標籤橋）
 //
-// 星座的 `tags` 是模型写的「这个星座是什么」。当某个 tag 正好是另一个星座的名字时，
-// 那就是**这个星座自己认的关系**——而没有任何东西读它。
-// 为什么需要它：另外两条路都会漏掉同一类结构——
-//   · 共现路要求 shared >= 2。一个「作品与其出品方/平台」式的对子，素材里未必
-//     有两条同时提到两者，于是永远够不到门槛。
-//   · 语义兜底路的 category 白名单是 event/place/person，`consumed`/`project` 那侧
-//     进不了候选池。
+// 星座的 `tags` 是模型寫的「這個星座是什麼」。當某個 tag 正好是另一個星座的名字時，
+// 那就是**這個星座自己認的關係**——而沒有任何東西讀它。
+// 為什麼需要它：另外兩條路都會漏掉同一類結構——
+//   · 共現路要求 shared >= 2。一個「作品與其出品方/平臺」式的對子，素材裡未必
+//     有兩條同時提到兩者，於是永遠夠不到門檻。
+//   · 語義兜底路的 category 白名單是 event/place/person，`consumed`/`project` 那側
+//     進不了候選池。
 //
-// ⚠️ 它**继承模型写 tags 时的毛病**，所以候选词要过跟别名链接器**同一套门**
-//    （`_mentionWeight` / `_aliasAmbiguous` —— 同一个定义处，不另抄一份）。
-//    真实数据上跑过一轮：19 条候选放行 12 / 挡掉 7，挡掉的正好包含一个错标签
-//    （把一次跟某机构无关的事，标成了那个机构）——因为它只有两个字，跟泛称一个待遇。
-//    **门比 prompt 有用：那条连 LLM 都没走到。**
-// ⚠️ 写出来的关系要**盖 last_reviewed 章**：标签桥天然没有共现碎片，
-//    reviewEntityRelations 判枯的判据是「现在一条都不共享」——不盖章的话，
-//    下一轮刚建的桥就会被当枯桥重审然后断掉，**等于白建**。
-// ⚠️ 不直接写库，仍然交给 LLM 写那一句话——它有权填 null（标签打错了就填 null）。
+// ⚠️ 它**繼承模型寫 tags 時的毛病**，所以候選詞要過跟別名連結器**同一套門**
+//    （`_mentionWeight` / `_aliasAmbiguous` —— 同一個定義處，不另抄一份）。
+//    真實資料上跑過一輪：19 條候選放行 12 / 擋掉 7，擋掉的正好包含一個錯標籤
+//    （把一次跟某機構無關的事，標成了那個機構）——因為它只有兩個字，跟泛稱一個待遇。
+//    **門比 prompt 有用：那條連 LLM 都沒走到。**
+// ⚠️ 寫出來的關係要**蓋 last_reviewed 章**：標籤橋天然沒有共現碎片，
+//    reviewEntityRelations 判枯的判據是「現在一條都不共享」——不蓋章的話，
+//    下一輪剛建的橋就會被當枯橋重審然後斷掉，**等於白建**。
+// ⚠️ 不直接寫庫，仍然交給 LLM 寫那一句話——它有權填 null（標籤打錯了就填 null）。
 // ═══════════════════════════════════════════════════════
 
 const TAG_RELATION_MAX_PER_RUN = 10;
@@ -323,12 +323,12 @@ async function discoverTagRelations({ dryRun = false, maxPerRun = TAG_RELATION_M
             if (have.has(other.id)) continue;
             if (!byExact) {
                 if (_mentionWeight(t) < AUTO_LINK_ALIAS_MIN_WEIGHT) { blocked.push(`${e.name}←「${t}」(太短)`); continue; }
-                // ⚠️ 已知的过度保守：`_aliasAmbiguous` 问的是「这个词跟*别的*实体的叫法
-                //    互相包含吗」。这里 tag 已经解析到了 other，但守卫不知道 other 是
-                //    "自己人"——所以当 other 自己另有一个短别名是它的子串时会误判。
-                //    实数据上没咬到（19 条里 0 条），代价也只是"少建一条真桥"，
-                //    按「宁可少一条真的，不要多一条假的」先留着。要修的话是给它加一个
-                //    ignoreIds 参数，把 other.id 一起忽略掉。
+                // ⚠️ 已知的過度保守：`_aliasAmbiguous` 問的是「這個詞跟*別的*實體的叫法
+                //    互相包含嗎」。這裡 tag 已經解析到了 other，但守衛不知道 other 是
+                //    "自己人"——所以當 other 自己另有一個短別名是它的子串時會誤判。
+                //    實資料上沒咬到（19 條裡 0 條），代價也只是"少建一條真橋"，
+                //    按「寧可少一條真的，不要多一條假的」先留著。要修的話是給它加一個
+                //    ignoreIds 引數，把 other.id 一起忽略掉。
                 if (_aliasAmbiguous(e.id, t, owners)) { blocked.push(`${e.name}←「${t}」(指代不明)`); continue; }
             }
             cands.push({ a: e, b: other, tag: t, exact: !!byExact });
@@ -345,7 +345,7 @@ async function discoverTagRelations({ dryRun = false, maxPerRun = TAG_RELATION_M
     }
 
     if (blocked.length) {
-        console.log(`[Archivist] 🏷️ 标签桥挡在门外 ${blocked.length} 个（跟别名链接器同一套门）：[${blocked.slice(0, 5).join(' ')}]`);
+        console.log(`[Archivist] 🏷️ 標籤橋擋在門外 ${blocked.length} 個（跟別名連結器同一套門）：[${blocked.slice(0, 5).join(' ')}]`);
     }
     if (queue.length === 0) return { discovered: 0, blocked: blocked.length };
     if (!_canCallLLM(1)) return { discovered: 0, pending: queue.length, blocked: blocked.length };
@@ -359,23 +359,23 @@ async function discoverTagRelations({ dryRun = false, maxPerRun = TAG_RELATION_M
     const fmtSide = (ent) => {
         const st = (ent.current_status || '').replace(/\n/g, ' / ').slice(0, 100);
         const fr = sideFrags.all(ent.id).map(f => `      · ${(f.content || '').slice(0, 70)}`).join('\n');
-        return `「${ent.name}」(${ent.category})${st ? `\n    近况：${st}` : ''}${fr ? `\n    素材：\n${fr}` : ''}`;
+        return `「${ent.name}」(${ent.category})${st ? `\n    近況：${st}` : ''}${fr ? `\n    素材：\n${fr}` : ''}`;
     };
     const pairBlocks = batch.map((c, i) =>
-        `[${i}] ${fmtSide(c.a)}\n    它的标签里写着 →「${c.tag}」\n${fmtSide(c.b)}`
+        `[${i}] ${fmtSide(c.a)}\n    它的標籤裡寫著 →「${c.tag}」\n${fmtSide(c.b)}`
     ).join('\n\n');
 
-    const prompt = `下面每一对星座，是**其中一个的标签里写着另一个的名字**。标签是自动打的，
-可能打错。请判断这个标签是不是真的指向某种关系，写一句话说明。
+    const prompt = `下面每一對星座，是**其中一個的標籤裡寫著另一個的名字**。標籤是自動打的，
+可能打錯。請判斷這個標籤是不是真的指向某種關係，寫一句話說明。
 
-⚠️ 关系必须是**能一句话验证的事实**（同一个项目与其出品方、同一个人与其常住地、
-同一件事与其发生场所）。写不出一句能验证的事实，就说明它其实没关系 → 填 null。
-⚠️ **宁可空着，不要编一句听起来合理的。** 标签打错的情况真实存在（比如某家机构被
-打上了"某次活动"的标签，而那次活动其实不在那家机构办的）——那种要填 null。
+⚠️ 關係必須是**能一句話驗證的事實**（同一個專案與其出品方、同一個人與其常住地、
+同一件事與其發生場所）。寫不出一句能驗證的事實，就說明它其實沒關係 → 填 null。
+⚠️ **寧可空著，不要編一句聽起來合理的。** 標籤打錯的情況真實存在（比如某家機構被
+打上了"某次活動"的標籤，而那次活動其實不在那家機構辦的）——那種要填 null。
 
 ${pairBlocks}
 
-只输出JSON数组: [{"pair":0,"relation":"一句话描述或null"}, ...]`;
+只輸出JSON陣列: [{"pair":0,"relation":"一句話描述或null"}, ...]`;
 
     let items;
     try {
@@ -390,7 +390,7 @@ ${pairBlocks}
         if (!m) return { discovered: 0, pending: queue.length - batch.length, blocked: blocked.length };
         items = JSON.parse(m[0]);
     } catch (e) {
-        console.error('[Archivist] 标签桥 LLM 失败:', e.message);
+        console.error('[Archivist] 標籤橋 LLM 失敗:', e.message);
         return { discovered: 0, blocked: blocked.length };
     }
 
@@ -400,12 +400,12 @@ ${pairBlocks}
         const c = batch[item.pair];
         if (!c) continue;
         if (!item.relation || item.relation === 'null') {
-            console.log(`[Archivist] ⏭️ 标签桥不成关系: ${c.a.name} --「${c.tag}」--> ${c.b.name}`);
+            console.log(`[Archivist] ⏭️ 標籤橋不成關係: ${c.a.name} --「${c.tag}」--> ${c.b.name}`);
             continue;
         }
         const rel = String(item.relation).slice(0, 60);
         if (dryRun) {
-            console.log(`[Archivist] 🏷️ (dry) 标签桥: ${c.a.name} ↔ ${c.b.name} — ${rel}`);
+            console.log(`[Archivist] 🏷️ (dry) 標籤橋: ${c.a.name} ↔ ${c.b.name} — ${rel}`);
             discovered++;
             continue;
         }
@@ -413,9 +413,9 @@ ${pairBlocks}
             _writeEntityRelation(c.a, c.b, rel, 0, { reviewed: stamp });
             _writeEntityRelation(c.b, c.a, rel, 0, { reviewed: stamp });
             discovered++;
-            console.log(`[Archivist] 🏷️ 标签桥: ${c.a.name} ↔ ${c.b.name} — ${rel}`);
+            console.log(`[Archivist] 🏷️ 標籤橋: ${c.a.name} ↔ ${c.b.name} — ${rel}`);
         } catch (e) {
-            console.error('[Archivist] 标签桥写入失败:', e.message);
+            console.error('[Archivist] 標籤橋寫入失敗:', e.message);
         }
     }
     if (discovered > 0 && !dryRun) {
@@ -439,7 +439,7 @@ async function discoverRelatedEntities() {
     try {
         await reviewEntityRelations();
     } catch (e) {
-        console.error('[Archivist] 关系表体检失败:', e.message);
+        console.error('[Archivist] 關係表體檢失敗:', e.message);
     }
 
     // Tag bridges are an INDEPENDENT path, so they're called here — the co-occurrence
@@ -450,7 +450,7 @@ async function discoverRelatedEntities() {
         const tagRes = await discoverTagRelations();
         discovered += (tagRes?.discovered || 0);
     } catch (e) {
-        console.error('[Archivist] 标签桥失败:', e.message);
+        console.error('[Archivist] 標籤橋失敗:', e.message);
     }
 
     const pairs = db.prepare(`
@@ -465,8 +465,8 @@ async function discoverRelatedEntities() {
         LIMIT 30
     `).all(...SKIP_NAMES, ...SKIP_NAMES);
 
-    // 语义关系检测：零共享碎片但有日期重叠的实体对 → LLM 判断
-    // （某地之旅 vs 某景点 — 碎片内容不重叠但属于同一旅行）
+    // 語義關係檢測：零共享碎片但有日期重疊的實體對 → LLM 判斷
+    // （某地之旅 vs 某景點 — 碎片內容不重疊但屬於同一旅行）
     if (pairs.length < 20 && _canCallLLM(2)) {
         const semanticPairs = db.prepare(`
             SELECT DISTINCT ea.id AS a_id, ea.name AS a_name, ea.category AS a_cat,
@@ -504,8 +504,8 @@ async function discoverRelatedEntities() {
         for (const cand of semanticCandidates.slice(0, 2)) {
             const sp = cand.a;
 
-            // ⚠️ 给它**证据**。原来这个 prompt 只给"两个名字 + 日期交集"，一条素材都不给
-            //    ——于是模型只能**编一句听起来合理的**。判关系不给证据 = 让它猜。
+            // ⚠️ 給它**證據**。原來這個 prompt 只給"兩個名字 + 日期交集"，一條素材都不給
+            //    ——於是模型只能**編一句聽起來合理的**。判關係不給證據 = 讓它猜。
             const evi = db.prepare(`
                 SELECT ep.name, mf.source_date, mf.content FROM (
                     SELECT fe.entity_id, mf.source_date, mf.content FROM fragment_entities fe
@@ -516,18 +516,18 @@ async function discoverRelatedEntities() {
             `).all(sp.a_id, sp.b_id);
             const evidence = evi.map(e => `  · [${String(e.source_date || '').slice(5)}][${e.name}] ${(e.content || '').slice(0, 90)}`).join('\n');
 
-            const prompt = `记忆星系中有两个星座，它们的时间线有交集（日期：${cand.days}），但记忆碎片互不重叠。
+            const prompt = `記憶星系中有兩個星座，它們的時間線有交集（日期：${cand.days}），但記憶碎片互不重疊。
 
 ${sp.a_name} (${sp.a_cat}) ↔ ${sp.b_name} (${sp.b_cat})
 
-它俩各自的近期素材（**这是给你判断用的证据，不是让你概括它**）：
-${evidence || '  （没有可用的素材）'}
+它倆各自的近期素材（**這是給你判斷用的證據，不是讓你概括它**）：
+${evidence || '  （沒有可用的素材）'}
 
-⚠️ 判断标准（关键）：**有没有哪一件事，是同时涉及它俩的？**
-· 「同一趟行程里的两个地点」「同一件事的当事人与其代理人」「同一场活动的场地与主办方」→ 是同一件事 ✓
-· 只是**日期凑巧重叠、各说各的** → 那不是关系，填 null
+⚠️ 判斷標準（關鍵）：**有沒有哪一件事，是同時涉及它倆的？**
+· 「同一趟行程裡的兩個地點」「同一件事的當事人與其代理人」「同一場活動的場地與主辦方」→ 是同一件事 ✓
+· 只是**日期湊巧重疊、各說各的** → 那不是關係，填 null
 
-有关系吗？一句话描述或填 null。只输出JSON: {"related":true|false,"relation":"一句话关系描述"}`;
+有關係嗎？一句話描述或填 null。只輸出JSON: {"related":true|false,"relation":"一句話關係描述"}`;
 
             try {
                 const raw = await callLLM(
@@ -541,18 +541,18 @@ ${evidence || '  （没有可用的素材）'}
                 if (!jsonMatch) continue;
                 const verdict = JSON.parse(jsonMatch[0]);
                 if (verdict.related && verdict.relation && verdict.relation !== 'null') {
-                    // 直接写入 related_entities（不经过 LLM 批量调用——已有关系描述）
+                    // 直接寫入 related_entities（不經過 LLM 批次呼叫——已有關係描述）
                     const aEnt = db.prepare('SELECT * FROM entity_profiles WHERE id = ?').get(sp.a_id);
                     const bEnt = db.prepare('SELECT * FROM entity_profiles WHERE id = ?').get(sp.b_id);
                     if (aEnt && bEnt) {
                         _writeEntityRelation(aEnt, bEnt, verdict.relation, 0);
                         _writeEntityRelation(bEnt, aEnt, verdict.relation, 0);
-                        console.log(`[Archivist] 🔗 语义关系: ${sp.a_name} ↔ ${sp.b_name} — ${verdict.relation}`);
+                        console.log(`[Archivist] 🔗 語義關係: ${sp.a_name} ↔ ${sp.b_name} — ${verdict.relation}`);
                         discovered++;
                     }
                 }
             } catch (e) {
-                console.error('[Archivist] 语义关系LLM失败:', e.message);
+                console.error('[Archivist] 語義關係LLM失敗:', e.message);
             }
         }
     }
@@ -560,7 +560,7 @@ ${evidence || '  （没有可用的素材）'}
     if (pairs.length === 0) return { discovered };
 
     const getEnt = db.prepare('SELECT id, name, category, overview, related_entities FROM entity_profiles WHERE id = ?');
-    // 找出还没有关系描述的对
+    // 找出還沒有關係描述的對
     const fresh = [];
     for (const p of pairs) {
         const a = getEnt.get(p.a_id), b = getEnt.get(p.b_id);
@@ -568,7 +568,7 @@ ${evidence || '  （没有可用的素材）'}
         let aRel = [];
         try { aRel = JSON.parse(a.related_entities || '[]'); } catch (_) {}
         const existing = aRel.find(r => r.id === b.id);
-        // 已有描述且共享数没显著增长 → 跳过
+        // 已有描述且共享數沒顯著增長 → 跳過
         if (existing && p.shared < (existing.shared_count || 0) * 1.5) continue;
         fresh.push({ a, b, shared: p.shared });
     }
@@ -577,7 +577,7 @@ ${evidence || '  （没有可用的素材）'}
     if (!_canCallLLM(1)) return { discovered: 0 };
 
     const batch = fresh.slice(0, 10);
-    // 给 LLM 每对附 2 条共享碎片做依据
+    // 給 LLM 每對附 2 條共享碎片做依據
     const pairBlocks = batch.map((p, i) => {
         const sharedFrags = db.prepare(`
             SELECT mf.content FROM memory_fragments mf
@@ -586,10 +586,10 @@ ${evidence || '  （没有可用的素材）'}
             LIMIT 2
         `).all(p.a.id, p.b.id);
         const evidence = sharedFrags.map(f => '  · ' + (f.content || '').slice(0, 100)).join('\n');
-        return `[${i}] "${p.a.name}"(${p.a.category}) ↔ "${p.b.name}"(${p.b.category}) 共享${p.shared}条记忆:\n${evidence}`;
+        return `[${i}] "${p.a.name}"(${p.a.category}) ↔ "${p.b.name}"(${p.b.category}) 共享${p.shared}條記憶:\n${evidence}`;
     }).join('\n\n');
 
-    // 预检：名字是子串关系的 pair（如"甲"是"甲乙"的子串）→ 加标记供 LLM 重点审查
+    // 預檢：名字是子串關係的 pair（如"甲"是"甲乙"的子串）→ 加標記供 LLM 重點審查
     const suspiciousPairs = new Set();
     for (const p of batch) {
         const aName = p.a.name, bName = p.b.name;
@@ -597,23 +597,23 @@ ${evidence || '  （没有可用的素材）'}
         if (bName.length <= 3 && aName.length > bName.length && aName.includes(bName)) suspiciousPairs.add(batch.indexOf(p));
     }
 
-    const prompt = `以下实体对在 user 的记忆中共同出现。对每对，按顺序做三件事：
+    const prompt = `以下實體對在 user 的記憶中共同出現。對每對，按順序做三件事：
 
-**① 同名异物检查**（警惕短名字是长名字的一部分，如"甲" vs "甲乙(某类店铺)"不是一回事）。
+**① 同名異物檢查**（警惕短名字是長名字的一部分，如"甲" vs "甲乙(某類店鋪)"不是一回事）。
 
-**② ⚠️「同一件事」检查（最关键的一步）**：这条共享碎片里的**那件事**，是不是**同时涉及它俩**？
-  · **是同一件事把两者绑在一起** → 真关系 ✓
-    例：同一趟行程的两个地点、同一件事的当事人与其代理人、同一场活动的场地与主办方
-  · **只是一句话里顺口都提到了** → **那是一次共现，不是关系** → 填 null
-    例：「在某个地方吃饭时提到某个人」「聊某个话题时扯到另一件事」——拿掉其中一个，
-    这件事照样成立，说明它只是被顺口带出来的
-  **自检一句话**：把这一个从这件事里拿掉，这件事还成立吗？成立 → 填 null。
+**② ⚠️「同一件事」檢查（最關鍵的一步）**：這條共享碎片裡的**那件事**，是不是**同時涉及它倆**？
+  · **是同一件事把兩者綁在一起** → 真關係 ✓
+    例：同一趟行程的兩個地點、同一件事的當事人與其代理人、同一場活動的場地與主辦方
+  · **只是一句話裡順口都提到了** → **那是一次共現，不是關係** → 填 null
+    例：「在某個地方吃飯時提到某個人」「聊某個話題時扯到另一件事」——拿掉其中一個，
+    這件事照樣成立，說明它只是被順口帶出來的
+  **自檢一句話**：把這一個從這件事裡拿掉，這件事還成立嗎？成立 → 填 null。
 
-**③ 都过了**，写一句话关系描述（≤30字，**陈述事实**）。看不出实质关系填 null。
+**③ 都過了**，寫一句話關係描述（≤30字，**陳述事實**）。看不出實質關係填 null。
 
 ${pairBlocks}
 
-只输出JSON数组: [{"pair":0,"verify":"ok|namesake|unrelated","relation":"一句话描述或null"}, ...]`;
+只輸出JSON陣列: [{"pair":0,"verify":"ok|namesake|unrelated","relation":"一句話描述或null"}, ...]`;
 
     let items;
     try {
@@ -630,7 +630,7 @@ ${pairBlocks}
         if (!jsonMatch) return { discovered: 0 };
         items = JSON.parse(jsonMatch[0]);
     } catch (e) {
-        console.error('[Archivist] 关系发现 LLM 失败:', e.message);
+        console.error('[Archivist] 關係發現 LLM 失敗:', e.message);
         return { discovered: 0 };
     }
 
@@ -640,7 +640,7 @@ ${pairBlocks}
 
         // Skip namesake or unrelated verdicts
         if (item.verify === 'namesake' || item.verify === 'unrelated') {
-            console.log(`[Archivist] ⏭️ 同名异物跳过: ${p.a.name} ↔ ${p.b.name} — ${item.verify}`);
+            console.log(`[Archivist] ⏭️ 同名異物跳過: ${p.a.name} ↔ ${p.b.name} — ${item.verify}`);
             continue;
         }
         if (!item.relation || item.relation === 'null') continue;
@@ -649,9 +649,9 @@ ${pairBlocks}
             _writeEntityRelation(p.a, p.b, item.relation, p.shared);
             _writeEntityRelation(p.b, p.a, item.relation, p.shared);
             discovered++;
-            console.log(`[Archivist] 🌉 实体关系: ${p.a.name} ↔ ${p.b.name} — ${item.relation}`);
+            console.log(`[Archivist] 🌉 實體關係: ${p.a.name} ↔ ${p.b.name} — ${item.relation}`);
         } catch (e) {
-            console.error('[Archivist] 关系写入失败:', e.message);
+            console.error('[Archivist] 關係寫入失敗:', e.message);
         }
     }
 

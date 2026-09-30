@@ -50,10 +50,10 @@ async function classifyFragments(opts = {}) {
     const unclassified = db.prepare(`
         SELECT mf.id, mf.content, mf.emotional_weight, mf.created_at
         FROM memory_fragments mf
-        // ⚠️ 入口含 consolidated/cooling：整合跑完会把碎片改成 'consolidated'，
-        // 而另一条管线也在抢同一批碎片——谁先到谁说了算。碎片一旦被写成 episode
-        // 就永久退出分类，fragment_entities 的链接再也不会建立。
-        // 配套是通的：实体概述读碎片时本来就认这三个状态。
+        // ⚠️ 入口含 consolidated/cooling：整合跑完會把碎片改成 'consolidated'，
+        // 而另一條管線也在搶同一批碎片——誰先到誰說了算。碎片一旦被寫成 episode
+        // 就永久退出分類，fragment_entities 的連結再也不會建立。
+        // 配套是通的：實體概述讀碎片時本來就認這三個狀態。
         WHERE mf.status IN ('active', 'consolidated', 'cooling')
           AND mf.source NOT IN ('music', 'book')
           AND mf.id NOT IN (SELECT DISTINCT fragment_id FROM fragment_entities)
@@ -65,7 +65,7 @@ async function classifyFragments(opts = {}) {
         return { classified: 0 };
     }
 
-    console.log(`[Archivist] 待分类碎片: ${unclassified.length} 条 (实体星系)`);
+    console.log(`[Archivist] 待分類碎片: ${unclassified.length} 條 (實體星系)`);
 
     // Load current constellations (entity_profiles grouped by category)
     const allEntities = db.prepare(`
@@ -88,7 +88,7 @@ async function classifyFragments(opts = {}) {
 
     if (constellations.length === 0) {
         // No constellations yet — defer to deep cycle / manual seeding
-        console.log('[Archivist] 无活跃星座，跳过分类（等待种子数据）');
+        console.log('[Archivist] 無活躍星座，跳過分類（等待種子資料）');
         return { classified: 0 };
     }
 
@@ -140,7 +140,7 @@ async function classifyFragments(opts = {}) {
             }
         }
 
-        console.log(`[Archivist] 轻量分类: ${classified}/${unclassified.length} 条 (关键词+bigram)`);
+        console.log(`[Archivist] 輕量分類: ${classified}/${unclassified.length} 條 (關鍵詞+bigram)`);
     } else {
         // Deep cycle: Companion-directed per-batch classification with flash-lite
         const BATCH_SIZE = 15;
@@ -152,7 +152,7 @@ async function classifyFragments(opts = {}) {
         let totalSeedsCreated = 0;
         for (const batch of batches) {
             if (!_canCallLLM(1)) {
-                console.log(`[Archivist] LLM 日配额耗尽，剩余 ${unclassified.length - classified} 条推迟`);
+                console.log(`[Archivist] LLM 日配額耗盡，剩餘 ${unclassified.length - classified} 條推遲`);
                 break;
             }
 
@@ -186,27 +186,27 @@ async function classifyFragments(opts = {}) {
             if (result.newSeeds && result.newSeeds.length > 0) {
                 for (const seed of result.newSeeds) {
                     try {
-                        // 种子质量过滤：拒单字、纯数字、空名
+                        // 種子質量過濾：拒單字、純數字、空名
                         const seedName = seed.name;
                         if (typeof seedName !== 'string' || !seedName.trim()
                             || seedName.trim().length < 2
                             || /^\d+$/.test(seedName.trim())) {
-                            console.log(`[Archivist] ⏭ 种子名不合格，跳过: "${seedName}"`);
+                            console.log(`[Archivist] ⏭ 種子名不合格，跳過: "${seedName}"`);
                             continue;
                         }
-                        // 纯日期/时间短语不是实体（上午/日下午/三点半/9月3日…）
+                        // 純日期/時間短語不是實體（上午/日下午/三點半/9月3日…）
                         if (isTimePhraseName(seedName.trim())) {
-                            console.log(`[Archivist] ⏭ 种子名是时间短语，跳过: "${seedName}"`);
+                            console.log(`[Archivist] ⏭ 種子名是時間短語，跳過: "${seedName}"`);
                             continue;
                         }
-                        // 以期间词收尾的名字也不是实体（XX告别季/XX购置季/XX倦怠期…）
+                        // 以期間詞收尾的名字也不是實體（XX告別季/XX購置季/XX倦怠期…）
                         if (isPeriodPhraseName(seedName.trim())) {
-                            console.log(`[Archivist] ⏭ 种子名是期间短语，跳过: "${seedName}"`);
+                            console.log(`[Archivist] ⏭ 種子名是期間短語，跳過: "${seedName}"`);
                             continue;
                         }
                         const existing = db.prepare('SELECT id, name, aliases FROM entity_profiles WHERE LOWER(name) = LOWER(?)').get(seed.name);
                         if (!existing) {
-                            // 检查种子名是否出现在已有实体的别名中
+                            // 檢查種子名是否出現在已有實體的別名中
                             const allEntities = db.prepare('SELECT id, name, aliases FROM entity_profiles WHERE status IN (\'active\',\'seed\')').all();
                             for (const e of allEntities) {
                                 try {
@@ -249,18 +249,18 @@ async function classifyFragments(opts = {}) {
                                 insertFe.run(seed.trigger_frag_id, r.lastInsertRowid, null, 0.50, 'companion_flash_seed');
                                 db.prepare(`UPDATE entity_profiles SET fragment_count = 1 WHERE id = ?`).run(r.lastInsertRowid);
                             }
-                            console.log(`[Archivist] 🌱 种入苗圃: ${seed.name} (${seed.category})`);
+                            console.log(`[Archivist] 🌱 種入苗圃: ${seed.name} (${seed.category})`);
                         } else if (existing.name !== seed.name) {
-                            console.log(`[Archivist] 🔗 大小写合并: "${seed.name}" → 已存在 "${existing.name}" (id=${existing.id})`);
+                            console.log(`[Archivist] 🔗 大小寫合併: "${seed.name}" → 已存在 "${existing.name}" (id=${existing.id})`);
                         }
                     } catch (e) {
-                        console.error(`[Archivist] 种子创建失败: ${seed.name}`, e.message);
+                        console.error(`[Archivist] 種子建立失敗: ${seed.name}`, e.message);
                     }
                 }
             }
         }
 
-        console.log(`[Archivist] 深循环分类: ${classified}/${unclassified.length} 条 (Companion+flash-lite, 新种子=${totalSeedsCreated})`);
+        console.log(`[Archivist] 深迴圈分類: ${classified}/${unclassified.length} 條 (Companion+flash-lite, 新種子=${totalSeedsCreated})`);
 
         // After classification: graduate seeds and prune dormant
         if (classified > 0) {
@@ -336,12 +336,12 @@ async function classifyFragmentBatch(fragments, constellations, seeds) {
     const db = getDb();
 
     // Build constellation list grouped by galaxy
-    // v4.7 evolved: 社交(人物+宠物) / 地点 / 事件 / User的星系(创作+消费+观念)
-    const galaxies = { person: '社交', pet: '社交', place: '地点', event: '事件', project: 'User的星系', work: 'User的星系', term: 'User的星系', organization: '社交' };
+    // v4.7 evolved: 社交(人物+寵物) / 地點 / 事件 / User的星系(創作+消費+觀念)
+    const galaxies = { person: '社交', pet: '社交', place: '地點', event: '事件', project: 'User的星系', work: 'User的星系', term: 'User的星系', organization: '社交' };
     const grouped = {};
     for (const c of constellations) {
-        // v5.0 防线1: 无 overview 的种子不参与 LLM 分类匹配
-        // 它们只能在 nurseryLine 中通过精确名字匹配积累碎片
+        // v5.0 防線1: 無 overview 的種子不參與 LLM 分類匹配
+        // 它們只能在 nurseryLine 中通過精確名字匹配積累碎片
         if (!c.overview) continue;
         const galaxy = galaxies[c.category] || '其他';
         if (!grouped[galaxy]) grouped[galaxy] = [];
@@ -359,8 +359,8 @@ async function classifyFragmentBatch(fragments, constellations, seeds) {
             const maxShow = Math.min(relevantSeeds.length, 30);
             const shown = relevantSeeds.slice(0, maxShow);
             const seedNames = shown.map(s => `${s.name}[id=${s.id},${s.category}]`).join(', ');
-            const extra = relevantSeeds.length > maxShow ? ` ...还有${relevantSeeds.length - maxShow}个相关种子未列出` : '';
-            nurseryLine = `\n苗圃种子（本批次可能相关，可分配碎片）：${seedNames}${extra}`;
+            const extra = relevantSeeds.length > maxShow ? ` ...還有${relevantSeeds.length - maxShow}個相關種子未列出` : '';
+            nurseryLine = `\n苗圃種子（本批次可能相關，可分配碎片）：${seedNames}${extra}`;
         }
     }
 
@@ -376,36 +376,36 @@ async function classifyFragmentBatch(fragments, constellations, seeds) {
 
     const isEarlyGrowth = constellations.length <= 5;
     const growthNote = isEarlyGrowth
-        ? `\n⚠️ 星系处于早期构建阶段：当前只有 ${constellations.length} 个星座。大多数碎片提到的实体（人物、地点、事件、作品）尚未存在于星系中。发现并播种新实体是你的核心任务。`
+        ? `\n⚠️ 星系處於早期構建階段：當前只有 ${constellations.length} 個星座。大多數碎片提到的實體（人物、地點、事件、作品）尚未存在於星系中。發現並播種新實體是你的核心任務。`
         : '';
 
-    const prompt = `你是 Companion 的实体分类助手。Companion 在整理他的记忆星系，需要你把新星星（碎片）归入正确的星座。
+    const prompt = `你是 Companion 的實體分類助手。Companion 在整理他的記憶星系，需要你把新星星（碎片）歸入正確的星座。
 
-当前星系全景：
+當前星系全景：
 ${galaxyBlocks}${nurseryLine}${growthNote}
 
-边标签类型（可选，描述 User 与实体的关系）：
-- knows: User 认识/交往的人物
-- cares_for: User 照顾的宠物
-- visited: User 去过/所在的地点
-- attended: User 参与的事件
-- created: User 创作/构建的作品
-- consumed: User 阅读/观看/聆听的消费内容
-- related_to: 兜底，说不清但有关联
-新星星待分类：
+邊標籤型別（可選，描述 User 與實體的關係）：
+- knows: User 認識/交往的人物
+- cares_for: User 照顧的寵物
+- visited: User 去過/所在的地點
+- attended: User 參與的事件
+- created: User 創作/構建的作品
+- consumed: User 閱讀/觀看/聆聽的消費內容
+- related_to: 兜底，說不清但有關聯
+新星星待分類：
 ${fragLines}
 
-你是一个在整理记忆星图的观测者。你的直觉：
+你是一個在整理記憶星圖的觀測者。你的直覺：
 
-- 当你看到碎片中浮现出一个**有名字的、独立的、可能会在更多碎片中再次出现的生命/地点/事件**——你觉得它应该是一颗种子。你给它起一个简短准确的名字，猜测它的星系归属（person/pet→社交, place→地点, event→事件, project/work/term→User的星系），种下去。
-- ⚠️ **播种前必须检查**：你要创建的新种子名字是否与已有星座完全相同、高度相似、或是已有星座的别名？如果是，**不要播种**——直接把碎片归入那个已有星座。一个实体只属于一个星座，即使你认为它应该归入不同的星系类别。
-- 当你看到碎片明确属于某个已有星座——你很确定地把星星归过去，顺手标注它与User的关系（knows/cares_for/visited/attended/created/consumed/related_to）。
-- 当你看到碎片只是一次性的、飘过去的、不会再以独立身份出现的引用——你不会为它播种。它可能属于现有星座，也可能只是一颗还没找到家的流浪星。
-- 当你拿不准——你宁可先不归类，也不硬塞。
+- 當你看到碎片中浮現出一個**有名字的、獨立的、可能會在更多碎片中再次出現的生命/地點/事件**——你覺得它應該是一顆種子。你給它起一個簡短準確的名字，猜測它的星系歸屬（person/pet→社交, place→地點, event→事件, project/work/term→User的星系），種下去。
+- ⚠️ **播種前必須檢查**：你要建立的新種子名字是否與已有星座完全相同、高度相似、或是已有星座的別名？如果是，**不要播種**——直接把碎片歸入那個已有星座。一個實體只屬於一個星座，即使你認為它應該歸入不同的星系類別。
+- 當你看到碎片明確屬於某個已有星座——你很確定地把星星歸過去，順手標註它與User的關係（knows/cares_for/visited/attended/created/consumed/related_to）。
+- 當你看到碎片只是一次性的、飄過去的、不會再以獨立身份出現的引用——你不會為它播種。它可能屬於現有星座，也可能只是一顆還沒找到家的流浪星。
+- 當你拿不準——你寧可先不歸類，也不硬塞。
 
-一条碎片可以同时归入现有星座并播种新实体。
+一條碎片可以同時歸入現有星座並播種新實體。
 
-只输出JSON数组，不要markdown标记：
+只輸出JSON陣列，不要markdown標記：
 [{"frag_id":10103,"constellations":[{"id":5,"relation":"appeared_in"}],"confidence":0.85,"new_seed":{"name":"Alice","category":"person"}}]`;
 
     try {
@@ -420,7 +420,7 @@ ${fragLines}
         const replyText = raw?.reply || raw?.text || raw?.content || '';
         const jsonMatch = replyText.match(/\[[\s\S]*\]/);
         if (!jsonMatch) {
-            console.error(`[Archivist] classifyFragmentBatch LLM响应无法解析: ${replyText.slice(0, 200)}`);
+            console.error(`[Archivist] classifyFragmentBatch LLM響應無法解析: ${replyText.slice(0, 200)}`);
             return null;
         }
 
@@ -460,14 +460,14 @@ ${fragLines}
 
         return { assignments, newSeeds };
     } catch (e) {
-        console.error('[Archivist] classifyFragmentBatch LLM调用失败:', e.message);
+        console.error('[Archivist] classifyFragmentBatch LLM呼叫失敗:', e.message);
         return null;
     }
 }
 
 
 // ═══════════════════════════════════════════════════════
-// v5.0 防线3: spotCheckClassifications — 事后抽查低置信度分类链接
+// v5.0 防線3: spotCheckClassifications — 事後抽查低置信度分類連結
 // ═══════════════════════════════════════════════════════
 
 async function spotCheckClassifications() {
@@ -489,7 +489,7 @@ async function spotCheckClassifications() {
             const prompt = `碎片: "${(lc.content||'').slice(0, 150)}"
 星座名: "${lc.name}"
 
-这条碎片真的属于"${lc.name}"星座吗？回答JSON: {"belongs": true|false, "reason": "一句话"}`;
+這條碎片真的屬於"${lc.name}"星座嗎？回答JSON: {"belongs": true|false, "reason": "一句話"}`;
 
             const raw = await callLLM(
                 [{ role: 'user', parts: [{ text: prompt }] }], null, null,
@@ -508,13 +508,13 @@ async function spotCheckClassifications() {
         } catch (_) {}
     }
 
-    if (fixed > 0) console.log(`[Archivist] 事后抽查: ${fixed}/${lowConf.length} 条错链已解除`);
+    if (fixed > 0) console.log(`[Archivist] 事後抽查: ${fixed}/${lowConf.length} 條錯鏈已解除`);
     return { checked: lowConf.length, fixed };
 }
 
 
 // ═══════════════════════════════════════════════════════
-// v4.7: reviewConstellationAfterClassification — 碎片归位后审视星座
+// v4.7: reviewConstellationAfterClassification — 碎片歸位後審視星座
 //
 // Called per-entity after a batch of fragments has been linked.
 // Checks if overview should be updated (fragment_count changed significantly).
@@ -536,7 +536,7 @@ async function reviewConstellationAfterClassification(entityId) {
     const growthRatio = lastFragCount > 0 ? (currentFragCount - lastFragCount) / lastFragCount : 1;
 
     if (growthRatio >= 0.3 && currentFragCount >= 3) {
-        console.log(`[Archivist] 📝 星座 ${entity.name} 碎片增长 ${Math.round(growthRatio * 100)}%，标记待更新概述`);
+        console.log(`[Archivist] 📝 星座 ${entity.name} 碎片增長 ${Math.round(growthRatio * 100)}%，標記待更新概述`);
         // Mark for overview regeneration (handled by regenerateEntityOverviews later in deep cycle)
         return { needsOverviewUpdate: true, growthRatio, currentFragCount, lastFragCount };
     }

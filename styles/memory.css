@@ -1,5 +1,5 @@
 /* ========================================
-   记忆星图 v5 — 样式
+   記憶星圖 v5 — 樣式
    ======================================== */
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -11,7 +11,7 @@ body {
 canvas { position: absolute; top: 0; left: 0; pointer-events: none; }
 #mc { pointer-events: all; }
 
-/* ── 顶部栏 ── */
+/* ── 頂部欄 ── */
 #topbar {
     position: absolute; top: 17px; left: 50%; transform: translateX(-50%);
     background: rgba(4, 7, 22, 0.58); backdrop-filter: blur(20px);
@@ -40,7 +40,7 @@ canvas { position: absolute; top: 0; left: 0; pointer-events: none; }
     color: rgba(220, 230, 255, 0.92); box-shadow: 0 0 7px var(--gc, rgba(100, 120, 255, 0.15));
 }
 
-/* ── 面包屑 ── */
+/* ── 麵包屑 ── */
 #breadcrumb {
     position: absolute; top: 19px; left: 20px; z-index: 30;
     display: flex; align-items: center; gap: 6px;
@@ -57,7 +57,7 @@ canvas { position: absolute; top: 0; left: 0; pointer-events: none; }
 .bc-item.active { color: rgba(220, 230, 255, 0.92); cursor: default; }
 .bc-sep { font-size: 11px; color: rgba(100, 120, 170, 0.35); }
 
-/* ── 详情面板 ── */
+/* ── 詳情面板 ── */
 #panel {
     position: absolute; right: 20px; top: 50%; width: 272px;
     background: rgba(3, 6, 22, 0.78); backdrop-filter: blur(28px);
@@ -97,12 +97,12 @@ canvas { position: absolute; top: 0; left: 0; pointer-events: none; }
     border-radius: 5px; padding: 2px 7px; font-size: 9px;
     color: rgba(140, 165, 255, 0.68); letter-spacing: .04em;
 }
-/* v5.1: 别称 — 精准触发, 蓝绿色 */
+/* v5.1: 別稱 — 精準觸發, 藍綠色 */
 .tag-alias {
     background: rgba(30, 140, 130, 0.13); border-color: rgba(60, 210, 180, 0.28);
     color: rgba(100, 220, 195, 0.78);
 }
-/* v5.1: 向量标签 — 语义关联, 暖紫色 */
+/* v5.1: 向量標籤 — 語義關聯, 暖紫色 */
 .tag-label {
     background: rgba(140, 60, 160, 0.12); border-color: rgba(170, 80, 200, 0.22);
     color: rgba(190, 130, 220, 0.72);
@@ -119,7 +119,7 @@ canvas { position: absolute; top: 0; left: 0; pointer-events: none; }
 }
 #panel-close:hover { color: rgba(190, 210, 255, 0.65); }
 
-/* 跨星系桥链接 */
+/* 跨星系橋連結 */
 .p-bridges { margin: 8px 0 4px; }
 .p-bridges-label { font-size: 9px; color: rgba(110, 130, 180, 0.38); letter-spacing: .08em; text-transform: uppercase; margin-bottom: 5px; }
 .p-bridge-link {
@@ -130,7 +130,7 @@ canvas { position: absolute; top: 0; left: 0; pointer-events: none; }
     cursor: pointer; transition: background .2s, border-color .2s;
 }
 .p-bridge-link:hover { background: rgba(255, 255, 255, 0.06); border-color: rgba(120, 140, 255, 0.25); }
-/* 桥那头的最新近况——缩进在桥下面，弱一档，明确是"别人的近况" */
+/* 橋那頭的最新近況——縮排在橋下面，弱一檔，明確是"別人的近況" */
 .p-bridge { margin-bottom: 3px; }
 .p-bridge .p-bridge-link { margin-bottom: 0; }
 .p-bridge-status {
@@ -139,9 +139,9 @@ canvas { position: absolute; top: 0; left: 0; pointer-events: none; }
     font-size: 9px; line-height: 1.5; letter-spacing: .02em;
     color: rgba(150, 168, 205, 0.42);
 }
-.p-bridge-status::before { content: '对面 '; color: rgba(120, 140, 200, 0.34); }
+.p-bridge-status::before { content: '對面 '; color: rgba(120, 140, 200, 0.34); }
 
-/* v5.3: Tab 切换栏 — 关联星座 / 叙事片段 */
+/* v5.3: Tab 切換欄 — 關聯星座 / 敘事片段 */
 .p-tab-bar { display: flex; gap: 2px; margin: 8px 0 4px; background: rgba(255,255,255,0.02); border-radius: 7px; padding: 2px; }
 .p-tab-btn {
     flex: 1; padding: 5px 0; border: none; border-radius: 5px;
@@ -155,7 +155,7 @@ canvas { position: absolute; top: 0; left: 0; pointer-events: none; }
 .p-tab-content::-webkit-scrollbar { display: none; }
 .p-tab-content .hidden { display: none; }
 
-/* v5.3: 叙事片段（episodes） */
+/* v5.3: 敘事片段（episodes） */
 .p-episodes { margin: 10px 0 6px; }
 .p-episodes-label { font-size: 9px; color: rgba(110, 130, 180, 0.38); letter-spacing: .08em; text-transform: uppercase; margin-bottom: 6px; }
 .p-episodes-list { scrollbar-width: none; }
@@ -171,7 +171,7 @@ canvas { position: absolute; top: 0; left: 0; pointer-events: none; }
 .p-episode-date { font-size: 8px; color: rgba(100, 120, 170, 0.3); }
 .p-episode-content { font-size: 11px; color: rgba(160, 180, 240, 0.55); line-height: 1.55; }
 
-/* ── 观星手记 ── */
+/* ── 觀星手記 ── */
 #archlog {
     position: absolute; left: 20px; bottom: 20px; width: 300px;
     background: rgba(3, 6, 22, 0.72); backdrop-filter: blur(22px);
@@ -200,7 +200,7 @@ canvas { position: absolute; top: 0; left: 0; pointer-events: none; }
 .arch-text strong { color: rgba(190, 210, 255, 0.8); font-weight: 500; }
 .arch-empty { font-size: 11px; color: rgba(100, 120, 170, 0.3); padding: 8px 0; }
 
-/* ── Clara 认知模型 ── */
+/* ── Clara 認知模型 ── */
 #model-panel {
     position: absolute; left: 20px; bottom: 68px; width: 300px;
     background: rgba(3, 6, 22, 0.72); backdrop-filter: blur(22px);
@@ -268,7 +268,7 @@ canvas { position: absolute; top: 0; left: 0; pointer-events: none; }
 .md-empty { font-size: 10px; color: rgba(100, 120, 170, 0.22); padding: 4px 0; font-style: italic; }
 .md-ttl { font-size: 9px; color: rgba(255,180,100,0.35); background: rgba(255,160,60,0.06); border-radius: 3px; padding: 1px 5px; margin-left: 4px; white-space: nowrap; }
 
-/* ── 合并提案队列（AI 的疑问）── */
+/* ── 合併提案佇列（AI 的疑問）── */
 #merge-proposals {
     position: absolute; right: 20px; bottom: 20px; width: 296px; max-height: 320px;
     background: rgba(3, 6, 22, 0.78); backdrop-filter: blur(22px);
@@ -309,7 +309,7 @@ canvas { position: absolute; top: 0; left: 0; pointer-events: none; }
     pointer-events: none; z-index: 20; text-align: right; line-height: 1.8;
 }
 
-/* ── 星尘透镜 ── */
+/* ── 星塵透鏡 ── */
 .stardust-btn {
     background: none; border: 1px solid rgba(160,180,255,0.12); border-radius: 50%;
     width: 26px; height: 26px; font-size: 12px; color: rgba(160,185,255,0.45);
@@ -466,7 +466,7 @@ canvas { position: absolute; top: 0; left: 0; pointer-events: none; }
     color: rgba(120,140,180,0.25); font-size: 12px; line-height: 2;
 }
 
-/* ── 扫描动画 ── */
+/* ── 掃描動畫 ── */
 #stardust-lens.sd-scanning { pointer-events: none; }
 #stardust-lens.sd-scanning #stardust-body { opacity: 0.5; }
 .sd-scanning-hint {
@@ -482,7 +482,7 @@ canvas { position: absolute; top: 0; left: 0; pointer-events: none; }
     50% { opacity: 0.9; transform: scale(1.15); }
 }
 
-/* 条目淡入 */
+/* 條目淡入 */
 .sd-entry { animation: sdFadeIn .35s ease-out both; }
 .sd-entry:nth-child(1) { animation-delay: .02s; }
 .sd-entry:nth-child(2) { animation-delay: .04s; }

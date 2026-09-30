@@ -28,15 +28,15 @@ function _getProfileTier(category) {
 
 
 /**
- * 画像写入协议：在 detectNewTraits / reviewStableTraits 产出新 trait 后，
- * 加载全量 User 画像做门禁检查，按稳定性分级写入。
+ * 畫像寫入協議：在 detectNewTraits / reviewStableTraits 產出新 trait 後，
+ * 載入全量 User 畫像做門禁檢查，按穩定性分級寫入。
  * @returns {{ integrated: number, rejected: number, conflicts: number }}
  */
 async function integrateProfileTraits() {
     const db = getDb();
     const result = { integrated: 0, rejected: 0, conflicts: 0 };
 
-    // 1. 加载全量 User 画像（12分类全部 active 条目）
+    // 1. 載入全量 User 畫像（12分類全部 active 條目）
     const profileEntries = db.prepare(`
         SELECT id, type, content, confidence, tags, evidence_count, source_diversity,
                source_quality, source_fragment_ids, evolution_history, status
@@ -46,7 +46,7 @@ async function integrateProfileTraits() {
         ORDER BY confidence DESC
     `).all();
 
-    // 2. 只处理 source_diversity 达标的 candidate（刚 detectNewTraits/reviewStableTraits 产出或修改的）
+    // 2. 只處理 source_diversity 達標的 candidate（剛 detectNewTraits/reviewStableTraits 產出或修改的）
     const candidates = profileEntries.filter(e => {
         if (e.status !== 'active') return false;
         // Check if this entry was recently created/modified (within last 6h)
@@ -59,7 +59,7 @@ async function integrateProfileTraits() {
 
     if (!candidates.length) return result;
 
-    // 3. 对每个候选条目按稳定性分级处理
+    // 3. 對每個候選條目按穩定性分級處理
     for (const candidate of candidates) {
         let tags = [];
         try { tags = typeof candidate.tags === 'string' ? JSON.parse(candidate.tags) : (candidate.tags || []); } catch (_) {}
@@ -73,7 +73,7 @@ async function integrateProfileTraits() {
 
         const tier = _getProfileTier(category);
 
-        // 3a. 门禁检查
+        // 3a. 門禁檢查
         if (tier.name === 'locked') {
             console.log(`[UserModel] profile: REJECTED #${candidate.id} — category '${category}' is locked`);
             result.rejected++;
@@ -109,7 +109,7 @@ async function integrateProfileTraits() {
             continue;
         }
 
-        // 3c. 矛盾扫描（medium + high tiers）
+        // 3c. 矛盾掃描（medium + high tiers）
         if (tier.requireContradictionCheck) {
             const sameCategory = profileEntries.filter(e =>
                 e.id !== candidate.id && e.type === 'stable_trait' && e.status === 'active' &&
@@ -131,7 +131,7 @@ async function integrateProfileTraits() {
             }
         }
 
-        // 3d. 写入 evolution_history
+        // 3d. 寫入 evolution_history
         let history = [];
         try { history = JSON.parse(candidate.evolution_history || '[]'); } catch (_) {}
         history.push({
@@ -167,30 +167,30 @@ async function _checkProfileConflict(candidate, sameCategoryEntries, allProfileE
     const existingSummary = sameCategoryEntries
         .map(e => `[#${e.id}] ${e.content.slice(0, 150)} (conf:${e.confidence?.toFixed(2)})`).join('\n');
 
-    const prompt = `你是 User 画像的矛盾检测器。判断新特质是否与已有画像条目存在逻辑冲突。
+    const prompt = `你是 User 畫像的矛盾檢測器。判斷新特質是否與已有畫像條目存在邏輯衝突。
 
-新特质: "${candidate.content.slice(0, 200)}" (置信度:${candidate.confidence?.toFixed(2)}, 来源多样性:${candidate.source_diversity})
+新特質: "${candidate.content.slice(0, 200)}" (置信度:${candidate.confidence?.toFixed(2)}, 來源多樣性:${candidate.source_diversity})
 
-同分类已有条目:
-${existingSummary || '(无)'}
+同分類已有條目:
+${existingSummary || '(無)'}
 
-全量画像参考:
+全量畫像參考:
 ${profileSummary.slice(0, 800)}
 
-输出 JSON:
+輸出 JSON:
 {
   "has_conflict": true/false,
   "conflict_with_id": null,
   "conflict_type": "direct_contradiction|partial_overlap|drift|none",
   "resolution": "supersede|discard_new|keep_both|none",
-  "reasoning": "一句话"
+  "reasoning": "一句話"
 }
 
-规则：
-- direct_contradiction（直接矛盾，如"{{user.pronoun}}喜欢社交" vs "{{user.pronoun}}讨厌社交"）→ resolution=supersede（新证据更强时）/discard_new（新证据更弱时）
-- partial_overlap（部分重叠但方向不同）→ resolution=keep_both
-- drift（旧认知可能过时了，如"{{user.pronoun}}住在某城市"→"{{user.pronoun}}搬到了某城市"）→ resolution=supersede
-- 无明显冲突 → resolution=none
+規則：
+- direct_contradiction（直接矛盾，如"{{user.pronoun}}喜歡社交" vs "{{user.pronoun}}討厭社交"）→ resolution=supersede（新證據更強時）/discard_new（新證據更弱時）
+- partial_overlap（部分重疊但方向不同）→ resolution=keep_both
+- drift（舊認知可能過時了，如"{{user.pronoun}}住在某城市"→"{{user.pronoun}}搬到了某城市"）→ resolution=supersede
+- 無明顯衝突 → resolution=none
 
 只返回 JSON。`;
 

@@ -1,5 +1,5 @@
 // utils/settings.js
-// 用户设置读写工具函数（从 index.js 拆出）
+// 使用者設定讀寫工具函式（從 index.js 拆出）
 
 const { getDb } = require('../database');
 
@@ -16,7 +16,7 @@ const getUserSetting = async (key) => {
             return { value: null };
         }
         
-        // 尝试转成数字，如果不行就返回原值
+        // 嘗試轉成數字，如果不行就返回原值
         const rawValue = setting.setting_value;
         const numValue = Number(rawValue);
         
@@ -24,7 +24,7 @@ const getUserSetting = async (key) => {
             value: isNaN(numValue) ? rawValue : numValue 
         };
     } catch (error) {
-        console.error(`获取用户设置 ${key} 失败:`, error);
+        console.error(`獲取使用者設定 ${key} 失敗:`, error);
         return { value: null };
     }
 };
@@ -40,10 +40,10 @@ const setUserSetting = async (key, value) => {
         `).run(key, value, value);
         
         if (key !== 'companion_state_snapshot') {
-            console.log(`✅ 设置已更新: ${key} = ${value}`);
+            console.log(`✅ 設定已更新: ${key} = ${value}`);
         }
     } catch (error) {
-        console.error(`❌ 设置用户设置 ${key} 失败:`, error);
+        console.error(`❌ 設定使用者設定 ${key} 失敗:`, error);
         throw error;
     }
 };

@@ -1,15 +1,15 @@
 // =================================================================
-// 冥想盆：记忆检索系统（硬触发 + 向量检索 + ChromaDB操作）
+// 冥想盆：記憶檢索系統（硬觸發 + 向量檢索 + ChromaDB操作）
 // =================================================================
 
 const { getDb } = require('../database');
 const { encryption } = require('../encryption');
 
-// ChromaDB 常驻服务地址（Docker 部署时通过环境变量 CHROMA_URL 指向 chroma 容器）
+// ChromaDB 常駐服務地址（Docker 部署時通過環境變數 CHROMA_URL 指向 chroma 容器）
 const CHROMA_URL = process.env.CHROMA_URL || 'http://127.0.0.1:7707';
 
 // =================================================================
-// ChromaDB 操作（HTTP 调用 chroma_service.py 常驻服务）
+// ChromaDB 操作（HTTP 呼叫 chroma_service.py 常駐服務）
 // =================================================================
 
 async function chromaDBOperation(action, data) {
@@ -24,7 +24,7 @@ async function chromaDBOperation(action, data) {
 }
 
 // =================================================================
-// 多 Collection 批量查询（供 Librarian 双路召回）
+// 多 Collection 批次查詢（供 Librarian 雙路召回）
 // =================================================================
 async function queryMultiCollections(queries) {
     if (!queries || queries.length === 0) return [];
@@ -33,7 +33,7 @@ async function queryMultiCollections(queries) {
 }
 
 // =================================================================
-// 硬触发检索：检查用户消息是否包含记忆库中的标签
+// 硬觸發檢索：檢查使用者訊息是否包含記憶庫中的標籤
 // =================================================================
 
 function searchMemoriesByHardTrigger(userMessage) {
@@ -62,7 +62,7 @@ function searchMemoriesByHardTrigger(userMessage) {
 
                 try {
                     const dec = encryption.decrypt(memory.content);
-                    if (dec === null) { console.error(`Memory ID ${memory.id} decryption failed，已跳过`); continue; }
+                    if (dec === null) { console.error(`Memory ID ${memory.id} decryption failed，已跳過`); continue; }
                     memory.content = dec;
                     matchedMemories.push(memory);
                 } catch (err) {
@@ -78,7 +78,7 @@ function searchMemoriesByHardTrigger(userMessage) {
 }
 
 // =================================================================
-// 本地 Embedding（HTTP 调用 chroma_service）
+// 本地 Embedding（HTTP 呼叫 chroma_service）
 // =================================================================
 
 async function getLocalEmbedding(text) {
@@ -93,7 +93,7 @@ async function getLocalEmbedding(text) {
 }
 
 // =================================================================
-// 向量检索：本地 embedding + ChromaDB 查询
+// 向量檢索：本地 embedding + ChromaDB 查詢
 // =================================================================
 
 async function searchMemoriesByVector(query, nResults = 3) {
@@ -107,7 +107,7 @@ async function searchMemoriesByVector(query, nResults = 3) {
             return [];
         }
 
-        // 2. HTTP 调用 chroma_service 查询
+        // 2. HTTP 呼叫 chroma_service 查詢
         const pythonResult = await chromaDBOperation('query', {
             embedding: queryEmbedding,
             n_results: nResults,
@@ -117,7 +117,7 @@ async function searchMemoriesByVector(query, nResults = 3) {
 
         const db = getDb();
 
-        // 3. 计算每个结果的相似度（1 - distance）
+        // 3. 計算每個結果的相似度（1 - distance）
         const resultIds = pythonResult.ids[0] || [];
         const resultDistances = pythonResult.distances?.[0] || [];
         console.log(`searchMemoriesByVector: ChromaDB returned ${resultIds.length} results, similarities: [${resultDistances.map(d => (1-d).toFixed(3)).join(', ')}]`);
@@ -126,9 +126,9 @@ async function searchMemoriesByVector(query, nResults = 3) {
             idToSimilarity[resultIds[i]] = 1 - resultDistances[i];
         }
 
-        // v5.3: 重新启用 episode（memories 表）向量检索
-        // v5.0 退役是因为旧 episode 来自废弃知识树。v5.3 consolidateCategory
-        // 改为从 entity_profiles 星座产出，新 episode 质量可靠且已重新索引 ChromaDB
+        // v5.3: 重新啟用 episode（memories 表）向量檢索
+        // v5.0 退役是因為舊 episode 來自廢棄知識樹。v5.3 consolidateCategory
+        // 改為從 entity_profiles 星座產出，新 episode 質量可靠且已重新索引 ChromaDB
         const fragmentIds = [];
         const memoryIds = [];
 
@@ -141,13 +141,13 @@ async function searchMemoriesByVector(query, nResults = 3) {
 
         const results = [];
 
-        // 查 memory_fragments 表（只返回 active，consolidated 不走向量路径）
+        // 查 memory_fragments 表（只返回 active，consolidated 不走向量路徑）
         if (fragmentIds.length > 0) {
             const placeholders = fragmentIds.map(() => '?').join(',');
             const fragments = db.prepare(`SELECT * FROM memory_fragments WHERE id IN (${placeholders}) AND status = 'active'`).all(...fragmentIds);
             const staleCount = fragmentIds.length - fragments.length;
             if (staleCount > 0) {
-                console.log(`searchMemoriesByVector: 过滤 ${staleCount} 条已合并/非活跃碎片 (ChromaDB stale entries)`);
+                console.log(`searchMemoriesByVector: 過濾 ${staleCount} 條已合併/非活躍碎片 (ChromaDB stale entries)`);
             }
             for (const f of fragments) {
                 const chromaId = `fragment_${f.id}`;
@@ -155,7 +155,7 @@ async function searchMemoriesByVector(query, nResults = 3) {
             }
         }
 
-        // 查 memories 表（只返回 episode + permanent，旧冥想盆历史条目不纳入）
+        // 查 memories 表（只返回 episode + permanent，舊冥想盆歷史條目不納入）
         if (memoryIds.length > 0) {
             const placeholders = memoryIds.map(() => '?').join(',');
             const episodes = db.prepare(`SELECT * FROM memories WHERE id IN (${placeholders}) AND layer = 'episode' AND status = 'permanent'`).all(...memoryIds);
@@ -178,7 +178,7 @@ async function searchMemoriesByVector(query, nResults = 3) {
     }
 }
 
-// ChromaDB 陈旧条目清理：删除 status != 'active' 但仍残留在 ChromaDB 的碎片嵌入
+// ChromaDB 陳舊條目清理：刪除 status != 'active' 但仍殘留在 ChromaDB 的碎片嵌入
 async function cleanupStaleChromaEntries() {
     const db = getDb();
     // Find fragments with status != 'active' that likely still have ChromaDB entries
@@ -200,7 +200,7 @@ async function cleanupStaleChromaEntries() {
     }
 
     if (cleaned > 0) {
-        console.log(`[Memory] ChromaDB 陈旧清理: ${cleaned}/${stale.length} 条`);
+        console.log(`[Memory] ChromaDB 陳舊清理: ${cleaned}/${stale.length} 條`);
     }
     return { cleaned, scanned: stale.length };
 }

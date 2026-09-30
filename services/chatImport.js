@@ -1,8 +1,8 @@
-// services/chatImport.js — 聊天记录写入（CLI 导入脚本 + API 接口共用）
+// services/chatImport.js — 聊天記錄寫入（CLI 匯入指令碼 + API 介面共用）
 const { getDb } = require('../database');
 const { normalizeTime } = require('./chatParser');
 
-// 补全缺省时间戳（从后往前，无时间的用当前时间递减）
+// 補全預設時間戳（從後往前，無時間的用當前時間遞減）
 function fillTimestamps(msgs) {
     let cursor = Date.now();
     for (let i = msgs.length - 1; i >= 0; i--) {
@@ -16,13 +16,13 @@ function fillTimestamps(msgs) {
     return msgs;
 }
 
-// 写入 messages 表（明文 is_encrypted=0，Scribe 直接读取）
-// opts: { chatId, name } — 有 chatId 直接写入，否则新建会话
+// 寫入 messages 表（明文 is_encrypted=0，Scribe 直接讀取）
+// opts: { chatId, name } — 有 chatId 直接寫入，否則新建會話
 function importMessages(msgs, opts = {}) {
     const db = getDb();
     let chatId = opts.chatId;
     if (!chatId) {
-        const name = opts.name || `导入 ${new Date().toISOString().slice(0, 10)}`;
+        const name = opts.name || `匯入 ${new Date().toISOString().slice(0, 10)}`;
         chatId = db.prepare('INSERT INTO chats (name) VALUES (?)').run(name).lastInsertRowid;
     }
 

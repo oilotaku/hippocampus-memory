@@ -83,8 +83,8 @@ describe('getActiveCorrections / 合併門檻', () => {
         }
         const out = cor.getActiveCorrections().split('\n');
         assert.equal(out.length, 5);
-        assert.equal(out[0], '- 错误：錯7 → 正确：對7');
-        assert.equal(out[4], '- 错误：錯3 → 正确：對3');
+        assert.equal(out[0], '- 錯誤：錯7 → 正確：對7');
+        assert.equal(out[4], '- 錯誤：錯3 → 正確：對3');
     });
 
     test('9 條 active 不觸發合併；merged 的不計入 active', async () => {
@@ -129,7 +129,7 @@ describe('getActiveCorrections / 合併門檻', () => {
 });
 
 describe('processChatCorrection', () => {
-    test('缺參數 → success:false，不動 DB', async () => {
+    test('缺引數 → success:false，不動 DB', async () => {
         const r = await cor.processChatCorrection({ wrongStatement: '', correction: 'x' });
         assert.equal(r.success, false);
         assert.match(r.formatted, /wrong_statement/);
@@ -160,7 +160,7 @@ describe('processChatCorrection', () => {
         assert.equal(chromaCalls[0].payload.items[0].id, `fragment_${frag.id}`);
         assert.equal(r.success, true);
         assert.ok(r.formatted.includes(`#${frag.id}`));
-        assert.match(r.formatted, /记忆库里没有找到相关的记忆/);
+        assert.match(r.formatted, /記憶庫裡沒有找到相關的記憶/);
     });
 
     test('Chroma 索引失敗不影響修正流程', async () => {
@@ -203,7 +203,7 @@ describe('processChatCorrection', () => {
         const log = rows('correction_log')[0];
         assert.equal(log.target_type, 'memory');
         assert.equal(log.target_id, m);
-        assert.match(r.formatted, /内容有误/);   // explanation 為空時的預設文字
+        assert.match(r.formatted, /內容有誤/);   // explanation 為空時的預設文字
     });
 
     test('memoryId 同時存在於 memories 與 fragments 時，現況優先取 memories', async () => {
@@ -224,7 +224,7 @@ describe('processChatCorrection', () => {
         llmImpl = async () => ({ reply: '{"matched":false}' });
         await cor.processChatCorrection({ wrongStatement: 'w', correction: 'c' });
         const prompt = llmCalls[0][0][0].parts[0].text;
-        assert.match(prompt, /\[0\] id=11 source_table=fragment\n内容: 池內碎片/);
+        assert.match(prompt, /\[0\] id=11 source_table=fragment\n內容: 池內碎片/);
         assert.match(prompt, /id=12 source_table=memory/);
         assert.doesNotMatch(prompt, /重複/);
     });
@@ -236,7 +236,7 @@ describe('processChatCorrection', () => {
         assert.equal(db.prepare('SELECT status FROM memory_fragments WHERE id=?').get(src).status, 'active');
         assert.equal(rows('correction_log')[0].target_type, 'hallucination');
         assert.equal(rows('memory_fragments', 'WHERE id != ' + src)[0].content, '第三人稱修正');
-        assert.match(r.formatted, /1 条/);
+        assert.match(r.formatted, /1 條/);
     });
 
     test('matched=true 但 memory_id 為 null → 視為幻聽', async () => {
@@ -246,21 +246,21 @@ describe('processChatCorrection', () => {
         assert.equal(rows('correction_log')[0].target_type, 'hallucination');
     });
 
-    test('LLM 呼叫失敗 → 「LLM调用失败，按幻听处理」，用使用者原文當修正內容', async () => {
+    test('LLM 呼叫失敗 → 「LLM呼叫失敗，按幻聽處理」，用使用者原文當修正內容', async () => {
         addFrag('候選');
         llmImpl = async () => { throw new Error('timeout'); };
         const r = await cor.processChatCorrection({ wrongStatement: 'w', correction: '原文修正', memoryId: 1 });
         assert.equal(rows('correction_log')[0].target_type, 'hallucination');
         assert.equal(rows('memory_fragments', "WHERE type='correction'")[0].content, '原文修正');
-        assert.match(r.formatted, /LLM调用失败，按幻听处理/);
+        assert.match(r.formatted, /LLM呼叫失敗，按幻聽處理/);
     });
 
-    test('LLM 回非 JSON → 「解析失败，按幻听处理」', async () => {
+    test('LLM 回非 JSON → 「解析失敗，按幻聽處理」', async () => {
         addFrag('候選');
         llmImpl = async () => ({ reply: '不是 json' });
         const r = await cor.processChatCorrection({ wrongStatement: 'w', correction: 'c', memoryId: 1 });
         assert.equal(rows('correction_log')[0].target_type, 'hallucination');
-        assert.match(r.formatted, /解析失败，按幻听处理/);
+        assert.match(r.formatted, /解析失敗，按幻聽處理/);
     });
 
     test('現況：LLM 回傳的 memory_id 不在候選內也照做（不驗證），對不存在的 id 記 target 並 success', async () => {

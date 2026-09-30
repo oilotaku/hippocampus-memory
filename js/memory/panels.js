@@ -1,6 +1,6 @@
 // ========================================
-// 记忆星图 v5 — DOM 面板层
-// 详情面板、面包屑、观星手记、User 认知模型、tooltip
+// 記憶星圖 v5 — DOM 面板層
+// 詳情面板、麵包屑、觀星手記、User 認知模型、tooltip
 // ========================================
 
 import { universe, conById, decideMergeProposal } from './data.js';
@@ -20,7 +20,7 @@ const $ = id => document.getElementById(id);
 
 function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 
-// ── 面包屑 ──
+// ── 麵包屑 ──
 export function renderBreadcrumb() {
     const el = $('breadcrumb');
     el.innerHTML = '';
@@ -38,7 +38,7 @@ export function renderBreadcrumb() {
     });
 }
 
-// ── 顶部统计 ──
+// ── 頂部統計 ──
 export function renderTopCount() {
     $('tb-count').textContent = `${universe.totalFragments} fragments · ${universe.constellations.length} constellations`;
 }
@@ -46,7 +46,7 @@ export function showConnectionLost() {
     $('tb-count').textContent = 'connection lost';
 }
 
-// ── 详情面板 ──
+// ── 詳情面板 ──
 function panelBase(color) {
     const p = $('panel');
     p.style.setProperty('--pc', color);
@@ -72,7 +72,7 @@ function addMeta(label, valuePct, valueText) {
     $('p-meta').appendChild(row);
 }
 
-// 星星（碎片）详情
+// 星星（碎片）詳情
 export function showStarPanel(star, viewConId) {
     const con = conById(viewConId);
     const color = con?.color || '#7c9dff';
@@ -82,13 +82,13 @@ export function showStarPanel(star, viewConId) {
     $('p-body').textContent = star.content || '';
     if (con) addTag('✦ ' + con.label);
     if (star.relation) addTag(star.relation);
-    if (star.lifecycle === 'cooling') addTag('冷却中 — 很久没被想起');
-    else if (star.lifecycle === 'frozen') addTag('已冻结 — 即将归档');
-    addMeta('鲜活度', (star.conf || 0) * 100, ((star.conf || 0) * 100).toFixed(0) + '%');
-    addMeta('视星等', Math.max(0, (6.5 - (star.mag || 4)) / 5.5 * 100), (star.mag || 4).toFixed(1) + '等');
+    if (star.lifecycle === 'cooling') addTag('冷卻中 — 很久沒被想起');
+    else if (star.lifecycle === 'frozen') addTag('已凍結 — 即將歸檔');
+    addMeta('鮮活度', (star.conf || 0) * 100, ((star.conf || 0) * 100).toFixed(0) + '%');
+    addMeta('視星等', Math.max(0, (6.5 - (star.mag || 4)) / 5.5 * 100), (star.mag || 4).toFixed(1) + '等');
     $('p-date').textContent = star.date || '';
 
-    // v5.0: 星星操作 — 解除与该星座的关联
+    // v5.0: 星星操作 — 解除與該星座的關聯
     // star.id = "f12345" → fragId = 12345, con needs real id (strip 'e' prefix)
     const fragId = parseInt(String(star.id).replace('f', ''));
     const entityId = con ? parseInt(String(con.id).replace('e', '')) : null;
@@ -96,7 +96,7 @@ export function showStarPanel(star, viewConId) {
         const actions = document.createElement('div');
         actions.style.cssText = 'margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.04)';
         const unlink = document.createElement('button');
-        unlink.textContent = '解除与「' + con.label + '」的关联';
+        unlink.textContent = '解除與「' + con.label + '」的關聯';
         unlink.style.cssText = 'background:rgba(255,80,80,0.06);border:1px solid rgba(255,80,80,0.12);border-radius:6px;color:rgba(255,120,120,0.5);font-family:inherit;font-size:10px;cursor:pointer;padding:4px 10px;transition:all .2s';
         unlink.addEventListener('mouseenter', () => { unlink.style.background = 'rgba(255,80,80,0.12)'; unlink.style.borderColor = 'rgba(255,80,80,0.3)'; });
         unlink.addEventListener('mouseleave', () => { unlink.style.background = 'rgba(255,80,80,0.06)'; unlink.style.borderColor = 'rgba(255,80,80,0.12)'; });
@@ -117,11 +117,11 @@ export function showStarPanel(star, viewConId) {
                     unlink.style.background = 'rgba(120,200,120,0.04)';
                     window.dispatchEvent(new CustomEvent('memory-refresh'));
                 } else {
-                    unlink.textContent = '解除失败';
+                    unlink.textContent = '解除失敗';
                     unlink.disabled = false;
                 }
             } catch (_) {
-                unlink.textContent = '解除失败';
+                unlink.textContent = '解除失敗';
                 unlink.disabled = false;
             }
         });
@@ -130,7 +130,7 @@ export function showStarPanel(star, viewConId) {
     }
 }
 
-// 星座（实体）详情
+// 星座（實體）詳情
 let _conPanelMode = 'facts'; // 'facts' | 'judgment'
 
 export function showConPanel(con) {
@@ -154,12 +154,12 @@ export function showConPanel(con) {
         const btn = document.createElement('button');
         btn.id = 'p-toggle-mode';
         btn.className = 'p-toggle-btn';
-        btn.title = '切换事实/私语';
-        btn.textContent = '◆ 私语';
+        btn.title = '切換事實/私語';
+        btn.textContent = '◆ 私語';
         btn.addEventListener('click', function(e) {
             e.stopPropagation();
             _conPanelMode = _conPanelMode === 'facts' ? 'judgment' : 'facts';
-            btn.textContent = _conPanelMode === 'facts' ? '◆ 私语' : '◇ 事实';
+            btn.textContent = _conPanelMode === 'facts' ? '◆ 私語' : '◇ 事實';
             _renderConBody(con);
         });
         $('p-title').appendChild(btn);
@@ -169,7 +169,7 @@ export function showConPanel(con) {
         const catLabel = con.subcategory ? `${con.category} · ${con.subcategory}` : con.category;
         addTag(catLabel);
     }
-    // v5.1: 别称（精准触发，蓝色标签）
+    // v5.1: 別稱（精準觸發，藍色標籤）
     if (con.aliases && con.aliases.length > 0) {
         con.aliases.forEach(a => {
             const el = document.createElement('span');
@@ -178,7 +178,7 @@ export function showConPanel(con) {
             $('p-tags').appendChild(el);
         });
     }
-    // v5.1: 向量标签（语义关联，紫色标签）
+    // v5.1: 向量標籤（語義關聯，紫色標籤）
     if (con.tags && con.tags.length > 0) {
         con.tags.forEach(t => {
             const el = document.createElement('span');
@@ -188,7 +188,7 @@ export function showConPanel(con) {
         });
     }
     if (con.relationship) addTag(con.relationship.slice(0, 40));
-    // v5.3: Tab切换 — 关联星座 / 叙事片段（二选一显示，防止面板过长）
+    // v5.3: Tab切換 — 關聯星座 / 敘事片段（二選一顯示，防止面板過長）
     const bridges = bridgesOfCon(con.id);
     const hasEpisodes = con.episodes && con.episodes.length > 0;
     const hasBridges = bridges.length > 0;
@@ -199,12 +199,12 @@ export function showConPanel(con) {
 
         const bridgeTab = document.createElement('button');
         bridgeTab.className = 'p-tab-btn active';
-        bridgeTab.textContent = '关联星座' + (hasBridges ? ` · ${bridges.length}` : '');
+        bridgeTab.textContent = '關聯星座' + (hasBridges ? ` · ${bridges.length}` : '');
         bridgeTab.dataset.tab = 'bridges';
 
         const epTab = document.createElement('button');
         epTab.className = 'p-tab-btn';
-        epTab.textContent = '叙事片段' + (hasEpisodes ? ` · ${con.episodes.length}` : '');
+        epTab.textContent = '敘事片段' + (hasEpisodes ? ` · ${con.episodes.length}` : '');
         epTab.dataset.tab = 'episodes';
 
         // Default: show bridges if any, else episodes
@@ -238,13 +238,13 @@ export function showConPanel(con) {
                 a.style.color = other.color;
                 a.textContent = br.relation
                     ? `${other.label} — ${br.relation}`
-                    : `${other.label} · ${br.weight}条共享记忆`;
+                    : `${other.label} · ${br.weight}條共享記憶`;
                 a.addEventListener('click', () => gotoConstellation(other.id));
                 wrap.appendChild(a);
 
-                // 桥那头的最新一条近况，**并排显示**——站在这颗星上也看得见对面的动静。
-                // 注意是**并排**不是合并：两边的近况各写各的，谁都不冒充谁的事实。
-                // （写进去会烂：那边的事一旦过去，这一头就永远挂着别人的旧闻。）
+                // 橋那頭的最新一條近況，**並排顯示**——站在這顆星上也看得見對面的動靜。
+                // 注意是**並排**不是合併：兩邊的近況各寫各的，誰都不冒充誰的事實。
+                // （寫進去會爛：那邊的事一旦過去，這一頭就永遠掛著別人的舊聞。）
                 const otherLatest = _bridgeLatestStatus(other);
                 if (otherLatest) {
                     const s = document.createElement('div');
@@ -296,27 +296,27 @@ export function showConPanel(con) {
     }
 
     const coolingN = con.coolingCount || 0;
-    addMeta('记忆碎片', Math.min(100, con.stars.length / 40 * 100),
-        coolingN > 0 ? `${con.stars.length} 颗 · ${coolingN} 冷却` : con.stars.length + ' 颗');
-    $('p-date').textContent = con.updatedAt ? '更新于 ' + (con.updatedAt || '').slice(0, 10) : '';
+    addMeta('記憶碎片', Math.min(100, con.stars.length / 40 * 100),
+        coolingN > 0 ? `${con.stars.length} 顆 · ${coolingN} 冷卻` : con.stars.length + ' 顆');
+    $('p-date').textContent = con.updatedAt ? '更新於 ' + (con.updatedAt || '').slice(0, 10) : '';
 }
 
-// 桥那头的最新一条近况（近况是倒序的日志，第一行最新）。
-// 取不到就返回空串——不占位、不写"暂无"（面板里已经够多"暂无"了）。
-// 自己判一下哨兵，不引别的模块的 helper：这里只需要"这行字值不值得显示"。
+// 橋那頭的最新一條近況（近況是倒序的日誌，第一行最新）。
+// 取不到就返回空串——不佔位、不寫"暫無"（面板裡已經夠多"暫無"了）。
+// 自己判一下哨兵，不引別的模組的 helper：這裡只需要"這行字值不值得顯示"。
 function _bridgeLatestStatus(con) {
     const raw = (con.currentStatus || '').replace(/\r/g, '');
     if (!raw || !raw.trim()) return '';
     const first = raw.split('\n').map(l => l.trim()).filter(Boolean)[0] || '';
     if (first.length < 3) return '';
-    if (/^(无|暂无|无明显变化|无变化|没有明显变化|无新动态|近期无新动态)[。.，,、\s]*$/.test(first)) return '';
+    if (/^(無|暫無|無明顯變化|無變化|沒有明顯變化|無新動態|近期無新動態)[。.，,、\s]*$|^(无|暂无|无明显变化|无变化|没有明显变化|无新动态|近期无新动态)[。.，,、\s]*$/.test(first)) return '';
     return first.length > 96 ? first.slice(0, 96) + '…' : first;
 }
 
 function _renderConBody(con) {
-    // 近况（current_status） — 放在 body 最前面
-    // ⚠️ 取 camelCase 的 currentStatus：后端 /api/memory/universe 映射出来的是这个名。
-    // 以前这里读下划线写法，永远 undefined，近况那一行从来没渲染过。
+    // 近況（current_status） — 放在 body 最前面
+    // ⚠️ 取 camelCase 的 currentStatus：後端 /api/memory/universe 映射出來的是這個名。
+    // 以前這裡讀下劃線寫法，永遠 undefined，近況那一行從來沒渲染過。
     let bodyHtml = '';
     if (con.currentStatus) {
         bodyHtml += '<div class="p-cs">' + con.currentStatus + '</div>';
@@ -342,18 +342,18 @@ function _renderConBody(con) {
     }
 }
 
-// 双星核心档案（颜色从API读取）
+// 雙星核心檔案（顏色從API讀取）
 export function showCorePanel(name, ent) {
     const color = ent?.color || '#7c9dff';
     const isUser = ent?.role === 'user';
     panelBase(color);
-    $('p-cat').textContent = '双星核心';
+    $('p-cat').textContent = '雙星核心';
     $('p-title').textContent = name;
-    $('p-body').textContent = ent?.facts || (isUser ? '这个宇宙的创造者。' : '这个宇宙的守护者。');
-    addTag(isUser ? '恒星 · 暖金' : '恒星 · 银绿');
+    $('p-body').textContent = ent?.facts || (isUser ? '這個宇宙的創造者。' : '這個宇宙的守護者。');
+    addTag(isUser ? '恆星 · 暖金' : '恆星 · 銀綠');
     if (ent?.relationship) addTag(ent.relationship.slice(0, 40));
-    addMeta('记忆碎片', 100, (ent?.fragment_count || 0) + ' 条');
-    $('p-date').textContent = ent?.updatedAt ? '更新于 ' + (ent.updatedAt || '').slice(0, 10) : '';
+    addMeta('記憶碎片', 100, (ent?.fragment_count || 0) + ' 條');
+    $('p-date').textContent = ent?.updatedAt ? '更新於 ' + (ent.updatedAt || '').slice(0, 10) : '';
 }
 
 export function hidePanel() { $('panel').classList.remove('visible'); }
@@ -368,13 +368,13 @@ export function showTooltip(mx, my, text) {
 }
 export function hideTooltip() { $('tt').style.opacity = '0'; }
 
-// ── 观星手记 ──
+// ── 觀星手記 ──
 export function renderArchlog() {
     const body = $('arch-body');
     body.innerHTML = '';
     const data = universe.archlog || [];
     if (!data.length) {
-        body.innerHTML = '<div class="arch-empty">尚无活动记录</div>';
+        body.innerHTML = '<div class="arch-empty">尚無活動記錄</div>';
         return;
     }
     data.slice(0, 15).forEach((e, i, arr) => {
@@ -387,11 +387,11 @@ export function renderArchlog() {
     });
 }
 
-// ── User 认知模型 ──
+// ── User 認知模型 ──
 // immutable_fact v4.8 退役。stable_trait/active_hypothesis v5.2 退役，由 user_patterns 替代。
 const MODEL_LAYERS = [
-    { type: 'current_state', label: '● 当前状态', cls: 'state' },
-    { type: 'pattern', label: '◇ 观察模式', cls: 'pat' },
+    { type: 'current_state', label: '● 當前狀態', cls: 'state' },
+    { type: 'pattern', label: '◇ 觀察模式', cls: 'pat' },
 ];
 
 export function renderModelPanel() {
@@ -423,21 +423,21 @@ function showModelDetail(filterType) {
     // ── Current State ──
     if (!filterType || filterType === 'current_state') {
         const states = universe.userModel.filter(e => e.type === 'current_state');
-        html += `<div class="md-section"><div class="md-section-title">● 当前状态 (${states.length})</div>`;
-        if (!states.length) html += '<div class="md-empty">暂无</div>';
+        html += `<div class="md-section"><div class="md-section-title">● 當前狀態 (${states.length})</div>`;
+        if (!states.length) html += '<div class="md-empty">暫無</div>';
         else states.forEach(e => {
             let extra = '';
             if (e.expires_at) {
                 const remainMs = new Date(e.expires_at) - Date.now();
-                if (remainMs <= 0) extra = '<span class="md-ttl md-expired">已过期</span>';
+                if (remainMs <= 0) extra = '<span class="md-ttl md-expired">已過期</span>';
                 else {
                     const remainH = Math.round(remainMs / 3600000);
-                    const remainText = remainH < 1 ? '即将过期' : remainH < 24 ? `约${remainH}h` : `约${Math.round(remainH/24)}d`;
+                    const remainText = remainH < 1 ? '即將過期' : remainH < 24 ? `約${remainH}h` : `約${Math.round(remainH/24)}d`;
                     extra = `<span class="md-ttl">${remainText}</span>`;
                 }
             }
             if (e.created_by === 'chat_companion') extra += '<span class="md-source">🖊️ AI</span>';
-            else if (e.created_by === 'deep_cycle') extra += '<span class="md-source">🌙 深循环</span>';
+            else if (e.created_by === 'deep_cycle') extra += '<span class="md-source">🌙 深迴圈</span>';
             html += `<div class="md-row"><span class="mdot mp-dot-s state"></span><span style="flex:1">${esc(e.content)}</span>${extra}</div>`;
         });
         html += '</div>';
@@ -446,8 +446,8 @@ function showModelDetail(filterType) {
     // ── Patterns (v5.2) ──
     if (!filterType || filterType === 'pattern') {
         const patterns = (universe.patterns || []).filter(p => p.status === 'active');
-        html += `<div class="md-section"><div class="md-section-title">◇ 观察模式 (${patterns.length})</div>`;
-        if (!patterns.length) html += '<div class="md-empty">暂无。深循环会在观察积累足够后自动生成。</div>';
+        html += `<div class="md-section"><div class="md-section-title">◇ 觀察模式 (${patterns.length})</div>`;
+        if (!patterns.length) html += '<div class="md-empty">暫無。深迴圈會在觀察積累足夠後自動生成。</div>';
         else patterns.forEach(p => {
             const conf = Math.round((p.confidence || 0) * 100);
             const spanDays = p.first_seen && p.last_seen
@@ -469,18 +469,18 @@ function showModelDetail(filterType) {
 }
 export function closeModelDetail() { $('model-detail').classList.remove('show'); }
 
-// ── v5.2: Patterns (日积月累的行为观察) ──
+// ── v5.2: Patterns (日積月累的行為觀察) ──
 export function renderPatterns() {
     const box = $('patterns-box');
     const body = $('pat-body');
     const patterns = universe.patterns || [];
     if (!patterns.length) { box.style.display = 'none'; return; }
     box.style.display = 'block';
-    $('pat-count').textContent = patterns.length + ' 个模式';
+    $('pat-count').textContent = patterns.length + ' 個模式';
     body.innerHTML = patterns.slice(0, 5).map(p => {
         const conf = Math.round((p.confidence || 0) * 100);
         const tags = (p.tags || []).slice(0, 4).map(t => `<span class="pat-tag">${esc(t)}</span>`).join('');
-        return `<div class="pat-item" onclick="document.querySelector('[data-type=pattern]').click()" title="点击查看全部模式">
+        return `<div class="pat-item" onclick="document.querySelector('[data-type=pattern]').click()" title="點選檢視全部模式">
           <div class="pat-content">${esc(p.content.slice(0, 60))}${p.content.length>60?'…':''}</div>
           <div class="pat-meta">
             <span class="pat-stat">${p.evidence_count}次 · 置信${conf}%</span>
@@ -489,28 +489,28 @@ export function renderPatterns() {
         </div>`;
     }).join('');
     if (patterns.length > 5) {
-        body.innerHTML += `<div class="pat-more" onclick="document.querySelector('[data-type=pattern]').click()">查看全部 ${patterns.length} 个模式 →</div>`;
+        body.innerHTML += `<div class="pat-more" onclick="document.querySelector('[data-type=pattern]').click()">檢視全部 ${patterns.length} 個模式 →</div>`;
     }
 }
 
-// ── 合并提案队列（AI 的疑问 → User 裁决）──
+// ── 合併提案佇列（AI 的疑問 → User 裁決）──
 export function renderMergeProposals() {
     const box = $('merge-proposals');
     const body = $('mq-body');
     const proposals = universe.mergeProposals || [];
     if (!proposals.length) { box.style.display = 'none'; return; }
     box.style.display = 'block';
-    $('mq-count').textContent = proposals.length + ' 待裁决';
+    $('mq-count').textContent = proposals.length + ' 待裁決';
     body.innerHTML = '';
     proposals.forEach(p => {
         const item = document.createElement('div');
         item.className = 'mq-item';
         const q = document.createElement('div');
         q.className = 'mq-q';
-        q.innerHTML = `<strong>${esc(p.a_name)}</strong>（${p.a_fc || 0}星）和 <strong>${esc(p.b_name)}</strong>（${p.b_fc || 0}星）是同一个吗？`;
+        q.innerHTML = `<strong>${esc(p.a_name)}</strong>（${p.a_fc || 0}星）和 <strong>${esc(p.b_name)}</strong>（${p.b_fc || 0}星）是同一個嗎？`;
         const reason = document.createElement('div');
         reason.className = 'mq-reason';
-        reason.textContent = `依据：${p.reason || '?'}${p.shared ? ` · 共享${p.shared}条记忆` : ''}`;
+        reason.textContent = `依據：${p.reason || '?'}${p.shared ? ` · 共享${p.shared}條記憶` : ''}`;
         const actions = document.createElement('div');
         actions.className = 'mq-actions';
         const mkBtn = (label, cls, decision) => {
@@ -524,22 +524,22 @@ export function renderMergeProposals() {
                     item.remove();
                     const left = universe.mergeProposals.length;
                     if (!left) box.style.display = 'none';
-                    else $('mq-count').textContent = left + ' 待裁决';
+                    else $('mq-count').textContent = left + ' 待裁決';
                 } catch (e) {
                     b.disabled = false;
-                    b.textContent = '失败，重试';
+                    b.textContent = '失敗，重試';
                 }
             });
             return b;
         };
-        actions.appendChild(mkBtn('是，合并', 'approve', 'approve'));
+        actions.appendChild(mkBtn('是，合併', 'approve', 'approve'));
         actions.appendChild(mkBtn('不是', 'reject', 'reject'));
         item.appendChild(q); item.appendChild(reason); item.appendChild(actions);
         body.appendChild(item);
     });
 }
 
-// ── v5.0: 核心洞察编辑 ──
+// ── v5.0: 核心洞察編輯 ──
 async function loadCoreInsight() {
     try {
         const r = await fetch('/api/memory/core-insight', { headers: authHeaders() });
@@ -547,7 +547,7 @@ async function loadCoreInsight() {
         if (d.ok) {
             $('ci-editor').value = d.insight || '';
             if (d.updated_at) {
-                $('ci-updated').textContent = '更新于 ' + new Date(d.updated_at).toLocaleString('zh-CN');
+                $('ci-updated').textContent = '更新於 ' + new Date(d.updated_at).toLocaleString('zh-CN');
             }
         }
     } catch (_) {}
@@ -558,7 +558,7 @@ export async function renderCoreInsight() {
         const insight = $('ci-editor').value.trim();
         if (!insight) return;
         $('ci-save').disabled = true;
-        $('ci-save').textContent = '保存中…';
+        $('ci-save').textContent = '儲存中…';
         try {
             const r = await fetch('/api/memory/core-insight', {
                 method: 'POST',
@@ -567,19 +567,19 @@ export async function renderCoreInsight() {
             });
             const d = await r.json();
             if (d.ok) {
-                $('ci-save').textContent = '已保存';
-                $('ci-updated').textContent = '更新于 ' + new Date().toLocaleString('zh-CN');
+                $('ci-save').textContent = '已儲存';
+                $('ci-updated').textContent = '更新於 ' + new Date().toLocaleString('zh-CN');
             } else {
-                $('ci-save').textContent = '失败，重试';
+                $('ci-save').textContent = '失敗，重試';
             }
         } catch (_) {
-            $('ci-save').textContent = '失败，重试';
+            $('ci-save').textContent = '失敗，重試';
         }
         $('ci-save').disabled = false;
     });
 }
 
-// ── 折叠面板初始化 ──
+// ── 摺疊面板初始化 ──
 export function initPanelEvents() {
     $('panel-close').addEventListener('click', hidePanel);
     $('arch-header').addEventListener('click', () => {
@@ -607,7 +607,7 @@ async function loadPipelineStatus() {
         const s = await res.json();
         if (!$('tb-count')) return;
         $('tb-count').textContent = '碎片 ' + (s.fragments?.total || 0).toLocaleString();
-        $('tb-entities').textContent = '实体 ' + (s.entities?.total || 0) + (s.entities?.seeds > 0 ? '/' + s.entities.seeds + '种' : '');
+        $('tb-entities').textContent = '實體 ' + (s.entities?.total || 0) + (s.entities?.seeds > 0 ? '/' + s.entities.seeds + '種' : '');
         $('tb-cm').textContent = 'CM ' + (s.userModel?.total || 0);
         if (s.lastScribe) {
             const mins = Math.round((Date.now() - new Date(s.lastScribe + 'Z').getTime()) / 60000);

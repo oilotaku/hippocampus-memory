@@ -101,7 +101,7 @@ test('services/cognitiveModel 的匯出介面與拆分前相同', () => {
     assert.deepEqual(surface(require('../../services/cognitiveModel')), COGNITIVE_MODEL);
 });
 
-test('archivist 與 cognitiveModel 各自只有一份模組實例（入口檔轉出的是同一個物件）', () => {
+test('archivist 與 cognitiveModel 各自只有一份模組例項（入口檔轉出的是同一個物件）', () => {
     const a1 = require('../../services/archivist');
     assert.equal(require('../../services/archivist.js'), a1);
     const c1 = require('../../services/cognitiveModel');

@@ -1,4 +1,4 @@
-# ChromaDB + Embedding 常驻服务（向量检索 + 语义搜索用）
+# ChromaDB + Embedding 常駐服務（向量檢索 + 語義搜尋用）
 FROM python:3.11-slim
 
 WORKDIR /app
@@ -8,7 +8,7 @@ RUN pip install --no-cache-dir -r chroma-requirements.txt
 
 COPY chroma_service.py ./
 
-# fastembed 模型缓存目录（首次运行会下载 jina-embeddings-v2-base-zh，约几百 MB）
+# fastembed 模型快取目錄（首次執行會下載 jina-embeddings-v2-base-zh，約幾百 MB）
 ENV HF_HOME=/app/hf_cache
 
 EXPOSE 7707

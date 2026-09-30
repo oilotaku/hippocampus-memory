@@ -11,15 +11,15 @@ process.env.MEMORY_ENCRYPTION = 'off';
 
 const { toIndexTokens, toQueryTokens, toMatchQuery } = require('../../utils/cjkTokenize');
 
-test('toIndexTokens: 中文切成重叠两字组', () => {
+test('toIndexTokens: 中文切成重疊兩字組', () => {
     assert.deepStrictEqual(toIndexTokens('動畫片').trim().split(/\s+/), ['動畫', '畫片']);
 });
 
-test('toIndexTokens: 单字串保留单字，非 CJK 转小写', () => {
+test('toIndexTokens: 單字串保留單字，非 CJK 轉小寫', () => {
     assert.deepStrictEqual(toIndexTokens('我 iPhone 15').trim().split(/\s+/), ['我', 'iphone', '15']);
 });
 
-test('toIndexTokens: 中英混合边界有空白隔开', () => {
+test('toIndexTokens: 中英混合邊界有空白隔開', () => {
     assert.deepStrictEqual(toIndexTokens('用Claude寫程式').trim().split(/\s+/), ['用', 'claude', '寫程', '程式']);
 });
 
@@ -29,18 +29,18 @@ test('toIndexTokens: 空值', () => {
     assert.strictEqual(toIndexTokens(undefined), '');
 });
 
-test('toMatchQuery: 两字组 OR 并加引号', () => {
+test('toMatchQuery: 兩字組 OR 並加引號', () => {
     assert.strictEqual(toMatchQuery('媽媽生日'), '"媽媽" OR "媽生" OR "生日"');
 });
 
-test('toMatchQuery: 空字串或全标点回传 null', () => {
+test('toMatchQuery: 空字串或全標點回傳 null', () => {
     assert.strictEqual(toMatchQuery(''), null);
     assert.strictEqual(toMatchQuery('   '), null);
     assert.strictEqual(toMatchQuery('，。！？…()"*:-'), null);
     assert.strictEqual(toMatchQuery(null), null);
 });
 
-test('toMatchQuery: FTS5 保留字与特殊符号不会拋錯', () => {
+test('toMatchQuery: FTS5 保留字與特殊符號不會拋錯', () => {
     const { initDatabase } = require('../../database');
     const db = initDatabase();
     const nasty = ['OR', 'AND', 'NOT', 'NEAR', 'NEAR/2', 'foo AND bar', '"unbalanced', '(a OR b', 'a*', 'col:val',
@@ -53,12 +53,12 @@ test('toMatchQuery: FTS5 保留字与特殊符号不会拋錯', () => {
     }
 });
 
-test('toQueryTokens: 停用字整个 token 都是停用字才丢', () => {
+test('toQueryTokens: 停用字整個 token 都是停用字才丟', () => {
     const stop = new Set(['我', '在', '哪']);
     assert.deepStrictEqual(toQueryTokens('我在哪上班', { stopChars: stop }), ['哪上', '上班']);
 });
 
-// ── 端到端：走 librarian 的实际 FTS 检索路径 ──
+// ── 端到端：走 librarian 的實際 FTS 檢索路徑 ──
 const { initDatabase, getDb } = require('../../database');
 const librarian = require('../../services/librarian');
 
@@ -73,14 +73,14 @@ const CORPUS = [
     '使用者住在新北三重',
     '媽媽下週三生日',
     '喜歡看動畫不喜歡恐怖片',
-    '使用者在台積電上班',
+    '使用者在臺積電上班',
     '動物園很好玩',
     '畫畫是興趣',
     '週末喜歡看電影，尤其是恐怖電影',
     '重要的事情要記得',
 ];
 
-test('librarian FTS 通道：兩字詞第一名正確、無單字干擾', () => {
+test('librarian FTS 通道：兩字詞第一名正確、無單字幹擾', () => {
     initDatabase();
     const db = getDb();
     seed(db, CORPUS);
@@ -89,7 +89,7 @@ test('librarian FTS 通道：兩字詞第一名正確、無單字干擾', () => 
 
     let r = top('動畫');
     assert.strictEqual(r[0], '喜歡看動畫不喜歡恐怖片');
-    assert.ok(!r.includes('動物園很好玩') && !r.includes('畫畫是興趣'), '不應命中單字干擾句: ' + r);
+    assert.ok(!r.includes('動物園很好玩') && !r.includes('畫畫是興趣'), '不應命中單字幹擾句: ' + r);
 
     r = top('三重');
     assert.strictEqual(r[0], '使用者住在新北三重');
@@ -102,7 +102,7 @@ test('librarian FTS 通道：兩字詞第一名正確、無單字干擾', () => 
     assert.strictEqual(r[0], '週末喜歡看電影，尤其是恐怖電影');
 
     r = top('我在哪上班');
-    assert.strictEqual(r[0], '使用者在台積電上班');
+    assert.strictEqual(r[0], '使用者在臺積電上班');
 
     assert.deepStrictEqual(top(''), []);
     assert.deepStrictEqual(top('，。！'), []);
@@ -142,7 +142,7 @@ test('migration v104：舊單字索引會被重建成兩字組', () => {
         db.prepare('INSERT INTO memories_fts(rowid, title, tags_text) VALUES (?, ?, ?)').run(m.id, oldSplit(m.title), '');
     }
     db.prepare('DELETE FROM schema_version WHERE version = 104').run();
-    // 舊索引下「動畫」會命中單字干擾句
+    // 舊索引下「動畫」會命中單字幹擾句
     const oldHit = db.prepare(`SELECT rowid FROM memory_fragments_fts WHERE memory_fragments_fts MATCH '"動" OR "畫"'`).all();
     assert.ok(oldHit.length >= 3);
 
@@ -160,6 +160,6 @@ test('migration v104：舊單字索引會被重建成兩字組', () => {
     assert.strictEqual(docs, fresh.prepare('SELECT COUNT(*) c FROM memory_fragments').get().c);
     const memHit = fresh.prepare(`SELECT rowid FROM memories_fts WHERE memories_fts MATCH '"動畫"'`).all();
     assert.strictEqual(memHit.length, 1);
-    // 新库第二次执行是 no-op
+    // 新庫第二次執行是 no-op
     assert.doesNotThrow(() => require('../../database').initDatabase());
 });

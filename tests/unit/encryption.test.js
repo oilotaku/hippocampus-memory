@@ -89,7 +89,7 @@ describe('encryption.encrypt / decrypt（v2）', () => {
         }, { key: 'zz' });
     });
 
-    test('decrypt：未加密字串（無 enc: 前綴）原樣回傳', () => {
+    test('decrypt：未加密字串（無 enc: 字首）原樣回傳', () => {
         assert.equal(encryption.decrypt('plain text'), 'plain text');
     });
 
@@ -125,13 +125,13 @@ describe('encryption.encrypt / decrypt（v2）', () => {
         withKeys(() => assert.equal(encryption.decrypt(out), null), { key: 'f'.repeat(64) });
     });
 
-    test('decrypt：opts.silent 只影響 log，回傳值不變', () => {
+    test('decrypt：opts.silent 隻影響 log，回傳值不變', () => {
         assert.equal(encryption.decrypt('enc:aa:bb', { silent: true }), null);
         assert.equal(encryption.decrypt('enc:00:00:00', { silent: true }), null);
     });
 
     test('decryptForDisplay：失敗回 fallback，成功回明文', () => {
-        assert.equal(encryption.decryptForDisplay('enc:aa:bb'), '（无法解密）');
+        assert.equal(encryption.decryptForDisplay('enc:aa:bb'), '（無法解密）');
         assert.equal(encryption.decryptForDisplay('enc:aa:bb', 'X'), 'X');
         assert.equal(encryption.decryptForDisplay(encryption.encrypt('ok')), 'ok');
     });
@@ -222,7 +222,7 @@ describe('encryption 金鑰輪替 / v1 相容', () => {
 });
 
 describe('encryption.isEncrypted', () => {
-    test('enc: 前綴為真，其餘為假', () => {
+    test('enc: 字首為真，其餘為假', () => {
         assert.equal(encryption.isEncrypted('enc:a:b:c'), true);
         assert.equal(encryption.isEncrypted(encryption.encrypt('x')), true);
         assert.equal(encryption.isEncrypted('plain'), false);

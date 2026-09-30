@@ -12,7 +12,7 @@ const { agentState, _canCallLLM } = require('./runtime');
 
 
 // ═══════════════════════════════════════════════════════
-// v4.7: rematchFragmentsForSeeds — 回补漏判碎片
+// v4.7: rematchFragmentsForSeeds — 回補漏判碎片
 //
 // The batch classifier misses ~74% of potential matches because
 // output space limits prevent exhaustive assignment. This runs a
@@ -45,11 +45,11 @@ async function rematchFragmentsForSeeds() {
     `).all(...SKIP_NAMES);
 
     if (seeds.length === 0) {
-        console.log('[Archivist] 回补: 没有需要补分的种子');
+        console.log('[Archivist] 回補: 沒有需要補分的種子');
         return { rematched: 0 };
     }
 
-    console.log(`[Archivist] 回补: ${seeds.length} 个种子有漏判碎片`);
+    console.log(`[Archivist] 回補: ${seeds.length} 個種子有漏判碎片`);
 
     // Process seeds in batches of 8 to keep prompt manageable
     const BATCH_SIZE = 8;
@@ -78,10 +78,10 @@ async function rematchFragmentsForSeeds() {
         if (seedFragments.length === 0) continue;
 
         // Build prompt
-        let prompt = '回补漏判碎片。对每个种子 + 它的候选碎片，判断是否属于该种子。\\n\\n';
+        let prompt = '回補漏判碎片。對每個種子 + 它的候選碎片，判斷是否屬於該種子。\\n\\n';
         for (const { seed, frags } of seedFragments) {
-            prompt += `种子: ${seed.name}[id=${seed.id},${seed.category}] 当前⭐${seed.fragment_count}\\n`;
-            prompt += `候选碎片（文本中提到"${seed.name}"，判断是否属于该种子）:\\n`;
+            prompt += `種子: ${seed.name}[id=${seed.id},${seed.category}] 當前⭐${seed.fragment_count}\\n`;
+            prompt += `候選碎片（文本中提到"${seed.name}"，判斷是否屬於該種子）:\\n`;
             for (const f of frags) {
                 const text = (f.content || '').slice(0, 180).replace(/\\n/g, ' ');
                 prompt += `  [frag_${f.id}] ${text}\\n`;
@@ -89,7 +89,7 @@ async function rematchFragmentsForSeeds() {
             prompt += '\\n';
         }
 
-        prompt += `对每条候选碎片判断match:true/false。一条碎片可以同时match多个种子（如果文本中提到了多个）。不确定就match:false（宁漏勿错）。\\n\\n只输出JSON数组:\\n[{"frag_id":101,"seed_id":1626,"match":true}, ...]`;
+        prompt += `對每條候選碎片判斷match:true/false。一條碎片可以同時match多個種子（如果文本中提到了多個）。不確定就match:false（寧漏勿錯）。\\n\\n只輸出JSON陣列:\\n[{"frag_id":101,"seed_id":1626,"match":true}, ...]`;
 
         try {
             const raw = await callLLM(
@@ -103,7 +103,7 @@ async function rematchFragmentsForSeeds() {
             const replyText = raw?.reply || raw?.text || raw?.content || '';
             const jsonMatch = replyText.match(/\[[\s\S]*\]/);
             if (!jsonMatch) {
-                console.error(`[Archivist] 回补 LLM响应无法解析: ${replyText.slice(0, 200)}`);
+                console.error(`[Archivist] 回補 LLM響應無法解析: ${replyText.slice(0, 200)}`);
                 continue;
             }
 
@@ -128,36 +128,36 @@ async function rematchFragmentsForSeeds() {
             writeBatch();
 
             totalRematched += batchRematched;
-            console.log(`[Archivist] 回补批次: ${batchRematched} 条匹配 (${seedFragments.map(s => s.seed.name).join(', ')})`);
+            console.log(`[Archivist] 回補批次: ${batchRematched} 條匹配 (${seedFragments.map(s => s.seed.name).join(', ')})`);
         } catch (e) {
-            console.error('[Archivist] 回补 LLM调用失败:', e.message);
+            console.error('[Archivist] 回補 LLM呼叫失敗:', e.message);
         }
     }
 
-    console.log(`[Archivist] 回补完成: ${totalRematched} 条碎片归位`);
+    console.log(`[Archivist] 回補完成: ${totalRematched} 條碎片歸位`);
     return { rematched: totalRematched };
 }
 
 
 // ═══════════════════════════════════════════════════════
-// v4.8: semanticRematchForSeeds — 语义回补
+// v4.8: semanticRematchForSeeds — 語義回補
 //
-// 字面 rematch 捞不到「去某地那次」「在某景点累瘫了」这类
-// 描述性提及（碎片不含实体名）。对小实体用 name+overview 做
-// 向量检索，候选送 flash 确认。地点/事件类实体的主要归位通路。
-// 仅深循环调用（ChromaDB 依赖，轻量模式禁入）。
+// 字面 rematch 撈不到「去某地那次」「在某景點累癱了」這類
+// 描述性提及（碎片不含實體名）。對小實體用 name+overview 做
+// 向量檢索，候選送 flash 確認。地點/事件類實體的主要歸位通路。
+// 僅深迴圈呼叫（ChromaDB 依賴，輕量模式禁入）。
 // ═══════════════════════════════════════════════════════
 
-const SEMANTIC_REMATCH_SIM_FLOOR = 0.40;   // 向量相似度门槛
+const SEMANTIC_REMATCH_SIM_FLOOR = 0.40;   // 向量相似度門檻
 
-const SEMANTIC_REMATCH_MAX_ENTITIES = 12;  // 每轮处理实体数（控制 LLM 用量）
+const SEMANTIC_REMATCH_MAX_ENTITIES = 12;  // 每輪處理實體數（控制 LLM 用量）
 
 
 async function semanticRematchForSeeds() {
     const db = getDb();
     const { searchMemoriesByVector } = require('../memory');
 
-    // 小实体优先：碎片少的星座最需要喂
+    // 小實體優先：碎片少的星座最需要喂
     const targets = db.prepare(`
         SELECT ep.id, ep.name, ep.category, ep.overview, ep.fragment_count
         FROM entity_profiles ep
@@ -179,13 +179,13 @@ async function semanticRematchForSeeds() {
     for (const ent of targets) {
         if (!_canCallLLM(1)) break;
 
-        // 用实体名+概述做语义查询，捞描述性提及
+        // 用實體名+概述做語義查詢，撈描述性提及
         const queryText = ent.overview ? `${ent.name}：${ent.overview.slice(0, 120)}` : ent.name;
         let hits;
         try {
             hits = await searchMemoriesByVector(queryText, 10);
         } catch (e) {
-            console.error(`[Archivist] 语义回补向量查询失败 (${ent.name}):`, e.message);
+            console.error(`[Archivist] 語義回補向量查詢失敗 (${ent.name}):`, e.message);
             continue;
         }
 
@@ -201,14 +201,14 @@ async function semanticRematchForSeeds() {
 
         const fragLines = candidates.map(c =>
             `[frag_${c.id}] ${(c.content || '').slice(0, 180).replace(/\n/g, ' ')}`).join('\n');
-        const prompt = `实体: ${ent.name} (${ent.category})${ent.overview ? '\n概述: ' + ent.overview.slice(0, 150) : ''}
+        const prompt = `實體: ${ent.name} (${ent.category})${ent.overview ? '\n概述: ' + ent.overview.slice(0, 150) : ''}
 
-以下碎片是语义检索找到的候选（文本里不一定出现"${ent.name}"，可能是间接提及，如"去某地那次"指代某地旅行）。
-判断每条是否确实在讲这个实体。间接指代算 match。只是主题相似但讲的不是它，不算。不确定就 false。
+以下碎片是語義檢索找到的候選（文本裡不一定出現"${ent.name}"，可能是間接提及，如"去某地那次"指代某地旅行）。
+判斷每條是否確實在講這個實體。間接指代算 match。只是主題相似但講的不是它，不算。不確定就 false。
 
 ${fragLines}
 
-只输出JSON数组: [{"frag_id":101,"match":true}, ...]`;
+只輸出JSON陣列: [{"frag_id":101,"match":true}, ...]`;
 
         try {
             const raw = await callLLM(
@@ -237,14 +237,14 @@ ${fragLines}
             writeBatch();
             if (matched > 0) {
                 total += matched;
-                console.log(`[Archivist] 🔭 语义回补: ${ent.name} +${matched} 颗星 (${ent.fragment_count}→${ent.fragment_count + matched})`);
+                console.log(`[Archivist] 🔭 語義回補: ${ent.name} +${matched} 顆星 (${ent.fragment_count}→${ent.fragment_count + matched})`);
             }
         } catch (e) {
-            console.error(`[Archivist] 语义回补 LLM 失败 (${ent.name}):`, e.message);
+            console.error(`[Archivist] 語義回補 LLM 失敗 (${ent.name}):`, e.message);
         }
     }
 
-    if (total > 0) console.log(`[Archivist] 语义回补完成: ${total} 条碎片归位`);
+    if (total > 0) console.log(`[Archivist] 語義回補完成: ${total} 條碎片歸位`);
     return { rematched: total };
 }
 

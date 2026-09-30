@@ -1,15 +1,15 @@
 // ========================================
-// 记忆星图 v5 — 布局层
-// 三套确定性布局：universe / galaxy 俯瞰 / constellation 展开
-// 所有随机量来自 mulberry32(seed)，刷新零抖动
+// 記憶星圖 v5 — 佈局層
+// 三套確定性佈局：universe / galaxy 俯瞰 / constellation 展開
+// 所有隨機量來自 mulberry32(seed)，重新整理零抖動
 // ========================================
 
 import { GALAXIES, GALAXY_BY_ID, strHash, mulberry32, consOfGalaxy, universe } from './data.js';
 
 const GOLDEN = Math.PI * (3 - Math.sqrt(5));
 
-// ── universe 视图 ──
-// 双星核心居中；四星系按固定方位角环绕；星系内星座做种子化 spiral 摆位（星团点）
+// ── universe 檢視 ──
+// 雙星核心居中；四星系按固定方位角環繞；星系內星座做種子化 spiral 擺位（星團點）
 export function layoutUniverse(W, H) {
     const cx = W / 2, cy = H / 2;
     const orbitR = Math.min(W, H) * 0.32;
@@ -19,7 +19,7 @@ export function layoutUniverse(W, H) {
         const gy = cy + Math.sin(ang) * orbitR;
         const cons = consOfGalaxy(g.id);
         const nebulaR = Math.min(W, H) * 0.17 + Math.sqrt(cons.length + 1) * 6;
-        // 星系内星座：种子化 sunflower spiral（按碎片数降序，大的居中）
+        // 星系內星座：種子化 sunflower spiral（按碎片數降序，大的居中）
         const sorted = [...cons].sort((a, b) => (b.fragment_count || 0) - (a.fragment_count || 0));
         const rng = mulberry32(strHash(g.id));
         const points = sorted.map((c, i) => {
@@ -37,9 +37,9 @@ export function layoutUniverse(W, H) {
     return { cx, cy, coreOrbitR: Math.min(W, H) * 0.035, galaxies };
 }
 
-// ── galaxy 俯瞰视图 ──
-// 该星系星座全屏 spiral 铺开，星座半径 ∝ sqrt(star数)，星座内有个体星点
-// v5.1: 视觉半径与点击半径分离，加碰撞推开避免星座重叠无法点击
+// ── galaxy 俯瞰檢視 ──
+// 該星系星座全屏 spiral 鋪開，星座半徑 ∝ sqrt(star數)，星座內有個體星點
+// v5.1: 視覺半徑與點選半徑分離，加碰撞推開避免星座重疊無法點選
 export function layoutGalaxy(galaxyId, W, H) {
     const cons = [...consOfGalaxy(galaxyId)].sort((a, b) => (b.fragment_count || 0) - (a.fragment_count || 0));
     const cx = W / 2, cy = H / 2;
@@ -52,12 +52,12 @@ export function layoutGalaxy(galaxyId, W, H) {
         const r = maxR * Math.sqrt((i + 0.5) / Math.max(cons.length, 1));
         const conX = cx + Math.cos(angle) * r * (W > H ? 1.35 : 1);
         const conY = cy + Math.sin(angle) * r;
-        // 视觉半径：小幅增长，上限收紧；点击半径：至少 30px 保证可点
+        // 視覺半徑：小幅增長，上限收緊；點選半徑：至少 30px 保證可點
         const conR = Math.min(70, 18 + Math.sqrt(c.stars.length) * 7);
         const hitR = Math.max(conR, 30);
         placed.push({ con: c, x: conX, y: conY, r: conR, hitR, stars: layoutStarsInCon(c, conX, conY, conR) });
     });
-    // 碰撞推开：中心距 < hitR1+hitR2+8px → 推开，3轮迭代
+    // 碰撞推開：中心距 < hitR1+hitR2+8px → 推開，3輪迭代
     for (let iter = 0; iter < 3; iter++) {
         for (let i = 0; i < placed.length; i++) {
             for (let j = i + 1; j < placed.length; j++) {
@@ -77,8 +77,8 @@ export function layoutGalaxy(galaxyId, W, H) {
     return { galaxy: GALAXY_BY_ID[galaxyId], cx, cy, cons: placed };
 }
 
-// ── constellation 展开视图 ──
-// 星星全屏环绕分布：亮星（conf 高）靠内大，暗星靠外小
+// ── constellation 展開檢視 ──
+// 星星全屏環繞分佈：亮星（conf 高）靠內大，暗星靠外小
 export function layoutConstellation(con, W, H) {
     const cx = W / 2, cy = H / 2;
     const R = Math.min(W, H) * 0.36;
@@ -86,7 +86,7 @@ export function layoutConstellation(con, W, H) {
     return { con, cx, cy, R, stars };
 }
 
-// 星座内星点排布（共用）：seed=fragment id；expanded 模式按 conf 排序内亮外暗
+// 星座內星點排布（共用）：seed=fragment id；expanded 模式按 conf 排序內亮外暗
 function layoutStarsInCon(con, cx, cy, R, expanded = false) {
     const list = expanded
         ? [...con.stars].sort((a, b) => (b.conf || 0) - (a.conf || 0))
@@ -96,7 +96,7 @@ function layoutStarsInCon(con, cx, cy, R, expanded = false) {
         const seed = strHash(s.id);
         const rng = mulberry32(seed);
         const angle = i * GOLDEN + rng() * (expanded ? 0.9 : 1.6);
-        // expanded: 排序后 spiral 半径自然内→外；cluster: 全随机散布
+        // expanded: 排序後 spiral 半徑自然內→外；cluster: 全隨機散佈
         const rNorm = expanded ? Math.sqrt((i + 0.5) / n) : (0.25 + rng() * 0.75);
         const r = R * (expanded ? (0.18 + rNorm * 0.82) : rNorm);
         const baseR = Math.max(1.4, 6.2 - (s.mag || 4) * 0.72) * (expanded ? 1.5 : 0.55);
@@ -110,8 +110,8 @@ function layoutStarsInCon(con, cx, cy, R, expanded = false) {
     });
 }
 
-// ── 桥线查询 ──
-// universe 层级：星系间聚合桥端点
+// ── 橋線查詢 ──
+// universe 層級：星系間聚合橋端點
 export function universeBridgeSegments(uLayout) {
     const gPos = Object.fromEntries(uLayout.galaxies.map(g => [g.galaxy.id, g]));
     return universe.galaxyBridges.map(br => {
@@ -121,17 +121,17 @@ export function universeBridgeSegments(uLayout) {
     }).filter(Boolean);
 }
 
-// galaxy 层级：该星系内部星座间的桥 + 跨星系桥只画到屏幕边缘方向的提示（省略，画内部桥即可）
+// galaxy 層級：該星系內部星座間的橋 + 跨星系橋只畫到螢幕邊緣方向的提示（省略，畫內部橋即可）
 export function galaxyBridgeSegments(gLayout) {
     const pos = Object.fromEntries(gLayout.cons.map(p => [p.con.id, p]));
     return universe.bridges.map(br => {
         const a = pos[br.a], b = pos[br.b];
-        if (!a || !b) return null; // 只画两端都在本星系的桥
+        if (!a || !b) return null; // 只畫兩端都在本星系的橋
         return { x1: a.x, y1: a.y, x2: b.x, y2: b.y, weight: br.weight, r1: a.r, r2: b.r };
     }).filter(Boolean);
 }
 
-// constellation 层级：与当前星座有桥的其他星座（供面板/提示显示）
+// constellation 層級：與當前星座有橋的其他星座（供面板/提示顯示）
 export function bridgesOfCon(conId) {
     return universe.bridges
         .filter(br => br.a === conId || br.b === conId)

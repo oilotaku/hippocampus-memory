@@ -27,17 +27,17 @@ async function start() {
     agentState.running = true;
     agentState.companionLastActive = Date.now();
 
-    console.log('[Archivist Agent] 启动 — Agent 循环 (2min tick) + 事件驱动 + Companion 感知');
+    console.log('[Archivist Agent] 啟動 — Agent 迴圈 (2min tick) + 事件驅動 + Companion 感知');
 
     // Listen for fragment events from Scribe — just set flags, don't cancel anything
     archivistEvents.on('fragments:written', (payload) => {
         onNewFragments(payload).catch(e =>
-            console.error('[Archivist Agent] 事件处理异常:', e.stack || e.message));
+            console.error('[Archivist Agent] 事件處理異常:', e.stack || e.message));
     });
 
     // Start the agent loop
     scheduleTick();
-    console.log('[Archivist Agent] 就绪');
+    console.log('[Archivist Agent] 就緒');
 }
 
 
@@ -64,7 +64,7 @@ function getStatus() {
 
 
 // ═══════════════════════════════════════════════════════
-// Event-Driven Path: Scribe 写完碎片 → 标记 flag
+// Event-Driven Path: Scribe 寫完碎片 → 標記 flag
 // ═══════════════════════════════════════════════════════
 
 async function onNewFragments({ fragmentIds, sourceMsgIds }) {
@@ -93,7 +93,7 @@ async function onNewFragments({ fragmentIds, sourceMsgIds }) {
     } catch (_) {}
     // Extract insights from new fragments (fire-and-forget)
     extractFragmentInsights().catch(e =>
-        console.error('[Archivist] insight 提取失败:', e.message));
+        console.error('[Archivist] insight 提取失敗:', e.message));
 }
 
 
@@ -124,7 +124,7 @@ function maybeTriggerFlashConsolidation(newFragmentIds, sourceMsgIds) {
     if (!hasSpike) return;
 
     const spike = highEW.find(f => f.emotional_weight >= FLASH_SPIKE_THRESHOLD);
-    console.log(`[Archivist] Flash触发条件满足：${highEW.length}条高EW碎片(≥${FLASH_EW_THRESHOLD})，尖峰=${spike.emotional_weight.toFixed(2)}`);
+    console.log(`[Archivist] Flash觸發條件滿足：${highEW.length}條高EW碎片(≥${FLASH_EW_THRESHOLD})，尖峰=${spike.emotional_weight.toFixed(2)}`);
 
     const { consolidateFlash } = require('../consolidator');
     const msgIds = (() => {
@@ -134,16 +134,16 @@ function maybeTriggerFlashConsolidation(newFragmentIds, sourceMsgIds) {
         if (result.flashed) {
             console.log(`[Archivist] Flash整合成功：episode #${result.memoryId}`);
         } else {
-            console.log(`[Archivist] Flash整合未执行：${result.reason || 'unknown'}`);
+            console.log(`[Archivist] Flash整合未執行：${result.reason || 'unknown'}`);
         }
     }).catch(err => {
-        console.error('[Archivist] Flash整合异常:', err.message);
+        console.error('[Archivist] Flash整合異常:', err.message);
     });
 }
 
 
 // ═══════════════════════════════════════════════════════
-// Agent Tick — 主循环
+// Agent Tick — 主迴圈
 // ═══════════════════════════════════════════════════════
 
 function scheduleTick() {
@@ -153,7 +153,7 @@ function scheduleTick() {
         try {
             await agentTick();
         } catch (e) {
-            console.error('[Archivist Agent] Tick 异常:', e.stack || e.message);
+            console.error('[Archivist Agent] Tick 異常:', e.stack || e.message);
         }
         scheduleTick();
     }, TICK_INTERVAL_MS);
@@ -195,13 +195,13 @@ async function agentTick() {
         const health = await assessTreeHealth();
 
         if (newFragCount > 0 || health.unclassified > 0) {
-            const mode = shouldDeepCycle ? '🌙深度整合' : '☀️轻量';
-            console.log(`[Archivist Agent] Tick [${mode}] 新碎片=${newFragCount} 未分类=${health.unclassified} user空闲=${Math.round(userIdleMs/60000)}min`);
+            const mode = shouldDeepCycle ? '🌙深度整合' : '☀️輕量';
+            console.log(`[Archivist Agent] Tick [${mode}] 新碎片=${newFragCount} 未分類=${health.unclassified} user空閒=${Math.round(userIdleMs/60000)}min`);
         }
 
         // 2. Bootstrap (zero-state only) — ensure seed constellations exist
         if (health.categoryCount === 0) {
-            console.log('[Archivist] 零状态：创建种子星座 (User + Companion)');
+            console.log('[Archivist] 零狀態：建立種子星座 (User + Companion)');
             const db = getDb();
             const { USER, AI } = require('../memoryConfig');
             db.prepare(`INSERT OR IGNORE INTO entity_profiles (name, category, status) VALUES (?, 'person', 'active')`).run(USER.name);
@@ -244,10 +244,10 @@ async function agentTick() {
         if (newFragCount > 0) {
             try {
                 matchEvidenceFromFragments();
-                // harvestFacts v4.8 退役：User 客观事实走 entity_profiles 档案，不再产 immutable_fact
+                // harvestFacts v4.8 退役：User 客觀事實走 entity_profiles 檔案，不再產 immutable_fact
                 // harvestFacts();
             } catch (e) {
-                console.error('[Archivist] 轻量模型维护失败:', e.message);
+                console.error('[Archivist] 輕量模型維護失敗:', e.message);
             }
         }
 
@@ -264,7 +264,7 @@ async function agentTick() {
                 }
                 return result;
             } catch (e) {
-                console.error('[Archivist] processModelDecay 失败:', e.message);
+                console.error('[Archivist] processModelDecay 失敗:', e.message);
                 return null;
             }
         }, 2 * 60 * 1000);  // every 2 min (every tick)
@@ -273,7 +273,7 @@ async function agentTick() {
             try {
                 return resolveExpiredStates();
             } catch (e) {
-                console.error('[Archivist] resolveExpiredStates 失败:', e.message);
+                console.error('[Archivist] resolveExpiredStates 失敗:', e.message);
                 return null;
             }
         }, 5 * 60 * 1000);  // every 5 min (fallback for >14d states, doesn't need frequent runs)
@@ -285,22 +285,22 @@ async function agentTick() {
             try {
                 return autoLinkLiteralMentions();
             } catch (e) {
-                console.error('[Archivist] autoLinkLiteralMentions 失败:', e.message);
+                console.error('[Archivist] autoLinkLiteralMentions 失敗:', e.message);
                 return null;
             }
         }, MIN_GAP_AUTO_LINK);
 
         // 5g. Aggregate linker — route music/book fragments to aggregate entities
         // These fragments are excluded from star map classification, but still need
-        // a home. Linked to aggregate entities (音乐/共读) in 爱好 galaxy.
+        // a home. Linked to aggregate entities (音樂/共讀) in 愛好 galaxy.
         await runTaskIfDue('aggregateLink', () => {
             try {
-                // 按值标路由的那几颗也跟着补链（正常情况下提取时已经链好了，
-                // 这里兜住"星座后建/当初写库失败"的尾巴以及存量）
+                // 按值標路由的那幾顆也跟著補鏈（正常情況下提取時已經鏈好了，
+                // 這裡兜住"星座後建/當初寫庫失敗"的尾巴以及存量）
                 linkTaggedFragments(db);
                 return linkAggregateFragments();
             } catch (e) {
-                console.error('[Archivist] aggregateLink 失败:', e.message);
+                console.error('[Archivist] aggregateLink 失敗:', e.message);
                 return null;
             }
         }, MIN_GAP_AUTO_LINK);
@@ -318,11 +318,11 @@ async function agentTick() {
                       AND created_at < datetime('now', '-7 days')
                 `).run(...SKIP_NAMES);
                 if (cleaned.changes > 0) {
-                    console.log(`[Archivist] 🧹 零碎片清理: ${cleaned.changes} 个实体标记 superseded`);
+                    console.log(`[Archivist] 🧹 零碎片清理: ${cleaned.changes} 個實體標記 superseded`);
                 }
                 return { cleaned: cleaned.changes };
             } catch (e) {
-                console.error('[Archivist] zeroFragCleanup 失败:', e.message);
+                console.error('[Archivist] zeroFragCleanup 失敗:', e.message);
                 return null;
             }
         }, CLEANUP_ZEROFRAG_MS);
@@ -332,7 +332,7 @@ async function agentTick() {
         // Each entity costs one cheap LLM call; 30min cooldown prevents abuse.
         await runTaskIfDue('entity_overviews', async () => {
             if (health.staleEntityOverviews > 0) {
-                console.log(`[Archivist] 📝 轻量概述更新: ${health.staleEntityOverviews} 个实体概述需更新`);
+                console.log(`[Archivist] 📝 輕量概述更新: ${health.staleEntityOverviews} 個實體概述需更新`);
                 return regenerateEntityOverviews();
             }
             return { skipped: true, reason: 'no stale overviews' };
@@ -344,12 +344,12 @@ async function agentTick() {
 
         if (shouldDeepCycle) {
             // Memory gate
-            if (!_checkMemoryGate(MIN_FREE_MEMORY_MB, '深度整合周期')) {
+            if (!_checkMemoryGate(MIN_FREE_MEMORY_MB, '深度整合週期')) {
                 agentState.inTick = false;
                 return;
             }
 
-            console.log('[Archivist Agent] 🦉 进入深度整合周期');
+            console.log('[Archivist Agent] 🦉 進入深度整合週期');
 
             // ── Phase 0: Decide what to do ──
             const llmAvailable = _countRemainingLLM();
@@ -366,14 +366,14 @@ async function agentTick() {
                     let classifyRounds = 0;
                     while (classifyRounds < MAX_CLASSIFY_ROUNDS && _canCallLLM(LLM_RESERVE_PER_ROUND + 25)) {
                         const rem = db.prepare(`SELECT COUNT(*) as c FROM memory_fragments WHERE status = 'active' AND id NOT IN (SELECT DISTINCT fragment_id FROM fragment_entities)`).get()?.c || 0;
-                        if (rem < 1) break;  // 即使1条也跑LLM分类(碎片少时LLM调用也小)
-                        if (!_checkMemoryGate(MEMORY_CHECK_GRACE_MB, `分类第${classifyRounds + 1}轮`)) break;
+                        if (rem < 1) break;  // 即使1條也跑LLM分類(碎片少時LLM呼叫也小)
+                        if (!_checkMemoryGate(MEMORY_CHECK_GRACE_MB, `分類第${classifyRounds + 1}輪`)) break;
                         const result = await runTask('classify', () => classifyFragments({ lightweight: false }));
                         if (!result || result.classified === 0) break;
                         classifyRounds++;
                     }
                     if (classifyRounds > 0) {
-                        console.log(`[Archivist Agent] 分类循环: ${classifyRounds} 轮`);
+                        console.log(`[Archivist Agent] 分類迴圈: ${classifyRounds} 輪`);
                         agentState.lastClassify = Date.now();
                     }
                     // Post-classify: spot-check low-confidence links
@@ -412,7 +412,7 @@ async function agentTick() {
                 const handler = dispatch[taskName];
                 if (!handler) continue;
                 if (!_canCallLLM(1) && taskName !== 'classify') {
-                    console.log(`[Archivist] 🌿 跳过 ${taskName}: LLM配额耗尽 (已用${agentState.tickLLMCalls})`);
+                    console.log(`[Archivist] 🌿 跳過 ${taskName}: LLM配額耗盡 (已用${agentState.tickLLMCalls})`);
                     continue;
                 }
                 const taskStart = Date.now();
@@ -420,7 +420,7 @@ async function agentTick() {
                 try {
                     const result = await handler();
                     const elapsed = Date.now() - taskStart;
-                    // Write to ontology_changelog so 观星手记 can display
+                    // Write to ontology_changelog so 觀星手記 can display
                     _logGardenActivity(taskName, result);
                     if (result) {
                         const summary = typeof result === 'object'
@@ -429,28 +429,28 @@ async function agentTick() {
                             : result;
                         console.log(`[Archivist] 🌿 ✓ ${taskName} (${(elapsed/1000).toFixed(1)}s): ${summary || 'done'}`);
                     } else {
-                        console.log(`[Archivist] 🌿 ○ ${taskName} (${(elapsed/1000).toFixed(1)}s): 跳过(冷却中或无待处理项)`);
+                        console.log(`[Archivist] 🌿 ○ ${taskName} (${(elapsed/1000).toFixed(1)}s): 跳過(冷卻中或無待處理項)`);
                     }
                 } catch (e) {
                     console.error(`[Archivist] 🌿 ✗ ${taskName}:`, e.stack || e.message);
                 }
             }
 
-            // Always write a deep cycle summary to 观星手记
+            // Always write a deep cycle summary to 觀星手記
             try {
                 const db2 = getDb();
                 const unclassifiedNow = db2.prepare(`SELECT COUNT(*) as c FROM memory_fragments WHERE status='active' AND id NOT IN (SELECT DISTINCT fragment_id FROM fragment_entities)`).get()?.c || 0;
                 const seedsNow = db2.prepare(`SELECT COUNT(*) as c FROM entity_profiles WHERE status='seed'`).get()?.c || 0;
                 db2.prepare(`INSERT INTO ontology_changelog (action, category_path, detail, confidence, status)
                     VALUES ('deep_cycle', ?, ?, 0.80, 'completed')`)
-                    .run('深循环完成', JSON.stringify({
+                    .run('深迴圈完成', JSON.stringify({
                         llm_calls: agentState.tickLLMCalls,
                         unclassified_remaining: unclassifiedNow,
                         seeds_remaining: seedsNow,
                     }));
             } catch (_) {}
 
-            console.log(`[Archivist] 🌿 园艺完成 (LLM: ${agentState.tickLLMCalls}次)`);
+            console.log(`[Archivist] 🌿 園藝完成 (LLM: ${agentState.tickLLMCalls}次)`);
 
             // ── Phase 2: Always-run maintenance (zero LLM) ──
             // Intuition stopwords refresh
@@ -486,7 +486,7 @@ async function agentTick() {
 
             // Mark deep cycle as done for this idle period
             agentState.deepCycleSinceLastUserMsg = true;
-            console.log('[Archivist Agent] 🦉 深度整合周期完成');
+            console.log('[Archivist Agent] 🦉 深度整合週期完成');
         }
 
         // 17. Whisper refresh — after any tree change
@@ -498,7 +498,7 @@ async function agentTick() {
         agentState.inTick = false;
         const elapsed = Date.now() - tickStart;
         if (elapsed > 30000) {
-            console.log(`[Archivist Agent] ⚠️ Tick 耗时 ${(elapsed/1000).toFixed(0)}s (LLM: ${agentState.tickLLMCalls})`);
+            console.log(`[Archivist Agent] ⚠️ Tick 耗時 ${(elapsed/1000).toFixed(0)}s (LLM: ${agentState.tickLLMCalls})`);
         }
     }
 }
@@ -602,22 +602,22 @@ function _countStaleEntityOverviews(db) {
 
         if (currentCount === 0) continue;
 
-        // 1. 从未有过概述
+        // 1. 從未有過概述
         if (!ent.overview) { count++; continue; }
 
-        // 2. 碎片数变化 ≥20% 或 ≥3
+        // 2. 碎片數變化 ≥20% 或 ≥3
         const prevCount = ent.last_eval_frag_count || 0;
         const growth = currentCount - prevCount;
         if ((prevCount > 0 && Math.abs(growth) / prevCount >= 0.2) || Math.abs(growth) >= 3) {
             count++; continue;
         }
 
-        // 3. 超过30天未更新概述
+        // 3. 超過30天未更新概述
         if (!ent.overview_updated_at || ent.overview_updated_at < thirtyDaysAgo) {
             count++; continue;
         }
 
-        // 4. 缺少别名或标签（低优先级回填）
+        // 4. 缺少別名或標籤（低優先順序回填）
         let existingAliases = [];
         let existingTags = [];
         try { existingAliases = JSON.parse(ent.aliases || '[]'); } catch (_) {}
@@ -651,29 +651,29 @@ function _countStaleEntityOverviews(db) {
 
 // Extract keywords from a category path for overlap safety check
 // ═══════════════════════════════════════════════════════
-// decideGardenAction — 深循环决策：flash-lite 看全景 → 决定任务优先级
+// decideGardenAction — 深迴圈決策：flash-lite 看全景 → 決定任務優先順序
 // ================================================================
-// 替代固定任务序列。不替代 runTaskIfDue 的冷却机制——决策只排顺序，
-// 冷却仍然由 runTaskIfDue 强制执行。
+// 替代固定任務序列。不替代 runTaskIfDue 的冷卻機制——決策只排順序，
+// 冷卻仍然由 runTaskIfDue 強制執行。
 // ═══════════════════════════════════════════════════════
 
-const GARDEN_DECISION_COOLDOWN = 10 * 60 * 1000; // 10min 冷却
+const GARDEN_DECISION_COOLDOWN = 10 * 60 * 1000; // 10min 冷卻
 
 
 const GARDEN_TASKS = {
-    classify:        { desc: '碎片分类(LLM批分类)', llm: true,  gapKey: 'MIN_GAP_CLASSIFY' },
-    rematch:         { desc: '字面回补(LIKE→LLM确认)', llm: true,  gapKey: 'MIN_GAP_REMATCH' },
-    semanticRematch: { desc: '语义回补(ChromaDB+LLM)', llm: true,  gapKey: 'MIN_GAP_SEMANTIC_REMATCH' },
-    seedMerge:       { desc: '种子合并(LLM别名检测)', llm: true,  gapKey: 'MIN_GAP_SEED_MERGE' },
-    graduate:        { desc: '种子毕业(LLM验证)', llm: true,  gapKey: null },
-    emergence:       { desc: '涌现检测(聚类+LLM)', llm: true,  gapKey: 'MIN_GAP_EMERGENT' },
-    entityRelations: { desc: '实体关系发现(LLM)', llm: true,  gapKey: 'MIN_GAP_RELATED_ENTITIES' },
-    entityOverviews: { desc: '实体概述更新(LLM)', llm: true,  gapKey: 'MIN_GAP_ENTITY_OVERVIEWS' },
-    episodeAudit:    { desc: 'Episode质检(LLM)', llm: true,  gapKey: 'MIN_GAP_EPISODE_AUDIT' },
+    classify:        { desc: '碎片分類(LLM批分類)', llm: true,  gapKey: 'MIN_GAP_CLASSIFY' },
+    rematch:         { desc: '字面回補(LIKE→LLM確認)', llm: true,  gapKey: 'MIN_GAP_REMATCH' },
+    semanticRematch: { desc: '語義回補(ChromaDB+LLM)', llm: true,  gapKey: 'MIN_GAP_SEMANTIC_REMATCH' },
+    seedMerge:       { desc: '種子合併(LLM別名檢測)', llm: true,  gapKey: 'MIN_GAP_SEED_MERGE' },
+    graduate:        { desc: '種子畢業(LLM驗證)', llm: true,  gapKey: null },
+    emergence:       { desc: '湧現檢測(聚類+LLM)', llm: true,  gapKey: 'MIN_GAP_EMERGENT' },
+    entityRelations: { desc: '實體關係發現(LLM)', llm: true,  gapKey: 'MIN_GAP_RELATED_ENTITIES' },
+    entityOverviews: { desc: '實體概述更新(LLM)', llm: true,  gapKey: 'MIN_GAP_ENTITY_OVERVIEWS' },
+    episodeAudit:    { desc: 'Episode質檢(LLM)', llm: true,  gapKey: 'MIN_GAP_EPISODE_AUDIT' },
     insights:        { desc: '碎片洞察提取(LLM)', llm: true,  gapKey: 'MIN_GAP_INSIGHTS' },
-    entityScan:      { desc: '新实体扫描(LLM)', llm: true,  gapKey: 'MIN_GAP_ENTITY_VERIFY' },
-    userModel:      { desc: 'User Model认知维护', llm: true,  gapKey: 'MIN_GAP_USER_MODEL' },
-    stop:            { desc: '本轮无事可做，停止', llm: false, gapKey: null },
+    entityScan:      { desc: '新實體掃描(LLM)', llm: true,  gapKey: 'MIN_GAP_ENTITY_VERIFY' },
+    userModel:      { desc: 'User Model認知維護', llm: true,  gapKey: 'MIN_GAP_USER_MODEL' },
+    stop:            { desc: '本輪無事可做，停止', llm: false, gapKey: null },
 };
 
 
@@ -710,7 +710,7 @@ async function decideGardenAction(health, llmAvailable) {
     const seedsReady = db.prepare(`SELECT COUNT(*) as c FROM entity_profiles WHERE status = 'seed' AND fragment_count >= 3`).get()?.c || 0;
     const recentSeeds = db.prepare(`SELECT name, category, fragment_count FROM entity_profiles WHERE status = 'seed' AND fragment_count >= 2 ORDER BY fragment_count DESC LIMIT 10`).all();
 
-    // v5.5: 过时overview详情
+    // v5.5: 過時overview詳情
     const staleEntities = db.prepare(`
         SELECT ep.id, ep.name, ep.category,
                (SELECT COUNT(*) FROM fragment_entities WHERE entity_id = ep.id) as fc,
@@ -730,37 +730,37 @@ async function decideGardenAction(health, llmAvailable) {
     const hasWork = health.unclassified >= 5 || seedsReady > 0 || seedsAtRisk > 5
         || health.needsInsight >= 10 || health.staleEntityOverviews > 0;
     if (!hasWork && !taskStatus.userModel?.ready) {
-        console.log('[Archivist] 🌿 花园无需打理');
+        console.log('[Archivist] 🌿 花園無需打理');
         return ['stop'];
     }
     if (llmAvailable < 3) {
-        console.log(`[Archivist] 🌿 LLM配额不足(${llmAvailable})，仅跑分类`);
+        console.log(`[Archivist] 🌿 LLM配額不足(${llmAvailable})，僅跑分類`);
         return ['classify', 'stop'];
     }
 
-    const prompt = `你是AI伴侣的园艺助手。看一眼记忆花园状态，决定本轮做什么。
+    const prompt = `你是AI伴侶的園藝助手。看一眼記憶花園狀態，決定本輪做什麼。
 
-═══ 花园现状 ═══
-未分类碎片: ${health.unclassified} | 活跃星座: ${health.categoryCount}
-fc=2种子(差1条可毕业): ${seedsAtRisk}颗 | fc≥3种子(已可毕业): ${seedsReady}颗
+═══ 花園現狀 ═══
+未分類碎片: ${health.unclassified} | 活躍星座: ${health.categoryCount}
+fc=2種子(差1條可畢業): ${seedsAtRisk}顆 | fc≥3種子(已可畢業): ${seedsReady}顆
 需洞察碎片: ${health.needsInsight} | 需更新概述: ${health.staleEntityOverviews}
-${staleEntities.length > 0 ? '═══ 过时概述 ═══\n' + staleEntities.map(s => `  ${s.name}(${s.category}): ${s.fc}碎片, 上次更新${s.days_stale}天前`).join('\n') + '\n' : ''}
-可用LLM配额: ${llmAvailable}
+${staleEntities.length > 0 ? '═══ 過時概述 ═══\n' + staleEntities.map(s => `  ${s.name}(${s.category}): ${s.fc}碎片, 上次更新${s.days_stale}天前`).join('\n') + '\n' : ''}
+可用LLM配額: ${llmAvailable}
 
-═══ 种子详情 ═══
-${recentSeeds.length > 0 ? recentSeeds.map(s => `  ${s.name}(${s.category}) fc=${s.fragment_count}`).join('\n') : '  (无高风险种子)'}
+═══ 種子詳情 ═══
+${recentSeeds.length > 0 ? recentSeeds.map(s => `  ${s.name}(${s.category}) fc=${s.fragment_count}`).join('\n') : '  (無高風險種子)'}
 
-═══ 任务冷却 ═══
-${Object.entries(taskStatus).filter(([n]) => n !== 'stop').map(([n, s]) => `  ${n}: ${s.ready ? '✅就绪' : '⏳' + s.cooldownRemaining + 's'} — ${s.desc}`).join('\n')}
+═══ 任務冷卻 ═══
+${Object.entries(taskStatus).filter(([n]) => n !== 'stop').map(([n, s]) => `  ${n}: ${s.ready ? '✅就緒' : '⏳' + s.cooldownRemaining + 's'} — ${s.desc}`).join('\n')}
 
-═══ 规则 ═══
-- fc=2种子多→优先rematch/classify攒碎片→然后graduate
-- 积压多→优先classify
-- 都没急事→选stop
-- 一次2-4个任务即可
-- 冷却中的任务选了也会被跳过
+═══ 規則 ═══
+- fc=2種子多→優先rematch/classify攢碎片→然後graduate
+- 積壓多→優先classify
+- 都沒急事→選stop
+- 一次2-4個任務即可
+- 冷卻中的任務選了也會被跳過
 
-输出JSON: {"tasks":["task1","task2"],"reasoning":"一句话"}`;
+輸出JSON: {"tasks":["task1","task2"],"reasoning":"一句話"}`;
 
     try {
         const raw = await callLLM(
@@ -772,12 +772,12 @@ ${Object.entries(taskStatus).filter(([n]) => n !== 'stop').map(([n, s]) => `  ${
         agentState.dailyLLMCalls++;
         const replyText = raw?.reply || raw?.text || raw?.content || '';
         const jsonMatch = replyText.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) { console.log('[Archivist] 🌿 决策解析失败，默认顺序'); return ['classify', 'rematch', 'graduate', 'stop']; }
+        if (!jsonMatch) { console.log('[Archivist] 🌿 決策解析失敗，預設順序'); return ['classify', 'rematch', 'graduate', 'stop']; }
         const decision = JSON.parse(jsonMatch[0]);
-        console.log(`[Archivist] 🌿 园艺决策: ${(decision.tasks || []).join(' → ')} — ${decision.reasoning || ''}`);
+        console.log(`[Archivist] 🌿 園藝決策: ${(decision.tasks || []).join(' → ')} — ${decision.reasoning || ''}`);
         return decision.tasks || ['stop'];
     } catch (e) {
-        console.error('[Archivist] 🌿 决策调用失败:', e.message);
+        console.error('[Archivist] 🌿 決策呼叫失敗:', e.message);
         return ['classify', 'rematch', 'graduate', 'stop'];
     }
 }

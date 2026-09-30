@@ -1,8 +1,8 @@
 """
-ChromaDB + Embedding 常驻服务 (FastAPI)
-取代每次 spawn 新进程，模型只加载一次，内存复用。
+ChromaDB + Embedding 常駐服務 (FastAPI)
+取代每次 spawn 新程序，模型只加載一次，記憶體複用。
 
-启动：venv/bin/python -m uvicorn chroma_service:app --host 127.0.0.1 --port 7707
+啟動：venv/bin/python -m uvicorn chroma_service:app --host 127.0.0.1 --port 7707
 PM2:  pm2 start chroma_service.py --name chroma-service --interpreter venv/bin/python
 """
 
@@ -12,7 +12,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
 
-# ── 全局状态（进程生命周期内复用）──
+# ── 全域性狀態（程序生命週期內複用）──
 _embed_model = None
 _chroma_client = None
 
@@ -35,7 +35,7 @@ def get_collection(name='memories_collection'):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 启动时预热模型
+    # 啟動時預熱模型
     get_embed_model()
     get_collection()
     yield
@@ -43,7 +43,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 
-# ── 请求体 ──
+# ── 請求體 ──
 class AddRequest(BaseModel):
     id: str
     embedding: list
@@ -109,7 +109,7 @@ class QueryMultiRequest(BaseModel):
     queries: list  # list of QueryMultiItem dicts
 
 
-# ── 路由（逻辑完全从 chroma_helper.py 搬移）──
+# ── 路由（邏輯完全從 chroma_helper.py 搬移）──
 
 @app.post("/add")
 def api_add(req: AddRequest):
@@ -147,11 +147,11 @@ def api_query(req: QueryRequest):
     n = req.n_results
     raw = col.query(
         query_embeddings=[req.embedding],
-        n_results=max(n * 3, 30),  # 补偿陈旧碎片占位，让新条目有机会进池
+        n_results=max(n * 3, 30),  # 補償陳舊碎片佔位，讓新條目有機會進池
         include=['metadatas', 'distances']
     )
 
-    # 过滤和加权（与原 chroma_helper 一致）
+    # 過濾和加權（與原 chroma_helper 一致）
     filtered = {'ids': [[]], 'distances': [[]], 'metadatas': [[]]}
     for i in range(len(raw['ids'][0])):
         distance = raw['distances'][0][i]
@@ -210,7 +210,7 @@ def api_index_batch(req: IndexBatchRequest):
     embeddings = list(model.embed(texts))
     emb_list = [e.tolist() for e in embeddings]
 
-    # 去重检查
+    # 去重檢查
     duplicates = []
     for i, emb in enumerate(emb_list):
         raw = col.query(query_embeddings=[emb], n_results=3, include=['metadatas', 'distances'])
@@ -230,7 +230,7 @@ def api_index_batch(req: IndexBatchRequest):
                 })
                 break
 
-    # 过滤重复项
+    # 過濾重複項
     dup_new_ids = {d['new_id'] for d in duplicates}
     filtered_ids = [id for id in ids if id not in dup_new_ids]
     filtered_embs = [emb_list[i] for i, id in enumerate(ids) if id not in dup_new_ids]
@@ -366,7 +366,7 @@ def api_query_multi(req: QueryMultiRequest):
     return {'results': all_results}
 
 
-# ── 健康检查 ──
+# ── 健康檢查 ──
 @app.get("/health")
 def health():
     return {"status": "ok", "model_loaded": _embed_model is not None}

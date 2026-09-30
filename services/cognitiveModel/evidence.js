@@ -157,7 +157,7 @@ function addEvidence(id, fragmentId, confirms = true, opts = {}) {
     if (entry.type === 'active_hypothesis' && sourceDiversity >= 3 && newConfidence >= 0.70) {
         db.prepare(`UPDATE user_model SET type = 'stable_trait', decay_type = 'evidence_dependent',
             source_quality = 'inferred', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(id);
-        console.log(`[UserModel] 🆙 假设升级为特质: "${entry.content.slice(0, 60)}" (id=${id}, evidence=${newCount}, diversity=${sourceDiversity})`);
+        console.log(`[UserModel] 🆙 假設升級為特質: "${entry.content.slice(0, 60)}" (id=${id}, evidence=${newCount}, diversity=${sourceDiversity})`);
         return { upgraded: true, id, content: entry.content };
     }
 
@@ -302,7 +302,7 @@ function matchEvidenceFromFragments() {
     }
 
     if (matched > 0) {
-        console.log(`[UserModel] 🔍 轻量证据匹配: ${matched}/${newFragments.length} 条碎片匹配到认知条目`);
+        console.log(`[UserModel] 🔍 輕量證據匹配: ${matched}/${newFragments.length} 條碎片匹配到認知條目`);
     }
     return { matched, fragmentsScanned: newFragments.length };
 }
@@ -390,7 +390,7 @@ function anchorEntriesToFragments(entryIds, opts = {}) {
                 .run(JSON.stringify(mergedFrags), JSON.stringify(mergedEntities),
                     mergedFrags.length, entry.id);
 
-            console.log(`[UserModel] ⚓ 锚定条目 #${entry.id}: ${matchedFragIds.length} frags — "${entry.content.slice(0, 50)}"`);
+            console.log(`[UserModel] ⚓ 錨定條目 #${entry.id}: ${matchedFragIds.length} frags — "${entry.content.slice(0, 50)}"`);
         }
     }
 }
@@ -412,7 +412,7 @@ function seedAnchorOrphanEntries() {
     if (orphans.length === 0) return { anchored: 0 };
 
     const orphanIds = orphans.map(o => o.id);
-    console.log(`[UserModel] 🦴 种子锚定: ${orphanIds.length} 条孤立条目 → 搜索全量碎片`);
+    console.log(`[UserModel] 🦴 種子錨定: ${orphanIds.length} 條孤立條目 → 搜尋全量碎片`);
 
     // Two-pass: oldest first (capture earliest evidence), then newest (capture recent)
     anchorEntriesToFragments(orphanIds, { timeWindow: '-999 days', fragLimit: 250, minOverlap: 4, orderDir: 'ASC', maxFrags: 25 });
@@ -452,8 +452,8 @@ async function harvestFacts() {
 
     // Pre-filter: keyword heuristics
     // Specific fact-indicating patterns — excludes generic 是/在 which match everything
-    const factPattern = /出生于|毕业于|就读于|家里有|家人|老家|家乡|妈妈|爸爸|妹妹|弟弟|姐姐|哥哥|大学|专业|职业|公司|[\d]{4}年|生日|身高|体重|血型|星座|MBTI|属相|住在|搬到/;
-    const transientPattern = /今天|现在|最近|这周|这个月|正在|准备/;
+    const factPattern = /出生於|畢業於|就讀於|家裡有|家人|老家|家鄉|媽媽|爸爸|妹妹|弟弟|姐姐|哥哥|大學|專業|職業|公司|[\d]{4}年|生日|身高|體重|血型|星座|MBTI|屬相|住在|搬到|出生于|毕业于|就读于|家里有|家人|老家|家乡|妈妈|爸爸|妹妹|弟弟|姐姐|哥哥|大学|专业|职业|公司|[\d]{4}年|生日|身高|体重|血型|星座|MBTI|属相|住在|搬到/;
+    const transientPattern = /今天|現在|最近|這週|這個月|正在|準備|今天|现在|最近|这周|这个月|正在|准备/;
 
     const preFiltered = [];
     for (const frag of candidates) {
@@ -476,7 +476,7 @@ async function harvestFacts() {
     }
 
     if (preFiltered.length === 0) {
-        console.log(`[UserModel] 🔍 事实收割: 扫描${candidates.length}条, 0条通过关键词预筛`);
+        console.log(`[UserModel] 🔍 事實收割: 掃描${candidates.length}條, 0條通過關鍵詞預篩`);
         return { harvested: 0, scanned: candidates.length };
     }
 
@@ -486,17 +486,17 @@ async function harvestFacts() {
     // LLM flash verification: which candidates contain verifiable immutable facts?
     let verified = [];
     try {
-        const verifyPrompt = `你是事实审核器。检查以下碎片是否包含关于{{user.name}}的可验证、不会改变的客观事实。
+        const verifyPrompt = `你是事實稽核器。檢查以下碎片是否包含關於{{user.name}}的可驗證、不會改變的客觀事實。
 
-事实标准：一旦确认就不会变（生日、血型、毕业院校、家庭成员、曾经居住地、学历、职业经历等）。必须是{{user.name}}本人陈述，不是{{ai.name}}推测。不是临时状态或偏好。
+事實標準：一旦確認就不會變（生日、血型、畢業院校、家庭成員、曾經居住地、學歷、職業經歷等）。必須是{{user.name}}本人陳述，不是{{ai.name}}推測。不是臨時狀態或偏好。
 
-对每条碎片判断是否收入为immutable_fact。只返回JSON数组。
+對每條碎片判斷是否收入為immutable_fact。只返回JSON陣列。
 
 碎片列表：
 ${verifyBatch.map((f, i) => `[${i}] [${f.type}] ${f.content}`).join('\n')}
 
 返回格式：[{"idx": 0, "harvest": true, "content": "{{user.name}}..."}, {"idx": 1, "harvest": false}]
-只返回JSON数组，不要其他内容。`;
+只返回JSON陣列，不要其他內容。`;
 
         const raw = await callLLM(
             [{ role: 'user', parts: [{ text: fillPrompt(verifyPrompt) }] }],
@@ -554,9 +554,9 @@ ${verifyBatch.map((f, i) => `[${i}] [${f.type}] ${f.content}`).join('\n')}
     }
 
     if (harvested > 0) {
-        console.log(`[UserModel] 📥 事实收割: ${harvested}/${verified.length}条确认 → immutable_fact (扫描${candidates.length}, 预筛${preFiltered.length})`);
+        console.log(`[UserModel] 📥 事實收割: ${harvested}/${verified.length}條確認 → immutable_fact (掃描${candidates.length}, 預篩${preFiltered.length})`);
     } else {
-        console.log(`[UserModel] 🔍 事实收割: 扫描${candidates.length}, 预筛${preFiltered.length}, LLM确认0条`);
+        console.log(`[UserModel] 🔍 事實收割: 掃描${candidates.length}, 預篩${preFiltered.length}, LLM確認0條`);
     }
     return { harvested, scanned: candidates.length, prefiltered: preFiltered.length, verified: verified.length };
 }
@@ -569,10 +569,10 @@ ${verifyBatch.map((f, i) => `[${i}] [${f.type}] ${f.content}`).join('\n')}
 function backfillModelEvidence() {
     const db = getDb();
 
-    // ── 一次性修复：已有 source_fragment_ids 的条目，evidence_count/source_diversity 重算 ──
-    // 原来的 entity_id 回填导致所有共享 entity_ids 的条目拿到相同的证据计数。
-    // evidence_count = source_fragment_ids 数组长度
-    // source_diversity = source_fragment_ids 中不同日期的数量
+    // ── 一次性修復：已有 source_fragment_ids 的條目，evidence_count/source_diversity 重算 ──
+    // 原來的 entity_id 回填導致所有共享 entity_ids 的條目拿到相同的證據計數。
+    // evidence_count = source_fragment_ids 陣列長度
+    // source_diversity = source_fragment_ids 中不同日期的數量
     const dirtyEntries = db.prepare(`
         SELECT id, source_fragment_ids FROM user_model
         WHERE status = 'active'
@@ -595,10 +595,10 @@ function backfillModelEvidence() {
         fixCount++;
     }
     if (fixCount > 0) {
-        console.log(`[UserModel] 证据修复: ${fixCount} 条 entry 的 evidence_count + source_diversity 已重算`);
+        console.log(`[UserModel] 證據修復: ${fixCount} 條 entry 的 evidence_count + source_diversity 已重算`);
     }
 
-    // ── 孤儿锚定：source_fragment_ids 为空的条目，用 bigram 匹配补证据 ──
+    // ── 孤兒錨定：source_fragment_ids 為空的條目，用 bigram 匹配補證據 ──
     const orphans = db.prepare(`
         SELECT id FROM user_model
         WHERE status = 'active'
@@ -609,7 +609,7 @@ function backfillModelEvidence() {
     if (orphans.length === 0) return { backfilled: fixCount };
 
     const orphanIds = orphans.map(o => o.id);
-    console.log(`[UserModel] 证据回填: ${orphanIds.length} 条孤立条目 → bigram锚定`);
+    console.log(`[UserModel] 證據回填: ${orphanIds.length} 條孤立條目 → bigram錨定`);
 
     // Two-pass anchor: oldest first (capture earliest evidence), then newest (capture recent)
     anchorEntriesToFragments(orphanIds, { timeWindow: '-999 days', fragLimit: 250, minOverlap: 4, orderDir: 'ASC', maxFrags: 25 });
@@ -628,22 +628,22 @@ function backfillModelEvidence() {
 
 
 // ═══════════════════════════════════════════════════════
-// v4.8: bridgeStarMapToModel — 星图→用户模型桥
+// v4.8: bridgeStarMapToModel — 星圖→使用者模型橋
 //
-// 星图的 term 实体（用户的一些脆弱时刻、深夜写代码等行为模式…）
-// 是 archivist 从碎片中聚类出的行为模式，天然适合作为
-// stable_trait 或 active_hypothesis 的候选。
+// 星圖的 term 實體（使用者的一些脆弱時刻、深夜寫程式碼等行為模式…）
+// 是 archivist 從碎片中聚類出的行為模式，天然適合作為
+// stable_trait 或 active_hypothesis 的候選。
 //
-// 本函数扫描 fragment_count≥5 且有 overview 的 term 实体，
-// 查重后提案进 user_model。不替换现有信号管线——作为
-// 第7个信号源，走同一套 dedup/verify/review 质检。
+// 本函式掃描 fragment_count≥5 且有 overview 的 term 實體，
+// 查重後提案進 user_model。不替換現有訊號管線——作為
+// 第7個訊號源，走同一套 dedup/verify/review 質檢。
 // ═══════════════════════════════════════════════════════
 
 async function bridgeStarMapToModel() {
-    // v4.9 退役：term overview 不是可测试的假设/特质，直接灌入产出的
-    // 是文学独白（见 #171-176 教训）。星图→{{user.name}} Model 的正确关系是
-    // 「引用」而非「桥」：trait.entity_ids 包含星图实体 ID。
-    // 保留函数签名以便未来重设计时起手有框架。
+    // v4.9 退役：term overview 不是可測試的假設/特質，直接灌入產出的
+    // 是文學獨白（見 #171-176 教訓）。星圖→{{user.name}} Model 的正確關係是
+    // 「引用」而非「橋」：trait.entity_ids 包含星圖實體 ID。
+    // 保留函式簽名以便未來重設計時起手有框架。
     return { proposed: 0 };
 }
 

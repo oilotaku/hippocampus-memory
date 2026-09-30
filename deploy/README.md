@@ -1,64 +1,64 @@
-# 部署到 AstrBot + SnowLuma 的说明
+# 部署到 AstrBot + SnowLuma 的說明
 
-记忆库（Memory Constellations）是**独立的 Node.js 服务**，不是 AstrBot 插件。
-要接入 AstrBot，需要两件事一起做：
+記憶庫（Memory Constellations）是**獨立的 Node.js 服務**，不是 AstrBot 外掛。
+要接入 AstrBot，需要兩件事一起做：
 
-1. **记忆库跑成一个 Docker 容器**（独立服务，监听 3000 端口）
-2. **（可选）ChromaDB 跑一个容器**（向量/语义检索，监听 7707 端口）
-3. **AstrBot 装一个桥接插件**（把聊天消息转发给记忆库）
+1. **記憶庫跑成一個 Docker 容器**（獨立服務，監聽 3000 埠）
+2. **（可選）ChromaDB 跑一個容器**（向量/語義檢索，監聽 7707 埠）
+3. **AstrBot 裝一個橋接外掛**（把聊天訊息轉發給記憶庫）
 
 ---
 
-## 第一步：把记忆库加进 docker-compose
+## 第一步：把記憶庫加進 docker-compose
 
-把 `docker-compose.memory.yml` 里的 `memory-constellations` 服务，合并到你的 `docker-compose.yml` 的 `services:` 下面（和 `astrbot`、`snowluma` 平级）。
+把 `docker-compose.memory.yml` 裡的 `memory-constellations` 服務，合併到你的 `docker-compose.yml` 的 `services:` 下面（和 `astrbot`、`snowluma` 平級）。
 
-改好后：
+改好後：
 
 ```bash
-# 生成两个随机密钥
+# 生成兩個隨機金鑰
 openssl rand -hex 32   # 填到 SANCTUARY_ENCRYPTION_KEY
 openssl rand -hex 32   # 填到 SESSION_SECRET
 
 docker compose up -d --build
 ```
 
-启动后记忆库在 `http://localhost:3000`，Web 星图在 `http://localhost:3000/memory.html`（登录密码是 `LOGIN_PASSWORD`）。
+啟動後記憶庫在 `http://localhost:3000`，Web 星圖在 `http://localhost:3000/memory.html`（登入密碼是 `LOGIN_PASSWORD`）。
 
 ---
 
-## 第二步：装 AstrBot 桥接插件
+## 第二步：裝 AstrBot 橋接外掛
 
-桥接插件的文件在 `deploy/astrbot-plugin/` 目录（`metadata.yaml` + `main.py` + `requirements.txt`）。
+橋接外掛的檔案在 `deploy/astrbot-plugin/` 目錄（`metadata.yaml` + `main.py` + `requirements.txt`）。
 
-**AstrBot 的「从 GitHub 导入插件」要求 `metadata.yaml` 在仓库根目录**，所以这个插件需要放在一个**独立的 GitHub 仓库**（不能放在记忆库仓库的子目录里）。
+**AstrBot 的「從 GitHub 匯入外掛」要求 `metadata.yaml` 在倉庫根目錄**，所以這個外掛需要放在一個**獨立的 GitHub 倉庫**（不能放在記憶庫倉庫的子目錄裡）。
 
-做法（二选一）：
+做法（二選一）：
 
-1. 新建一个 GitHub 仓库，把 `deploy/astrbot-plugin/` 里的三个文件上传到仓库根目录，然后在 AstrBot 里粘贴这个仓库地址导入；
-2. 或者手动：把 `main.py` 复制到 AstrBot 的插件目录，`requirements.txt` 里的 `aiohttp` 用 `pip install aiohttp` 装上。
+1. 新建一個 GitHub 倉庫，把 `deploy/astrbot-plugin/` 裡的三個檔案上傳到倉庫根目錄，然後在 AstrBot 裡貼上這個倉庫地址匯入；
+2. 或者手動：把 `main.py` 複製到 AstrBot 的外掛目錄，`requirements.txt` 裡的 `aiohttp` 用 `pip install aiohttp` 裝上。
 
-导入后，在插件的环境变量里设置（或直接改 `main.py` 顶部）：
+匯入後，在外掛的環境變數裡設定（或直接改 `main.py` 頂部）：
 
 ```
 MEMORY_API_BASE=http://memory-constellations:3000
 ```
 
-（`memory-constellations` 是 docker-compose 里的容器名，AstrBot 容器内能通过这个名字访问它。）
+（`memory-constellations` 是 docker-compose 裡的容器名，AstrBot 容器內能通過這個名字訪問它。）
 
 ---
 
-## 完事后的效果
+## 完事後的效果
 
-- AstrBot 收到的用户消息 → 自动 POST 给记忆库 → Scribe 提取记忆碎片
-- AstrBot 的回复 → 也 POST 给记忆库 → 记住机器人说过的话
-- 记忆库 Web 星图（`memory.html`）能看到星座生长
+- AstrBot 收到的使用者訊息 → 自動 POST 給記憶庫 → Scribe 提取記憶碎片
+- AstrBot 的回覆 → 也 POST 給記憶庫 → 記住機器人說過的話
+- 記憶庫 Web 星圖（`memory.html`）能看到星座生長
 
-记忆库**不负责回复**，回复还是 AstrBot 自己的 LLM。
+記憶庫**不負責回覆**，回覆還是 AstrBot 自己的 LLM。
 
 ---
 
-## 备注
+## 備註
 
-- 记忆库的**向量检索需要 ChromaDB 服务**（`chroma_service.py`，端口 7707），已随仓库提供（`deploy/Dockerfile.chroma` + compose 里的 `chroma` 服务）。记忆库通过 `CHROMA_URL` 环境变量连 chroma 容器（compose 里已配好 `CHROMA_URL=http://chroma:7707`）。没有 ChromaDB 时记忆库仍能跑、能提取碎片，只是「向量语义检索」降级为「关键词检索」。
-- `deploy/astrbot-plugin/main.py` 里的 `on_decorating_result` 是 AstrBot 的 LLM 生命周期钩子，如果 AstrBot 版本不同导致报错，删掉这个函数、只留 `on_user_message` 也能用（只是不记机器人回复）。
+- 記憶庫的**向量檢索需要 ChromaDB 服務**（`chroma_service.py`，埠 7707），已隨倉庫提供（`deploy/Dockerfile.chroma` + compose 裡的 `chroma` 服務）。記憶庫通過 `CHROMA_URL` 環境變數連 chroma 容器（compose 裡已配好 `CHROMA_URL=http://chroma:7707`）。沒有 ChromaDB 時記憶庫仍能跑、能提取碎片，只是「向量語義檢索」降級為「關鍵詞檢索」。
+- `deploy/astrbot-plugin/main.py` 裡的 `on_decorating_result` 是 AstrBot 的 LLM 生命週期鉤子，如果 AstrBot 版本不同導致報錯，刪掉這個函式、只留 `on_user_message` 也能用（只是不記機器人回覆）。

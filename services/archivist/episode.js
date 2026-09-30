@@ -15,11 +15,11 @@ const { buildLandscapeIndex } = require('./shared');
 
 
 // ═══════════════════════════════════════════════════════
-// v4.8: auditNewEpisodes — Episode 写入质检
+// v4.8: auditNewEpisodes — Episode 寫入質檢
 //
-// 新 episode（consolidateCategory 产出）追溯其 source_msg_ids 原始消息，
-// LLM 判断片段忠实度。faithful=正常 / distorted=降权标记 / fabricated=归档。
-// 每轮 ≤3 条。观星手记可见。
+// 新 episode（consolidateCategory 產出）追溯其 source_msg_ids 原始訊息，
+// LLM 判斷片段忠實度。faithful=正常 / distorted=降權標記 / fabricated=歸檔。
+// 每輪 ≤3 條。觀星手記可見。
 // ═══════════════════════════════════════════════════════
 
 async function auditNewEpisodes() {
@@ -43,7 +43,7 @@ async function auditNewEpisodes() {
         try { sourceIds = JSON.parse(ep.source_msg_ids || '[]'); } catch (_) {}
         if (sourceIds.length === 0) { markAudit.run('skipped_no_sources', ep.id); continue; }
 
-        // 最多读 5 条源消息做抽样验证
+        // 最多讀 5 條源訊息做抽樣驗證
         const msgIds = sourceIds.slice(0, 5);
         const placeholders = msgIds.map(() => '?').join(',');
         const messages = db.prepare(`
@@ -61,20 +61,20 @@ async function auditNewEpisodes() {
 
         if (!origTexts.trim()) { markAudit.run('skipped_empty_msgs', ep.id); continue; }
 
-        const prompt = `下面的「记忆片段」是从聊天记录中自动整合生成的。请对比原始对话，判断这份总结是否忠实。
+        const prompt = `下面的「記憶片段」是從聊天記錄中自動整合生成的。請對比原始對話，判斷這份總結是否忠實。
 
-原始对话抽样：
+原始對話抽樣：
 ${origTexts.slice(0, 2000)}
 
-记忆片段：
+記憶片段：
 ${(ep.content || '').slice(0, 500)}
 
-判断（三选一）：
-- faithful: 总结准确反映了对话中的事实，无编造
-- distorted: 有轻微偏差（日期/细节/人物混淆），但不至于完全错误
-- fabricated: 编造了对话中不存在的事实或事件
+判斷（三選一）：
+- faithful: 總結準確反映了對話中的事實，無編造
+- distorted: 有輕微偏差（日期/細節/人物混淆），但不至於完全錯誤
+- fabricated: 編造了對話中不存在的事實或事件
 
-只输出JSON: {"verdict":"faithful|distorted|fabricated","reason":"一句话"}`;
+只輸出JSON: {"verdict":"faithful|distorted|fabricated","reason":"一句話"}`;
 
         try {
             const raw = await callLLM(
@@ -93,12 +93,12 @@ ${(ep.content || '').slice(0, 500)}
                 db.prepare('UPDATE memories SET weight = MAX(1, weight * 0.5), audit_status = ? WHERE id = ?').run('distorted', ep.id);
                 db.prepare(`INSERT INTO ontology_changelog (action, category_path, detail, status) VALUES ('episode_audit', NULL, ?, 'done')`)
                     .run(JSON.stringify({ verdict: 'distorted', reason: verdict.reason, episode_id: ep.id, snippet: (ep.content || '').slice(0, 60) }));
-                console.log(`[Archivist] 📋 质检 distorted: ep#${ep.id} — ${(verdict.reason || '').slice(0, 60)}`);
+                console.log(`[Archivist] 📋 質檢 distorted: ep#${ep.id} — ${(verdict.reason || '').slice(0, 60)}`);
             } else if (verdict.verdict === 'fabricated') {
                 db.prepare("UPDATE memories SET status = 'archived', audit_status = 'fabricated' WHERE id = ?").run(ep.id);
                 db.prepare(`INSERT INTO ontology_changelog (action, category_path, detail, status) VALUES ('episode_audit', NULL, ?, 'done')`)
                     .run(JSON.stringify({ verdict: 'fabricated', reason: verdict.reason, episode_id: ep.id, snippet: (ep.content || '').slice(0, 60) }));
-                console.log(`[Archivist] 🚨 质检 fabricated: ep#${ep.id} ⇒ archived — ${(verdict.reason || '').slice(0, 60)}`);
+                console.log(`[Archivist] 🚨 質檢 fabricated: ep#${ep.id} ⇒ archived — ${(verdict.reason || '').slice(0, 60)}`);
             } else {
                 markAudit.run('faithful', ep.id);
             }
@@ -136,9 +136,9 @@ const CATEGORY_CONSOLIDATE_MAX_FRAGS = 30;   // max fragments to fetch per categ
 async function consolidateCategory() {
     const db = getDb();
 
-    // v5.3: 从 entity_profiles 星座读取（替代旧的 memory_ontology 知识树）
-    // 跳过 用户/AI（碎片太多，每次取30条无法覆盖）和聚合实体
-    const CONSOLIDATE_SKIP = [USER.name, AI.name, '音乐', '共读'];
+    // v5.3: 從 entity_profiles 星座讀取（替代舊的 memory_ontology 知識樹）
+    // 跳過 使用者/AI（碎片太多，每次取30條無法覆蓋）和聚合實體
+    const CONSOLIDATE_SKIP = [USER.name, AI.name, '音樂', '共讀', '音乐', '共读'];
     const CONSOLIDATE_SKIP_PH = CONSOLIDATE_SKIP.map(() => '?').join(',');
 
     const candidates = db.prepare(`
@@ -190,34 +190,34 @@ async function consolidateCategory() {
 
 ${buildLandscapeIndex()}
 
-你是星座记忆整合器。你看到的碎片都来自同一个记忆星座：
-**星座名称**：${cat.path}（${cat.category || 'unknown'}）
-**当前概述**：${cat.description || '无'}
+你是星座記憶整合器。你看到的碎片都來自同一個記憶星座：
+**星座名稱**：${cat.path}（${cat.category || 'unknown'}）
+**當前概述**：${cat.description || '無'}
 
-## 你的任务
+## 你的任務
 
-1. **审视所有碎片**，判断哪些碎片是"同一事件的多个侧面"（语义高度相关、讲的是同一个具体的事件或关系），将它们分组。
-   - 注意：不是所有话题相同的就是同一事件——"妈妈做饭"和"妈妈打电话"虽然都涉及妈妈，但是两个独立事件
-   - 只有真正讲述同一个具体事件的碎片才应该被合并
-   - 每组至少3条碎片才值得合并
+1. **審視所有碎片**，判斷哪些碎片是"同一事件的多個側面"（語義高度相關、講的是同一個具體的事件或關係），將它們分組。
+   - 注意：不是所有話題相同的就是同一事件——"媽媽做飯"和"媽媽打電話"雖然都涉及媽媽，但是兩個獨立事件
+   - 只有真正講述同一個具體事件的碎片才應該被合併
+   - 每組至少3條碎片才值得合併
 
-2. **对每个可合并的组**，将碎片合并为一条规范episode记忆（第三人称，不超过150字）。
+2. **對每個可合併的組**，將碎片合併為一條規範episode記憶（第三人稱，不超過150字）。
 
-## 分量判断 (significance)
-- 8-10：情感转折、重大决定、深刻冲突、关系里程碑
-- 5-7：有意义但非关键的事件、日常偏好变化
-- 3-4：日常工作记录、routine操作 — 不值得长期保留
-- 1-2：琐碎闲聊 — 应丢弃
+## 分量判斷 (significance)
+- 8-10：情感轉折、重大決定、深刻衝突、關係里程碑
+- 5-7：有意義但非關鍵的事件、日常偏好變化
+- 3-4：日常工作記錄、routine操作 — 不值得長期保留
+- 1-2：瑣碎閒聊 — 應丟棄
 
-## 输出格式
+## 輸出格式
 
-严格JSON，不含任何其他文字：
+嚴格JSON，不含任何其他文字：
 {
   "clusters": [
     {
       "fragment_indices": [0, 3, 7],
-      "merged_memory": "第三人称规范记忆，150字以内",
-      "corrected_date": "YYYY-MM-DD 或空字符串",
+      "merged_memory": "第三人稱規範記憶，150字以內",
+      "corrected_date": "YYYY-MM-DD 或空字串",
       "significance": 1-10,
       "confidence": "high/medium/low",
       "contradiction": null
@@ -227,7 +227,7 @@ ${buildLandscapeIndex()}
 
         try {
             const response = await callLLM(
-                [{ role: 'user', parts: [{ text: `${fragmentsBlock}\n\n请整合以上碎片。` }] }],
+                [{ role: 'user', parts: [{ text: `${fragmentsBlock}\n\n請整合以上碎片。` }] }],
                 prompt,
                 null,
                 { temperature: 0.3, maxOutputTokens: 4000 },
@@ -253,7 +253,7 @@ ${buildLandscapeIndex()}
 
                 const sig = typeof cluster.significance === 'number' ? cluster.significance : 5;
                 if (sig < 4) {
-                    console.log(`[Archivist] 星座整合跳过(分量不足 sig=${sig}): ${cat.path}`);
+                    console.log(`[Archivist] 星座整合跳過(分量不足 sig=${sig}): ${cat.path}`);
                     continue;
                 }
 
@@ -312,9 +312,9 @@ ${buildLandscapeIndex()}
                     console.error(`[Archivist] consolidateCategory ChromaDB index failed:`, e.message);
                 }
 
-                // v5.12: 共享碎片实体同步 — 碎片可能同时链接到多个entity
-                // （如"和朋友看某剧"链接到「某朋友」和「某剧名」）
-                // 合并后的episode应两边都有，否则consumed类实体永远拿不到叙事弧线
+                // v5.12: 共享碎片實體同步 — 碎片可能同時連結到多個entity
+                // （如"和朋友看某劇"連結到「某朋友」和「某劇名」）
+                // 合併後的episode應兩邊都有，否則consumed類實體永遠拿不到敘事弧線
                 const sharedEntities = db.prepare(`
                     SELECT fe.entity_id, ep.name, ep.category, COUNT(*) as shared_count
                     FROM fragment_entities fe
@@ -334,7 +334,7 @@ ${buildLandscapeIndex()}
                         JSON.stringify([...allMsgIds]),
                         shared.entity_id
                     );
-                    console.log(`[Archivist] 星座整合 [${shared.name}(${shared.category})]: 共享episode #${sharedInfo.lastInsertRowid} (${shared.shared_count}/${mergedIds.length}个共享碎片, from ${cat.path})`);
+                    console.log(`[Archivist] 星座整合 [${shared.name}(${shared.category})]: 共享episode #${sharedInfo.lastInsertRowid} (${shared.shared_count}/${mergedIds.length}個共享碎片, from ${cat.path})`);
                     newEpisodes.push({
                         memoryId: sharedInfo.lastInsertRowid,
                         memoryContent: cluster.merged_memory,
@@ -370,14 +370,14 @@ ${buildLandscapeIndex()}
                 console.log(`[Archivist] 星座整合 [${cat.path}]: ${mergedIds.length}碎片 → episode #${memoryId} (sig=${sig})`);
             }
 
-            // 概述更新已移除——统一由 regenerateEntityOverviews 负责
-            // consolidateCategory 本职是碎片→叙事记忆合并，不应兼职写概述
+            // 概述更新已移除——統一由 regenerateEntityOverviews 負責
+            // consolidateCategory 本職是碎片→敘事記憶合併，不應兼職寫概述
 
             // v5.3: entity_profiles doesn't have centroid_embedding — skip centroid refresh
             // Fragment counts will be refreshed naturally on next classification cycle
 
         } catch (e) {
-            console.error(`[Archivist] consolidateCategory 失败 [${cat.path}]:`, e.message);
+            console.error(`[Archivist] consolidateCategory 失敗 [${cat.path}]:`, e.message);
         }
     }
 
@@ -386,7 +386,7 @@ ${buildLandscapeIndex()}
         try {
             const { updateEntityProfiles } = require('../entityProfile');
             await updateEntityProfiles(newEpisodes).catch(e =>
-                console.error('[Archivist] 实体档案更新失败:', e.message)
+                console.error('[Archivist] 實體檔案更新失敗:', e.message)
             );
         } catch (_) {}
 
@@ -397,15 +397,15 @@ ${buildLandscapeIndex()}
             const episodeCount = db.prepare("SELECT COUNT(*) as c FROM memories WHERE layer='episode' AND status='permanent'").get();
             if (episodeCount.c >= 5) {
                 const { clusterSagas } = require('../consolidator');
-                console.log(`[Archivist] episode已累积${episodeCount.c}条，触发Saga聚类...`);
+                console.log(`[Archivist] episode已累積${episodeCount.c}條，觸發Saga聚類...`);
                 await clusterSagas().catch(e =>
-                    console.error('[Archivist] Saga聚类失败:', e.message)
+                    console.error('[Archivist] Saga聚類失敗:', e.message)
                 );
             }
         } catch (_) {}
     }
 
-    console.log(`[Archivist] 星座整合完成: ${categoriesProcessed}个星座 → ${episodesWritten}条episode`);
+    console.log(`[Archivist] 星座整合完成: ${categoriesProcessed}個星座 → ${episodesWritten}條episode`);
     return { categories: categoriesProcessed, episodes: episodesWritten };
 }
 

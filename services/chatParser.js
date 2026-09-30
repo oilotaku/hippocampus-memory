@@ -1,16 +1,16 @@
-// services/chatParser.js — 聊天记录解析（CLI 导入脚本 + API 接口共用）
+// services/chatParser.js — 聊天記錄解析（CLI 匯入指令碼 + API 介面共用）
 //
-// 支持三种格式：
-//   1. 整文件 JSON 数组  [{role, content}, ...]
-//   2. JSONL（每行一个 JSON）
-//   3. TXT（每行「名字: 内容」，可带时间戳前缀）
+// 支援三種格式：
+//   1. 整檔案 JSON 陣列  [{role, content}, ...]
+//   2. JSONL（每行一個 JSON）
+//   3. TXT（每行「名字: 內容」，可帶時間戳字首）
 //
-// content 兼容字符串 或 OpenAI 式 [{type:"text",text:"..."}] 数组；
-// 自动跳过 type:"think"（AI 内心推理）、剥掉 <system_reminder> 系统注入。
+// content 相容字串 或 OpenAI 式 [{type:"text",text:"..."}] 陣列；
+// 自動跳過 type:"think"（AI 內心推理）、剝掉 <system_reminder> 系統注入。
 
 const { USER, AI } = require('./nameResolver');
 
-// 归一化 sender → DB 值（'user' / 'ai'）
+// 歸一化 sender → DB 值（'user' / 'ai'）
 function mapSender(raw) {
     const s = String(raw || '').trim().toLowerCase();
     if (s === 'user' || s === 'human' || s === 'me') return 'user';
@@ -20,7 +20,7 @@ function mapSender(raw) {
     return 'user';
 }
 
-// 归一化时间戳 → 'YYYY-MM-DD HH:MM:SS'
+// 歸一化時間戳 → 'YYYY-MM-DD HH:MM:SS'
 function normalizeTime(ts) {
     if (!ts) return null;
     let d = null;
@@ -36,7 +36,7 @@ function normalizeTime(ts) {
     return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
-// 从 content 提取纯文本
+// 從 content 提取純文本
 function extractText(content) {
     if (typeof content === 'string') return content.trim();
     if (Array.isArray(content)) {
@@ -54,7 +54,7 @@ function extractText(content) {
     return '';
 }
 
-// 把一个消息对象转成 {sender, content, timestamp}
+// 把一個訊息物件轉成 {sender, content, timestamp}
 function msgFromObject(o) {
     if (!o || typeof o !== 'object') return null;
     const content = extractText(o.content ?? o.text ?? o.message ?? o.msg ?? '');
@@ -64,7 +64,7 @@ function msgFromObject(o) {
     return { sender, content, timestamp: normalizeTime(ts) };
 }
 
-// 解析整文件 JSON 数组 [{role, content}, ...]
+// 解析整檔案 JSON 陣列 [{role, content}, ...]
 function parseJsonArray(text) {
     try {
         const arr = JSON.parse(text);
@@ -75,7 +75,7 @@ function parseJsonArray(text) {
     }
 }
 
-// 解析 JSONL（每行一个 JSON 对象）
+// 解析 JSONL（每行一個 JSON 物件）
 function parseJsonl(text) {
     const msgs = [];
     for (const line of text.split('\n')) {
@@ -85,13 +85,13 @@ function parseJsonl(text) {
             const m = msgFromObject(JSON.parse(t));
             if (m) msgs.push(m);
         } catch (e) {
-            // 跳过非 JSON 行
+            // 跳過非 JSON 行
         }
     }
     return msgs;
 }
 
-// 解析 TXT（每行「名字: 内容」，可带时间戳前缀）
+// 解析 TXT（每行「名字: 內容」，可帶時間戳字首）
 function parseTxt(text) {
     const msgs = [];
     for (const line of text.split('\n')) {
@@ -118,7 +118,7 @@ function parseTxt(text) {
     return msgs;
 }
 
-// 依次尝试：JSON 数组 → JSONL → TXT
+// 依次嘗試：JSON 陣列 → JSONL → TXT
 function parseAny(text) {
     let msgs = parseJsonArray(text);
     if (msgs.length === 0) msgs = parseJsonl(text);

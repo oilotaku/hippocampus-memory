@@ -39,8 +39,8 @@
     "exclude_sources": []
   },
   "tag_routing": {
-    "_comment": "按值标自动建星座：提取时打的标 → 一颗专门的星座（代码直连，不靠分类器）。可选值跑 scripts/list_tag_routing.js 看。不填 = 一颗都不建。",
-    "_example": "intimacy -> 亲密时刻, health -> 健康"
+    "_comment": "按值標自動建星座：提取時打的標 → 一顆專門的星座（程式碼直連，不靠分類器）。可選值跑 scripts/list_tag_routing.js 看。不填 = 一顆都不建。",
+    "_example": "intimacy -> 親密時刻, health -> 健康"
   },
   "source_routing": {}
 }

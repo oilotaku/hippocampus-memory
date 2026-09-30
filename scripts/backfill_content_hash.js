@@ -1,11 +1,11 @@
 // scripts/backfill_content_hash.js — memory_fragments.content_hash 一次性回填
-// 为已有碎片计算确定性内容哈希，使 hash 硬去重对历史数据同样生效。
-// 幂等：只处理 content_hash IS NULL 的行，可安全重复运行。
-// 运行：node scripts/backfill_content_hash.js
+// 為已有碎片計算確定性內容雜湊，使 hash 硬去重對歷史資料同樣生效。
+// 冪等：只處理 content_hash IS NULL 的行，可安全重複執行。
+// 執行：node scripts/backfill_content_hash.js
 
 const { initDatabase, getDb } = require('../database');
-// W5 把 utils/text 的 hashFragmentContent 换成 scribeQuality.normalizedContentHash 时漏改这里（原本 require 不到而报错）。
-// W3：on 模式下 normalizedContentHash 是带金钥的 HMAC；content 由 database.js 的透明解密层读成明文。
+// W5 把 utils/text 的 hashFragmentContent 換成 scribeQuality.normalizedContentHash 時漏改這裡（原本 require 不到而報錯）。
+// W3：on 模式下 normalizedContentHash 是帶金鑰的 HMAC；content 由 database.js 的透明解密層讀成明文。
 const { normalizedContentHash: hashFragmentContent } = require('../services/scribeQuality');
 
 initDatabase();
@@ -16,7 +16,7 @@ const rows = db.prepare(`
     WHERE content_hash IS NULL
 `).all();
 
-console.log(`待回填 ${rows.length} 条碎片`);
+console.log(`待回填 ${rows.length} 條碎片`);
 
 if (rows.length > 0) {
     const update = db.prepare('UPDATE memory_fragments SET content_hash = ? WHERE id = ?');
@@ -36,8 +36,8 @@ if (rows.length > 0) {
     console.log('回填完成');
 }
 
-// 校验：统计「同内容 + 同一天」的重复组数（与 scribe.js 去重规则一致）
-// 跨天的同一句话是 source_diversity 证据，不算重复，不在这里统计
+// 校驗：統計「同內容 + 同一天」的重複組數（與 scribe.js 去重規則一致）
+// 跨天的同一句話是 source_diversity 證據，不算重複，不在這裡統計
 const dup = db.prepare(`
     SELECT COUNT(*) AS c FROM (
         SELECT content_hash, source_date FROM memory_fragments
@@ -46,4 +46,4 @@ const dup = db.prepare(`
     )
 `).get().c;
 const remainingNull = db.prepare('SELECT COUNT(*) AS c FROM memory_fragments WHERE content_hash IS NULL').get().c;
-console.log(`校验：剩余 NULL=${remainingNull}，同天重复组=${dup}`);
+console.log(`校驗：剩餘 NULL=${remainingNull}，同天重複組=${dup}`);

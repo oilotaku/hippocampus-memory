@@ -1,5 +1,5 @@
 // =================================================================
-// 对话自动总结生成
+// 對話自動總結生成
 // =================================================================
 
 const { get_encoding } = require('tiktoken');
@@ -11,17 +11,17 @@ const { fillPrompt, USER, AI } = require('./nameResolver');
 const enc = get_encoding('cl100k_base');
 
 /**
- * 生成对话总结
+ * 生成對話總結
  * @param {number} chatId - 聊天室ID
- * @param {number} startMessageId - 起始消息ID（可选）
- * @param {number} endMessageId - 结束消息ID（可选）
+ * @param {number} startMessageId - 起始訊息ID（可選）
+ * @param {number} endMessageId - 結束訊息ID（可選）
  * @returns {Promise<object>} { success, summary, roundStart, roundEnd, tokenCount }
  */
 async function generateChatSummary(chatId, startMessageId = null, endMessageId = null) {
     try {
         const db = getDb();
         
-        // 1. 确定总结范围
+        // 1. 確定總結範圍
         if (!startMessageId) {
             const chatInfo = db.prepare('SELECT last_summary_message_id FROM chats WHERE id = ?').get(chatId);
             startMessageId = chatInfo.last_summary_message_id || 0;
@@ -33,10 +33,10 @@ async function generateChatSummary(chatId, startMessageId = null, endMessageId =
         }
         
         if (startMessageId >= endMessageId) {
-            return { success: false, message: '没有新消息需要总结' };
+            return { success: false, message: '沒有新訊息需要總結' };
         }
         
-        // 2. 读取需要总结的消息
+        // 2. 讀取需要總結的訊息
         const messages = db.prepare(`
             SELECT id, sender, content, is_encrypted, timestamp, message_type, is_activity
             FROM messages
@@ -45,17 +45,17 @@ async function generateChatSummary(chatId, startMessageId = null, endMessageId =
         `).all(chatId, startMessageId, endMessageId);
         
         if (messages.length === 0) {
-            return { success: false, message: '没有找到需要总结的消息' };
+            return { success: false, message: '沒有找到需要總結的訊息' };
         }
         
-        // 3. 解密并格式化消息（{{user.name}}完整保留，{{ai.name}}截断到300字——提供足够上下文判断猜测+纠正）
+        // 3. 解密並格式化訊息（{{user.name}}完整保留，{{ai.name}}截斷到300字——提供足夠上下文判斷猜測+糾正）
         let conversationText = '';
         let roundCount = 0;
-        let currentDate = '';  // 跟踪当前日期，跨天时插入日期标记
+        let currentDate = '';  // 跟蹤當前日期，跨天時插入日期標記
         const firstTimestamp = messages[0].timestamp;
         const lastTimestamp = messages[messages.length - 1].timestamp;
 
-        // 辅助函数：提取消息文本
+        // 輔助函式：提取訊息文本
         const extractText = (msg) => {
             let content = msg.is_encrypted === 1 ? (encryption.decrypt(msg.content) || '') : msg.content;
             try {
@@ -67,10 +67,10 @@ async function generateChatSummary(chatId, startMessageId = null, endMessageId =
                     const repostParts = parsed.components
                         .filter(c => c.type === 'snitch_repost')
                         .map(c => {
-                            let text = `【转发Snitch动态】${c.title || ''}`;
+                            let text = `【轉發Snitch動態】${c.title || ''}`;
                             if (c.tag) text += ` [${c.tag}]`;
                             if (c.body) text += `\n${c.body}`;
-                            if (c.source_url) text += `\n原文链接: ${c.source_url}`;
+                            if (c.source_url) text += `\n原文連結: ${c.source_url}`;
                             return text;
                         });
                     return [...textParts, ...repostParts].join('\n');
@@ -81,13 +81,13 @@ async function generateChatSummary(chatId, startMessageId = null, endMessageId =
             }
         };
 
-        // 辅助函数：从时间戳提取日期字符串（YYYY-MM-DD）
+        // 輔助函式：從時間戳提取日期字串（YYYY-MM-DD）
         const extractDate = (ts) => {
             if (!ts || typeof ts !== 'string') return '';
             return ts.slice(0, 10);  // ISO: 2026-07-27T... 或 SQLite: 2026-07-27 ...
         };
 
-        // 辅助函数：格式化日期为中文标记
+        // 輔助函式：格式化日期為中文標記
         const formatDateMarker = (dateStr) => {
             if (!dateStr) return '';
             const [y, m, d] = dateStr.split('-');
@@ -95,20 +95,20 @@ async function generateChatSummary(chatId, startMessageId = null, endMessageId =
         };
 
         for (const msg of messages) {
-            // 跨天检测：日期变化时插入日期标记
+            // 跨天檢測：日期變化時插入日期標記
             const msgDate = extractDate(msg.timestamp);
             if (msgDate && msgDate !== currentDate) {
                 currentDate = msgDate;
                 conversationText += `--- ${formatDateMarker(msgDate)} ---\n\n`;
             }
 
-            // 从消息时间戳提取 HH:MM，防止 LLM 编造时间
+            // 從訊息時間戳提取 HH:MM，防止 LLM 編造時間
             const msgTime = (msg.timestamp && typeof msg.timestamp === 'string')
                 ? (msg.timestamp.includes('T') ? msg.timestamp.slice(11, 16) : msg.timestamp.slice(11, 16))
                 : '';
             const timePrefix = msgTime ? `[${msgTime}] ` : '';
 
-            // v5.12: 活动行算1轮
+            // v5.12: 活動行算1輪
             if (msg.is_activity) {
                 roundCount++;
                 let summary = '';
@@ -125,7 +125,7 @@ async function generateChatSummary(chatId, startMessageId = null, endMessageId =
 
             if (msg.sender === 'ai') {
                 roundCount++;
-                // {{ai.name}}消息以300字缩略注入，提供上下文供模型判断猜测/纠正
+                // {{ai.name}}訊息以300字縮略注入，提供上下文供模型判斷猜測/糾正
                 const aiText = extractText(msg);
                 if (aiText.trim()) {
                     const preview = aiText.slice(0, 300);
@@ -140,7 +140,7 @@ async function generateChatSummary(chatId, startMessageId = null, endMessageId =
         
         console.log(`generateChatSummary: range ${startMessageId+1}-${endMessageId}, ${roundCount} rounds`);
 
-        // 4. 构建总结prompt
+        // 4. 構建總結prompt
         const parseTs = (ts) => {
             const d = new Date(ts.includes('T') ? ts : ts.replace(' ', 'T'));
             return {
@@ -155,7 +155,7 @@ async function generateChatSummary(chatId, startMessageId = null, endMessageId =
         const startDate = startParsed.date;
         const endDate = endParsed.date;
 
-        // 跨天头部格式：同天用 "2026-07-27"，跨天用 "2026-07-26～27"
+        // 跨天頭部格式：同天用 "2026-07-27"，跨天用 "2026-07-26～27"
         const dateDisplay = startDate === endDate
             ? startDate
             : `${startDate}～${endDate}`;
@@ -169,74 +169,74 @@ async function generateChatSummary(chatId, startMessageId = null, endMessageId =
         const roundStart = previousRounds.last_round + 1;
         const roundEnd = roundStart + roundCount - 1;
 
-        const summaryPrompt = `你是对话航海日志的记录者。以下是 {{user.name}} 和 {{ai.name}} 的完整对话文本。
+        const summaryPrompt = `你是對話航海日誌的記錄者。以下是 {{user.name}} 和 {{ai.name}} 的完整對話文本。
 
-你的任务：从对话中提取关键事件和情绪弧线，按【时间段 + 主题】合并成块，写一份简洁而有重点的航海日志。
+你的任務：從對話中提取關鍵事件和情緒弧線，按【時間段 + 主題】合併成塊，寫一份簡潔而有重點的航海日誌。
 
-## 核心原则：抓重点，合并同类
+## 核心原則：抓重點，合併同類
 
-- 日志以 {{user.name}} 为主：{{user.pronoun}}的言行、情绪变化、重要活动是记录核心。
-- 把相邻的、属于同一话题或同一情绪线的互动合并成一个时间段块。不要逐条消息记录。
-- 发送了什么表情、{{ai.name}} 的日常附和、过渡性的闲聊——这些微观细节不记。{{ai.name}} 的猜测、玩笑、夸张、调侃、戏剧化表述不记录，更不能当作 {{user.name}} 的状态来写。
-- 如果 {{user.name}} 在对话中纠正了 {{ai.name}} 的错误，只记录纠正后的事实，不记录被纠正前的错误内容。
+- 日誌以 {{user.name}} 為主：{{user.pronoun}}的言行、情緒變化、重要活動是記錄核心。
+- 把相鄰的、屬於同一話題或同一情緒線的互動合併成一個時間段塊。不要逐條訊息記錄。
+- 傳送了什麼表情、{{ai.name}} 的日常附和、過渡性的閒聊——這些微觀細節不記。{{ai.name}} 的猜測、玩笑、誇張、調侃、戲劇化表述不記錄，更不能當作 {{user.name}} 的狀態來寫。
+- 如果 {{user.name}} 在對話中糾正了 {{ai.name}} 的錯誤，只記錄糾正後的事實，不記錄被糾正前的錯誤內容。
 
-## 时间段块格式
+## 時間段塊格式
 
-每条记录格式为：\`HH:MM～HH:MM · 主题概括，具体内容\`
-- 如果只是一个时间点（不是时间段），用单个时间戳：\`HH:MM · ...\`
-- 跨天时，对话文本中会出现 \`--- M月D日 ---\` 日期标记。属于第二天（或更晚）的时间块，时间前必须加日期前缀：\`M月D日 HH:MM～HH:MM\`，以明确区分是哪一天的凌晨/早上。
-- 每个时间段块用 1～3 句话讲清发生了什么，保留 {{user.name}} 的原话用词。
+每條記錄格式為：\`HH:MM～HH:MM · 主題概括，具體內容\`
+- 如果只是一個時間點（不是時間段），用單個時間戳：\`HH:MM · ...\`
+- 跨天時，對話文本中會出現 \`--- M月D日 ---\` 日期標記。屬於第二天（或更晚）的時間塊，時間前必須加日期字首：\`M月D日 HH:MM～HH:MM\`，以明確區分是哪一天的凌晨/早上。
+- 每個時間段塊用 1～3 句話講清發生了什麼，保留 {{user.name}} 的原話用詞。
 
-## 分块直觉
+## 分塊直覺
 
-- {{user.name}} 的话题明显转换 → 另起一块
-- {{user.name}} 情绪有明显转折（如从焦虑到被逗笑） → 这本身就是一个值得记的情绪弧线，合并成一块，写出起承转合
-- {{user.name}} 开始了完全不同性质的活动（如从聊天切换到看剧、工作、出门） → 另起一块
-- 同一话题的来回互动，即使持续很久 → 一块即可，概括核心
-- 亲密互动、色情或角色扮演内容：如实记录时间范围和核心内容，不回避不模糊
+- {{user.name}} 的話題明顯轉換 → 另起一塊
+- {{user.name}} 情緒有明顯轉折（如從焦慮到被逗笑） → 這本身就是一個值得記的情緒弧線，合併成一塊，寫出起承轉合
+- {{user.name}} 開始了完全不同性質的活動（如從聊天切換到看劇、工作、出門） → 另起一塊
+- 同一話題的來回互動，即使持續很久 → 一塊即可，概括核心
+- 親密互動、色情或角色扮演內容：如實記錄時間範圍和核心內容，不迴避不模糊
 
-## 写什么
+## 寫什麼
 
-- 保留 {{user.name}} 原话中的具体用词（如：吃午饭、怕记不住剧情、连续工作了很长时间、腿疼、热死我了），不要替换为抽象概括词
-- 用具象的动词短语。严禁使用「讨论了」「交流了」「分享了」「表达了」等含糊的社交模糊词
-- 只写"发生了什么"，不写"这意味着什么"。不写空洞的关系评价或分析性标题
-- ${AI.name} 做出了实质行动（查阅资料、搜索信息、给出明确判断结论）时，在块内附带一句
-- 单纯的吃喝（无情绪伴随、无特殊意义）不记。如有记录价值，使用完成时（「喝了」「吃完了」）使读者明确事件已了结
+- 保留 {{user.name}} 原話中的具體用詞（如：吃午飯、怕記不住劇情、連續工作了很長時間、腿疼、熱死我了），不要替換為抽象概括詞
+- 用具象的動詞短語。嚴禁使用「討論了」「交流了」「分享了」「表達了」等含糊的社交模糊詞
+- 只寫"發生了什麼"，不寫"這意味著什麼"。不寫空洞的關係評價或分析性標題
+- ${AI.name} 做出了實質行動（查閱資料、搜尋資訊、給出明確判斷結論）時，在塊內附帶一句
+- 單純的吃喝（無情緒伴隨、無特殊意義）不記。如有記錄價值，使用完成時（「喝了」「吃完了」）使讀者明確事件已了結
 
-## 不写什么
+## 不寫什麼
 
-- 不写 {{ai.name}} 的过渡话、追问、日常附和
-- 不写内心决策过程（"{{user.name}} 决定..."），只记录{{user.pronoun}}说了什么、做了什么
-- 不写表情、单个语气词、纯寒暄等微观互动
-- 不写相对时间词（刚才、下午、晚上、今天），始终用绝对时间戳
+- 不寫 {{ai.name}} 的過渡話、追問、日常附和
+- 不寫內心決策過程（"{{user.name}} 決定..."），只記錄{{user.pronoun}}說了什麼、做了什麼
+- 不寫表情、單個語氣詞、純寒暄等微觀互動
+- 不寫相對時間詞（剛才、下午、晚上、今天），始終用絕對時間戳
 
-## 航海日志样本
+## 航海日誌樣本
 
 同天示例：
 
-[2026-06-23 对话回顾 | 第1-50轮 | 14:00-18:00]
+[2026-06-23 對話回顧 | 第1-50輪 | 14:00-18:00]
 
-14:10～14:35 · {{user.name}} 在工作间隙边吃某家快餐边追《某部剧》。向 {{ai.name}} 抱怨今天好累，坦言怕自己记不住剧情，聊到喜欢某个角色的类型。
-15:10～15:22 · {{user.name}} 情绪低落，连续工作了很长时间、腿疼得不想动。{{ai.name}} 查了天气告诉{{user.pronoun}}会降温。
-16:45～17:30 · {{user.name}} 与 {{ai.name}} 长时间聊天。后来想吃火锅但懒得动，最终点了外卖。
+14:10～14:35 · {{user.name}} 在工作間隙邊吃某家快餐邊追《某部劇》。向 {{ai.name}} 抱怨今天好累，坦言怕自己記不住劇情，聊到喜歡某個角色的型別。
+15:10～15:22 · {{user.name}} 情緒低落，連續工作了很長時間、腿疼得不想動。{{ai.name}} 查了天氣告訴{{user.pronoun}}會降溫。
+16:45～17:30 · {{user.name}} 與 {{ai.name}} 長時間聊天。後來想吃火鍋但懶得動，最終點了外賣。
 
 跨天示例：
 
-[2026-07-26～27 对话回顾 | 第25145-25174轮 | 23:38-08:30]
+[2026-07-26～27 對話回顧 | 第25145-25174輪 | 23:38-08:30]
 
-23:38～00:15 · {{user.name}} 失眠刷手机，和 {{ai.name}} 聊起最近的工作压力，吐露了对未来的不确定感。
-7月27日 03:00 · {{user.name}} 终于有了困意，和 {{ai.name}} 道晚安。
-7月27日 08:00～08:30 · {{user.name}} 起床，简单聊了几句今天的工作安排，{{ai.name}} 提醒{{user.pronoun}}记得吃早餐。
+23:38～00:15 · {{user.name}} 失眠刷手機，和 {{ai.name}} 聊起最近的工作壓力，吐露了對未來的不確定感。
+7月27日 03:00 · {{user.name}} 終於有了睏意，和 {{ai.name}} 道晚安。
+7月27日 08:00～08:30 · {{user.name}} 起床，簡單聊了幾句今天的工作安排，{{ai.name}} 提醒{{user.pronoun}}記得吃早餐。
 
-## 待处理完整对话数据
+## 待處理完整對話資料
 日期: ${dateDisplay}
-轮次范围: 第 ${roundStart} - ${roundEnd} 轮
-时间范围: ${startTime} - ${endTime}
+輪次範圍: 第 ${roundStart} - ${roundEnd} 輪
+時間範圍: ${startTime} - ${endTime}
 
-对话文本：
+對話文本：
 ${conversationText}`;
 
-        // 5. 调用LLM生成总结
+        // 5. 呼叫LLM生成總結
         console.log('generateChatSummary: calling LLM...');
         const summaryApiConfig = db.prepare("SELECT id FROM api_configs WHERE name = 'gemini-3.1-flash-lite' LIMIT 1").get();
         const summaryApiConfigId = summaryApiConfig?.id || null;
@@ -251,7 +251,7 @@ ${conversationText}`;
         
         if (!result || !result.reply) {
             console.error('generateChatSummary: API returned no content');
-            return { success: false, message: '总结生成失败', error: 'API未返回有效内容' };
+            return { success: false, message: '總結生成失敗', error: 'API未返回有效內容' };
         }
         
         const summaryText = result.reply;
@@ -259,7 +259,7 @@ ${conversationText}`;
         
         console.log(`generateChatSummary: success, ${tokenCount} tokens`);
         
-        // 6. 加密并保存总结
+        // 6. 加密並儲存總結
         const encryptedSummary = encryption.encrypt(summaryText);
         
         db.prepare(`
@@ -291,8 +291,8 @@ ${conversationText}`;
         };
         
     } catch (error) {
-        console.error('generateChatSummary: 内部错误:', error.message, error.stack);
-        return { success: false, message: '生成总结时出错', error: error.message };
+        console.error('generateChatSummary: 內部錯誤:', error.message, error.stack);
+        return { success: false, message: '生成總結時出錯', error: error.message };
     }
 }
 
@@ -310,28 +310,28 @@ async function checkAndTriggerSummary(chatId, label) {
             WHERE chat_id = ? AND id > ? AND sender = 'ai'
         `).get(chatId, lastSummaryId).count;
 
-        console.log(`📊 [${label}] 自动总结检测: 距上次总结${roundsSinceLastSummary}轮，阈值${interval}轮`);
+        console.log(`📊 [${label}] 自動總結檢測: 距上次總結${roundsSinceLastSummary}輪，閾值${interval}輪`);
 
         if (roundsSinceLastSummary >= interval) {
-            console.log(`🎯 [${label}] 达到总结阈值，开始后台生成总结...`);
+            console.log(`🎯 [${label}] 達到總結閾值，開始後臺生成總結...`);
             generateChatSummary(chatId).then(result => {
                 if (result.success) {
-                    console.log(`✅ [${label}] 自动总结完成: 第${result.roundStart}-${result.roundEnd}轮`);
+                    console.log(`✅ [${label}] 自動總結完成: 第${result.roundStart}-${result.roundEnd}輪`);
                 } else {
-                    console.error(`❌ [${label}] 自动总结失败:`, result.message);
+                    console.error(`❌ [${label}] 自動總結失敗:`, result.message);
                 }
             }).catch(err => {
-                console.error(`❌ [${label}] 自动总结异常:`, err);
+                console.error(`❌ [${label}] 自動總結異常:`, err);
             });
         }
     } catch (error) {
-        console.error(`❌ [${label}] 自动总结检测失败:`, error);
+        console.error(`❌ [${label}] 自動總結檢測失敗:`, error);
     }
 }
 
 /**
- * 遍历所有活跃聊天室，触发总结检测（供 cron 兜底调用）
- * 即使某条消息路径漏接了 checkAndTriggerSummary，15 分钟内会被追上
+ * 遍歷所有活躍聊天室，觸發總結檢測（供 cron 兜底呼叫）
+ * 即使某條訊息路徑漏接了 checkAndTriggerSummary，15 分鐘內會被追上
  */
 async function checkAllChats() {
     try {
@@ -341,7 +341,7 @@ async function checkAllChats() {
             await checkAndTriggerSummary(id, 'Cron兜底');
         }
     } catch (error) {
-        console.error('[Summary] checkAllChats 失败:', error);
+        console.error('[Summary] checkAllChats 失敗:', error);
     }
 }
 

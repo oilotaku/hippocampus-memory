@@ -1,29 +1,29 @@
-// {{user.name}} Intuition — 上下文触发的认知直觉引擎
+// {{user.name}} Intuition — 上下文觸發的認知直覺引擎
 // ================================================================
 // 替代 cognitiveModel.getModelContext() 的「全量 dump」模式。
-// 只在 {{user.name}} 的当前对话触发了某个行为模式时，才注入对应的直觉条目。
-// 自包含模块，可插拔替换——开源后每个 user 可挂自己的直觉数据源。
+// 只在 {{user.name}} 的當前對話觸發了某個行為模式時，才注入對應的直覺條目。
+// 自包含模組，可插拔替換——開源後每個 user 可掛自己的直覺資料來源。
 //
-// 分层触发规则：
-//   current_state   → 始终注入（瞬时态，活在当下）
-//   stable_trait    → 关键词命中（tags 字段）→ 直接触发；未命中 → bigram 兜底（阈值 5）
+// 分層觸發規則：
+//   current_state   → 始終注入（瞬時態，活在當下）
+//   stable_trait    → 關鍵詞命中（tags 欄位）→ 直接觸發；未命中 → bigram 兜底（閾值 5）
 //   active_hypothesis → 同上
-//   immutable_fact  → v4.8 退役（v4.6 设计，现 18 条已迁移分流）
+//   immutable_fact  → v4.8 退役（v4.6 設計，現 18 條已遷移分流）
 
 const { getDb } = require('../database');
 const { encryption } = require('../encryption');
 
 // ── TTL helpers for current_state display ──
 const TTL_LABELS = {
-    hours: '几小时内', day: '今天内', days: '数天内', until_event: '持续中',
+    hours: '幾小時內', day: '今天內', days: '數天內', until_event: '持續中',
 };
 
 function formatTimeAgo(dateStr) {
     if (!dateStr) return '近期';
     const minutesAgo = Math.round((Date.now() - new Date(dateStr)) / (1000 * 60));
-    if (minutesAgo < 60) return `${minutesAgo}分钟前`;
+    if (minutesAgo < 60) return `${minutesAgo}分鐘前`;
     const hoursAgo = Math.round(minutesAgo / 60);
-    if (hoursAgo < 24) return `${hoursAgo}小时前`;
+    if (hoursAgo < 24) return `${hoursAgo}小時前`;
     const daysAgo = Math.round(hoursAgo / 24);
     return `${daysAgo}天前`;
 }
@@ -32,22 +32,22 @@ function formatTtlHint(createdAt, decayParams) {
     const dp = decayParams || {};
     const ttlCat = dp.ttl_category;
     if (!createdAt || !ttlCat) return '';
-    if (ttlCat === 'until_event') return '，持续中';
+    if (ttlCat === 'until_event') return '，持續中';
     const TTL_HOURS = { hours: 8, day: 24, days: 72 };
     const ttlHours = TTL_HOURS[ttlCat];
     if (!ttlHours) return '';
     const expiresAt = new Date(new Date(createdAt).getTime() + ttlHours * 60 * 60 * 1000);
     const remainingMs = expiresAt - Date.now();
-    if (remainingMs <= 0) return '，即将过期';
+    if (remainingMs <= 0) return '，即將過期';
     const remainingH = Math.round(remainingMs / (1000 * 60 * 60));
-    if (remainingH < 1) return '，约1小时内过期';
-    if (remainingH < 24) return `，预计持续约${remainingH}小时`;
+    if (remainingH < 1) return '，約1小時內過期';
+    if (remainingH < 24) return `，預計持續約${remainingH}小時`;
     const remainingD = Math.round(remainingH / 24);
-    return `，预计持续约${remainingD}天`;
+    return `，預計持續約${remainingD}天`;
 }
 
 // ═══════════════════════════════════════════════════════════════
-// Bigram tokenizer — 复用 anchorEntriesToFragments 同款算法
+// Bigram tokenizer — 複用 anchorEntriesToFragments 同款演算法
 // ═══════════════════════════════════════════════════════════════
 
 function tokenize(text) {
@@ -73,17 +73,17 @@ function bigramOverlap(entryContent, contextText) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// 触发判定：关键词优先 + bigram 兜底
-// Layer 1 — tags 字段任一关键词出现在上下文中 → 直接触发
-// Layer 2 — bigram 重叠 ≥ BIGRAM_THRESHOLD → 兜底触发
+// 觸發判定：關鍵詞優先 + bigram 兜底
+// Layer 1 — tags 欄位任一關鍵詞出現在上下文中 → 直接觸發
+// Layer 2 — bigram 重疊 ≥ BIGRAM_THRESHOLD → 兜底觸發
 // ═══════════════════════════════════════════════════════════════
 
 const BIGRAM_THRESHOLD = 5;
 
-// ── 高频词停用表：{{user.name}} 日常说烂了的词不能当触发器 ──
-// 「代码」「界面」「开源」这类词天天出现，挂上它们的条目等于永远激活，
-// 直觉注入退化成全量 dump。由 Archivist 深循环统计近30天高频词维护
-// （user_settings.intuition_stopwords），此处加载缓存 10 分钟。
+// ── 高頻詞停用表：{{user.name}} 日常說爛了的詞不能當觸發器 ──
+// 「程式碼」「介面」「開源」這類詞天天出現，掛上它們的條目等於永遠啟用，
+// 直覺注入退化成全量 dump。由 Archivist 深迴圈統計近30天高頻詞維護
+// （user_settings.intuition_stopwords），此處載入快取 10 分鐘。
 let _stopwordsCache = null;
 let _stopwordsCacheAt = 0;
 
@@ -107,9 +107,9 @@ function isTriggered(entry, contextText) {
     const tags = JSON.parse(entry.tags || '[]');
     if (tags.length > 0) {
       for (const tag of tags) {
-        if (stopwords.has(tag)) continue; // 高频词不触发
+        if (stopwords.has(tag)) continue; // 高頻詞不觸發
         if (contextText.includes(tag)) return true;
-        // Partial: for longer keywords, match 3-char substrings (handles "这个bug修完就睡" vs "这个bug修了一晚上")
+        // Partial: for longer keywords, match 3-char substrings (handles "這個bug修完就睡" vs "這個bug修了一晚上")
         if (tag.length >= 4) {
           for (let i = 0; i <= tag.length - 3; i++) {
             const sub = tag.slice(i, i + 3);
@@ -125,7 +125,7 @@ function isTriggered(entry, contextText) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// 构建触发上下文：当前消息 + 最近 N 条对话
+// 構建觸發上下文：當前訊息 + 最近 N 條對話
 // ═══════════════════════════════════════════════════════════════
 
 function buildContextText(userMessage, recentMsgCount = 10) {
@@ -153,9 +153,9 @@ function buildContextText(userMessage, recentMsgCount = 10) {
 
 // ═══════════════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════════════
-// v5.2: 会话级实体缓存 — 30分钟滑动窗口
-// {{user.name}} 提到某个朋友 → 注入 overview → 缓存。下一条消息继续聊这个人
-// 但没提名字 → overview 仍在。30分钟内无再次提及 → 过期清除。
+// v5.2: 會話級實體快取 — 30分鐘滑動視窗
+// {{user.name}} 提到某個朋友 → 注入 overview → 快取。下一條訊息繼續聊這個人
+// 但沒提名字 → overview 仍在。30分鐘內無再次提及 → 過期清除。
 // ═══════════════════════════════════════════════════════════════
 
 const ENTITY_CACHE_TTL_MS = 30 * 60 * 1000; // 30 min
@@ -204,17 +204,17 @@ function lookupEntitiesInMessage(userMessage) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// 主入口：获取触发式直觉上下文
+// 主入口：獲取觸發式直覺上下文
 // ═══════════════════════════════════════════════════════════════
 
 function getTriggeredIntuition(userMessage, maxTokens = 800) {
   const db = getDb();
 
   // v5.0: stable_trait + active_hypothesis 不再注入聊天。
-  // 它们的价值体现在 core_insight（始终在 system prompt 中）+
-  // deep cycle 的持续认知迭代。这里只保留 current_state。
-  // v5.1: 新增 entity overview 注入——当 {{user.name}} 提到某人时，
-  // 星座描述（替代旧冥想盆）自动出现在 {{ai.name}} 的感知中。
+  // 它們的價值體現在 core_insight（始終在 system prompt 中）+
+  // deep cycle 的持續認知迭代。這裡只保留 current_state。
+  // v5.1: 新增 entity overview 注入——當 {{user.name}} 提到某人時，
+  // 星座描述（替代舊冥想盆）自動出現在 {{ai.name}} 的感知中。
 
   const states = db.prepare(`
     SELECT id, content, confidence, last_evidence_at, created_at, expires_at, decay_params, source_quality
@@ -242,12 +242,12 @@ function getTriggeredIntuition(userMessage, maxTokens = 800) {
   }
 
   const lines = ['<user_intuition>',
-    '（你此刻感知到的{{user.name}}的状态——不是推理，是观察。）',
+    '（你此刻感知到的{{user.name}}的狀態——不是推理，是觀察。）',
     ''];
 
-  // ── 当前状态（含 TTL 提示）──
+  // ── 當前狀態（含 TTL 提示）──
   if (states.length > 0) {
-    lines.push('● 当前状态：');
+    lines.push('● 當前狀態：');
     for (const s of states) {
       const ago = formatTimeAgo(s.last_evidence_at);
       // v5.0: prefer explicit expires_at over legacy TTL calculation
@@ -255,12 +255,12 @@ function getTriggeredIntuition(userMessage, maxTokens = 800) {
       if (s.expires_at) {
         const remainingMs = new Date(s.expires_at) - Date.now();
         if (remainingMs <= 0) {
-          ttlHint = '，已过期';
+          ttlHint = '，已過期';
         } else {
           const remainingH = Math.round(remainingMs / (1000 * 60 * 60));
-          if (remainingH < 1) ttlHint = '，即将过期';
-          else if (remainingH < 24) ttlHint = `，约${remainingH}h后过期`;
-          else ttlHint = `，约${Math.round(remainingH/24)}d后过期`;
+          if (remainingH < 1) ttlHint = '，即將過期';
+          else if (remainingH < 24) ttlHint = `，約${remainingH}h後過期`;
+          else ttlHint = `，約${Math.round(remainingH/24)}d後過期`;
         }
       } else {
         // Legacy fallback
@@ -272,7 +272,7 @@ function getTriggeredIntuition(userMessage, maxTokens = 800) {
     lines.push('');
   }
 
-  // ── v5.2: 星座描述 — 新匹配 + 缓存合并 ──
+  // ── v5.2: 星座描述 — 新匹配 + 快取合併 ──
   const cachedEntities = _getCachedEntities();
   const allEntities = [...matchedEntities];
   // Add cached entities that weren't newly matched
@@ -288,13 +288,13 @@ function getTriggeredIntuition(userMessage, maxTokens = 800) {
   }
 
   if (allEntities.length > 0) {
-    lines.push('● 相关的星座（你记忆中关于这些人/事的总览）：');
+    lines.push('● 相關的星座（你記憶中關於這些人/事的總覽）：');
     for (const e of allEntities.slice(0, 5)) {
       const cached = _entityCache.has(e.id) && !matchedEntities.find(m => m.id === e.id);
       const updatedAgo = e.overview_updated_at
         ? Math.round((Date.now() - new Date(e.overview_updated_at)) / (1000*60*60*24))
         : null;
-      const freshness = cached ? '（从缓存保留）'
+      const freshness = cached ? '（從快取保留）'
         : updatedAgo !== null && updatedAgo > 3 ? `（${updatedAgo}天前更新）`
         : '';
       const text = e.facts || '';
@@ -303,7 +303,7 @@ function getTriggeredIntuition(userMessage, maxTokens = 800) {
     lines.push('');
   }
 
-  // ── v5.2: 观察到的模式（日积月累的行为观察，话题触发）──
+  // ── v5.2: 觀察到的模式（日積月累的行為觀察，話題觸發）──
   const patterns = db.prepare(`
     SELECT content, evidence_count, first_seen, last_seen, confidence, tags
     FROM user_patterns WHERE status = 'active'
@@ -332,8 +332,8 @@ function getTriggeredIntuition(userMessage, maxTokens = 800) {
         const spanMonths = p.first_seen && p.last_seen
           ? Math.round((new Date(p.last_seen) - new Date(p.first_seen)) / (1000 * 60 * 60 * 24 * 30))
           : 0;
-        const spanLabel = spanMonths > 0 ? `，跨${spanMonths}个月` : '';
-        lines.push(`◇ ${p.content}（${p.evidence_count}次观察${spanLabel}）`);
+        const spanLabel = spanMonths > 0 ? `，跨${spanMonths}個月` : '';
+        lines.push(`◇ ${p.content}（${p.evidence_count}次觀察${spanLabel}）`);
         triggered.push(p);
       }
     }
@@ -347,19 +347,19 @@ function getTriggeredIntuition(userMessage, maxTokens = 800) {
 
   if (estimatedTokens <= maxTokens) return { text: fullText, signals: [] };
 
-  // 超预算：保留 current_state + 缩减 entity overview
+  // 超預算：保留 current_state + 縮減 entity overview
   const slim = ['<user_intuition>',
-    '（你此刻感知到的{{user.name}}的状态——不是推理，是观察。）',
+    '（你此刻感知到的{{user.name}}的狀態——不是推理，是觀察。）',
     ''];
   if (states.length > 0) {
-    slim.push('● 当前状态：');
+    slim.push('● 當前狀態：');
     for (const s of states) {
       slim.push(`- [#${s.id}] ${s.content}`);
     }
     slim.push('');
   }
   if (matchedEntities.length > 0) {
-    slim.push('● 相关的星座：');
+    slim.push('● 相關的星座：');
     for (const e of matchedEntities) {
       const text = e.facts || '';
       slim.push(`◇ ${e.name}：${text.slice(0, 200)}`);
@@ -371,7 +371,7 @@ function getTriggeredIntuition(userMessage, maxTokens = 800) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// 调试：全量 dump（保留兼容，供 memory.html / 手动检查用）
+// 除錯：全量 dump（保留相容，供 memory.html / 手動檢查用）
 // ═══════════════════════════════════════════════════════════════
 
 function getFullModel() {

@@ -12,21 +12,21 @@ const SKIP_PH = SKIP_NAMES.map(() => '?').join(', '); // SQL placeholder string 
 // Constants
 // ═══════════════════════════════════════════════════════
 
-const ARCHIVIST_LLM_CONFIG_ID = 36;  // [书库]DS — 主题提案/树审计/关系发现
+const ARCHIVIST_LLM_CONFIG_ID = 36;  // [書庫]DS — 主題提案/樹審計/關係發現
 
-const ARCHIVIST_VERIFY_CONFIG_ID = 38;  // [心跳]flash — 分类校验/insight，便宜够用
+const ARCHIVIST_VERIFY_CONFIG_ID = 38;  // [心跳]flash — 分類校驗/insight，便宜夠用
 
 
-const TICK_INTERVAL_MS = 2 * 60 * 1000;       // Agent 循环 tick 间隔
+const TICK_INTERVAL_MS = 2 * 60 * 1000;       // Agent 迴圈 tick 間隔
 
-// 从 memory_config.json 读取深循环触发间隔（默认 60 分钟）
+// 從 memory_config.json 讀取深迴圈觸發間隔（預設 60 分鐘）
 const USER_IDLE_DEEP_CYCLE_MS = (() => {
     try {
         const cfg = require('../../memory_config.json');
         const mins = cfg.rhythm?.deep_cycle_idle_minutes;
         if (typeof mins === 'number' && mins > 0) return mins * 60 * 1000;
     } catch (_) {}
-    return 60 * 60 * 1000; // 默认 1h
+    return 60 * 60 * 1000; // 預設 1h
 })();
 
 
@@ -66,11 +66,11 @@ const BOOTSTRAP_SAMPLE = 300;
 
 
 // Cost controls
-const MAX_DAILY_LLM_CALLS = 500;          // 硬上限：日总调用次数
+const MAX_DAILY_LLM_CALLS = 500;          // 硬上限：日總呼叫次數
 
-const MAX_LLM_PER_TICK_IDLE = 50;         // Companion 空闲时每 tick 最大 LLM 调用
+const MAX_LLM_PER_TICK_IDLE = 50;         // Companion 空閒時每 tick 最大 LLM 呼叫
 
-const MAX_LLM_PER_TICK_ACTIVE = 10;       // Companion 活跃时每 tick 最大 LLM 调用
+const MAX_LLM_PER_TICK_ACTIVE = 10;       // Companion 活躍時每 tick 最大 LLM 呼叫
 
 
 // Min intervals between task types (ms) — prevents thrashing
@@ -92,44 +92,44 @@ const MIN_GAP_RECONCILE = 30 * 60 * 1000;
 
 const MIN_GAP_RELATIONSHIPS = 30 * 60 * 1000;
 
-const MIN_GAP_EMERGENT = 30 * 60 * 1000;           // 涌现地点/事件检测（聚类第二遍扫描）——清积压期30min
+const MIN_GAP_EMERGENT = 30 * 60 * 1000;           // 湧現地點/事件檢測（聚類第二遍掃描）——清積壓期30min
 
-const MIN_GAP_ENTITY_VERIFY = 60 * 60 * 1000;           // 管道A实体分类LLM抽检
+const MIN_GAP_ENTITY_VERIFY = 60 * 60 * 1000;           // 管道A實體分類LLM抽檢
 
-const MIN_GAP_CATEGORY_CONSOLIDATE = 60 * 60 * 1000;    // 按类别合并碎片为episode
+const MIN_GAP_CATEGORY_CONSOLIDATE = 60 * 60 * 1000;    // 按類別合併碎片為episode
 
-const MIN_GAP_CATEGORY_MERGE = 6 * 60 * 60 * 1000;        // 重叠类别自动合并（LLM审视全貌）
+const MIN_GAP_CATEGORY_MERGE = 6 * 60 * 60 * 1000;        // 重疊類別自動合併（LLM審視全貌）
 
-const MIN_GAP_MUSIC_EXTRACT = 2 * 60 * 60 * 1000;   // 音乐品味变化慢
+const MIN_GAP_MUSIC_EXTRACT = 2 * 60 * 60 * 1000;   // 音樂品味變化慢
 
-const MIN_GAP_BOOK_EXTRACT = 60 * 60 * 1000;         // 读书批注新增较快
+const MIN_GAP_BOOK_EXTRACT = 60 * 60 * 1000;         // 讀書批註新增較快
 
-const MIN_GAP_AUTO_LINK = 2 * 60 * 1000;             // 字面自动链接 2min（轻量，零LLM）
+const MIN_GAP_AUTO_LINK = 2 * 60 * 1000;             // 字面自動連結 2min（輕量，零LLM）
 
-const AUTO_MERGE_OVERLAP_THRESHOLD = 0.80;           // 小类别 ≥80% 碎片已在另一类别中 → 自动合并
+const AUTO_MERGE_OVERLAP_THRESHOLD = 0.80;           // 小類別 ≥80% 碎片已在另一類別中 → 自動合併
 
 
-const EMERGENCE_THRESHOLD = 50;                    // 未分类积累到 50 条 → 触发生长脉冲
+const EMERGENCE_THRESHOLD = 50;                    // 未分類積累到 50 條 → 觸發生長脈衝
 
-const EMERGENCE_SAMPLE = 150;                      // 生长脉冲采样碎片数
+const EMERGENCE_SAMPLE = 150;                      // 生長脈衝取樣碎片數
 
-const EMBED_BATCH_SIZE = 50;                       // ChromaDB embed_batch 单次最大（过proxy有限制）
+const EMBED_BATCH_SIZE = 50;                       // ChromaDB embed_batch 單次最大（過proxy有限制）
 
-const MIN_GAP_EMERGENCE = 30 * 60 * 1000;          // 生长脉冲冷却 30min
+const MIN_GAP_EMERGENCE = 30 * 60 * 1000;          // 生長脈衝冷卻 30min
 
-const MIN_GAP_REMATCH = 2 * 60 * 60 * 1000;            // 字面回补 2h
+const MIN_GAP_REMATCH = 2 * 60 * 60 * 1000;            // 字面回補 2h
 
-const MIN_GAP_SEMANTIC_REMATCH = 4 * 60 * 60 * 1000;   // 语义回补 4h（ChromaDB + LLM 较重）
+const MIN_GAP_SEMANTIC_REMATCH = 4 * 60 * 60 * 1000;   // 語義回補 4h（ChromaDB + LLM 較重）
 
-const MIN_GAP_SEED_MERGE = 12 * 60 * 60 * 1000;        // 种子合并 12h
+const MIN_GAP_SEED_MERGE = 12 * 60 * 60 * 1000;        // 種子合併 12h
 
-const MIN_GAP_RELATED_ENTITIES = 24 * 60 * 60 * 1000;  // 实体关系发现 24h
+const MIN_GAP_RELATED_ENTITIES = 24 * 60 * 60 * 1000;  // 實體關係發現 24h
 
-const MIN_GAP_EPISODE_AUDIT = 6 * 60 * 60 * 1000;        // Episode质检 6h
+const MIN_GAP_EPISODE_AUDIT = 6 * 60 * 60 * 1000;        // Episode質檢 6h
 
-const MIN_FREE_MEMORY_MB = require('../rhythmConfig').getDeepCycleMinFreeMb();  // 深度循环最低可用内存（MB），不足跳过；可由 memory_config.json rhythm.deep_cycle_min_free_mb 设定
+const MIN_FREE_MEMORY_MB = require('../rhythmConfig').getDeepCycleMinFreeMb();  // 深度迴圈最低可用記憶體（MB），不足跳過；可由 memory_config.json rhythm.deep_cycle_min_free_mb 設定
 
-const MEMORY_CHECK_GRACE_MB = 300;                 // 每轮分类后额外保留内存
+const MEMORY_CHECK_GRACE_MB = 300;                 // 每輪分類後額外保留記憶體
 
 module.exports = {
     SKIP_PH,

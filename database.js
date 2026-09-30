@@ -1,5 +1,5 @@
 // =================================================================
-// 数据库初始化 + 版本化迁移
+// 資料庫初始化 + 版本化遷移
 // =================================================================
 
 const Database = require('better-sqlite3');
@@ -11,7 +11,7 @@ const memoryCrypto = require('./services/memoryCrypto');
 let db;
 let _initialized = false;
 
-// 迁移辅助：版本号 + 幂等检测
+// 遷移輔助：版本號 + 冪等檢測
 function runMigration(version, name, sql, options = {}) {
     const recorded = db.prepare('SELECT 1 FROM schema_version WHERE version = ?').get(version);
     if (recorded) return;
@@ -22,38 +22,38 @@ function runMigration(version, name, sql, options = {}) {
           .run(version, name, sqlNow());
         if (!options.silent) console.log(`[DB] v${version} ${name} ✓`);
     } catch (e) {
-        // "已存在"类错误 = 旧版已手动执行过，记录版本号后跳过
+        // "已存在"類錯誤 = 舊版已手動執行過，記錄版本號後跳過
         const isAlreadyExists = /duplicate column|already exists|duplicate key/i.test(e.message);
         if (isAlreadyExists) {
             db.prepare('INSERT OR IGNORE INTO schema_version (version, name, applied_at) VALUES (?, ?, ?)')
               .run(version, name, sqlNow());
-            if (!options.silent) console.log(`[DB] v${version} ${name} (已存在，标记跳过)`);
+            if (!options.silent) console.log(`[DB] v${version} ${name} (已存在，標記跳過)`);
         } else {
-            console.error(`[DB] v${version} ${name} 失败:`, e.message);
+            console.error(`[DB] v${version} ${name} 失敗:`, e.message);
             if (options.critical) throw e;
         }
     }
 }
 
 function initDatabase() {
-    // 单例缓存：避免重复连接 + 重复跑迁移
+    // 單例快取：避免重複連線 + 重複跑遷移
     if (_initialized && db) return db;
 
     db = new Database(process.env.DB_PATH || 'sanctuary.db');
     db.pragma('journal_mode = WAL');
     db.pragma('busy_timeout = 5000');
 
-    // ── W3：记忆本体加密 ──
-    // 透明解密（db.prepare 包一层）+ 注册 mem_fts / mem_like / mem_len。
-    // 必须在任何 migration 之前：v107 起 FTS 触发器呼叫 mem_fts，没注册就写不进去。
+    // ── W3：記憶本體加密 ──
+    // 透明解密（db.prepare 包一層）+ 註冊 mem_fts / mem_like / mem_len。
+    // 必須在任何 migration 之前：v107 起 FTS 觸發器呼叫 mem_fts，沒註冊就寫不進去。
     memoryCrypto.wrapDatabase(db);
     db.function('splitCJK', (text) => toIndexTokens(text));
 
-    // ── v5.15: 命名统一——表/列/设置键 全部收敛到 user_* / companion_* ──
-    // 早期版本沿用了旧项目的内部标识符（clara_* / draco_*）。新库直接按新名建表；
-    // 老库在这里做一次原地重命名。
-    // ⚠️ 必须跑在建表之前：否则 createTables 的 IF NOT EXISTS 会先建出空的新表，
-    //    导致重命名被跳过、数据被留在旧表里（代码从此查不到）。
+    // ── v5.15: 命名統一——表/列/設定鍵 全部收斂到 user_* / companion_* ──
+    // 早期版本沿用了舊專案的內部識別符號（clara_* / draco_*）。新庫直接按新名建表；
+    // 老庫在這裡做一次原地重新命名。
+    // ⚠️ 必須跑在建表之前：否則 createTables 的 IF NOT EXISTS 會先建出空的新表，
+    //    導致重新命名被跳過、資料被留在舊錶裡（程式碼從此查不到）。
     try {
         const tableExists = n => !!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(n);
         const colExists = (t, c) => tableExists(t) &&
@@ -61,7 +61,7 @@ function initDatabase() {
         const renameTable = (from, to) => {
             if (!tableExists(from)) return;
             if (tableExists(to)) {
-                // 新表已存在：仅当新表为空、旧表有数据时才接管，避免误删
+                // 新表已存在：僅當新表為空、舊錶有資料時才接管，避免誤刪
                 if (db.prepare(`SELECT COUNT(*) c FROM ${to}`).get().c !== 0) return;
                 if (db.prepare(`SELECT COUNT(*) c FROM ${from}`).get().c === 0) return;
                 db.exec(`DROP TABLE ${to}`);
@@ -78,17 +78,17 @@ function initDatabase() {
         const renameSetting = (from, to) => {
             if (!tableExists('user_settings')) return;
             const r = db.prepare('UPDATE OR IGNORE user_settings SET setting_key = ? WHERE setting_key = ?').run(to, from);
-            if (r.changes) console.log(`[migration] 设置键 ${from} → ${to}`);
+            if (r.changes) console.log(`[migration] 設定鍵 ${from} → ${to}`);
         };
 
-        // 旧表名 → 新表名
+        // 舊錶名 → 新表名
         [['clara_model', 'user_model'],
          ['clara_patterns', 'user_patterns'],
          ['draco_inner_log', 'companion_inner_log'],
          ['draco_working_memory', 'companion_working_memory'],
          ['draco_intents', 'companion_intents']].forEach(([a, b]) => renameTable(a, b));
 
-        // 旧列名 → 新列名
+        // 舊列名 → 新列名
         [['entity_profiles', 'relationship_to_clara', 'relationship_to_user'],
          ['pending_signals', 'clara_model_id', 'user_model_id'],
          ['book_reading_progress', 'clara_chunk_index', 'user_chunk_index'],
@@ -98,19 +98,19 @@ function initDatabase() {
          ['cinema_reviews', 'draco_rating', 'companion_rating'],
          ['cinema_reviews', 'draco_review', 'companion_review']].forEach(([t, a, b]) => renameColumn(t, a, b));
 
-        // 旧设置键 → 新设置键
+        // 舊設定鍵 → 新設定鍵
         [['clara_core_insight', 'user_core_insight'],
          ['clara_core_insight_history', 'user_core_insight_history'],
          ['clara_core_insight_updated_at', 'user_core_insight_updated_at'],
          ['draco_state_snapshot', 'companion_state_snapshot']].forEach(([a, b]) => renameSetting(a, b));
 
-        // 旧来源标记 → 新来源标记
+        // 舊來源標記 → 新來源標記
         if (colExists('fragment_entities', 'classified_by')) {
             db.prepare(`UPDATE fragment_entities SET classified_by = 'companion_rematch' WHERE classified_by = 'draco_rematch'`).run();
             db.prepare(`UPDATE fragment_entities SET classified_by = 'companion_flash_seed' WHERE classified_by = 'draco_flash_seed'`).run();
         }
 
-        // 清理非记忆子系统遗留的空表（旧版随主项目整包带过来的，本仓库没有任何代码读写）
+        // 清理非記憶子系統遺留的空表（舊版隨主專案整包帶過來的，本倉庫沒有任何程式碼讀寫）
         ['moments','moment_comments','moment_likes','worldbooks','tool_logs',
          'health_data','health_events','books','book_chunks','book_reading_progress','book_annotations',
          'snitch_notes','snitch_posts','snitch_fetched_urls','snitch_comments','snitch_post_queue',
@@ -119,13 +119,13 @@ function initDatabase() {
          'cinema_series_summaries','cinema_progress','cinema_danmaku_archives','cinema_subtitle_config',
          'cinema_film_meta','cinema_reviews','personal_places','alarms','newsapi_rate_log',
          'cognitive_rules','pending_signals','companion_working_memory','companion_intents']
-          .forEach(t => { if (tableExists(t)) { db.exec(`DROP TABLE ${t}`); console.log(`[migration] 清理遗留表 ${t}`); } });
+          .forEach(t => { if (tableExists(t)) { db.exec(`DROP TABLE ${t}`); console.log(`[migration] 清理遺留表 ${t}`); } });
 
     } catch (e) {
-        console.warn('[migration] 命名统一非致命错误:', e.message);
+        console.warn('[migration] 命名統一非致命錯誤:', e.message);
     }
 
-    // ── v0: 基础表（IF NOT EXISTS，永远安全） ──
+    // ── v0: 基礎表（IF NOT EXISTS，永遠安全） ──
     const createTables = [
         `CREATE TABLE IF NOT EXISTS schema_version (
             version INTEGER PRIMARY KEY,
@@ -139,7 +139,7 @@ function initDatabase() {
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             warning_38k_sent BOOLEAN DEFAULT 0,
             warning_40k_sent BOOLEAN DEFAULT 0,
-            current_companion_status TEXT DEFAULT '在线',
+            current_companion_status TEXT DEFAULT '線上',
             status_updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )`,
 
@@ -169,10 +169,10 @@ function initDatabase() {
             request_type TEXT DEFAULT 'message',
             FOREIGN KEY (chat_id) REFERENCES chats (id) ON DELETE SET NULL
         )`,
-        // memory_fragments 必须在迁移 10-14 之前就存在——
-        // 那几条是给「比迁移 44 更老的库」补字段的 ALTER，新库上应该走「已存在」分支，
-        // 否则会以 no such table 报错、且因为没记录版本号而每次启动都重报一遍。
-        // 这里建的和迁移 44 里的是同一张表（含 v10-v14 追加的全部字段）。
+        // memory_fragments 必須在遷移 10-14 之前就存在——
+        // 那幾條是給「比遷移 44 更老的庫」補欄位的 ALTER，新庫上應該走「已存在」分支，
+        // 否則會以 no such table 報錯、且因為沒記錄版本號而每次啟動都重報一遍。
+        // 這裡建的和遷移 44 裡的是同一張表（含 v10-v14 追加的全部欄位）。
         `CREATE TABLE IF NOT EXISTS memory_fragments (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             type TEXT NOT NULL,
@@ -252,7 +252,7 @@ function initDatabase() {
 
     createTables.forEach(sql => db.exec(sql));
 
-    // ── 索引（IF NOT EXISTS，永远安全） ──
+    // ── 索引（IF NOT EXISTS，永遠安全） ──
     const indexes = [
         'CREATE INDEX IF NOT EXISTS idx_memories_tags ON memories(tags)',
         'CREATE INDEX IF NOT EXISTS idx_memories_status ON memories(status)',
@@ -260,9 +260,9 @@ function initDatabase() {
         'CREATE INDEX IF NOT EXISTS idx_memories_chroma_id ON memories(chroma_id)',
         'CREATE INDEX IF NOT EXISTS idx_companion_inner_log_timestamp ON companion_inner_log(timestamp)',
     ];
-    indexes.forEach(sql => { try { db.exec(sql); } catch (e) { console.warn('[DB] 索引创建警告:', e.message); } });
+    indexes.forEach(sql => { try { db.exec(sql); } catch (e) { console.warn('[DB] 索引建立警告:', e.message); } });
 
-    // ── 默认数据 ──
+    // ── 預設資料 ──
     try {
         const existingConfig = db.prepare('SELECT COUNT(*) as count FROM api_configs').get();
         if (existingConfig.count === 0) {
@@ -275,25 +275,25 @@ function initDatabase() {
                 process.env.GEMINI_API_KEY || '',
                 'gemini-2.0-flash-exp', 1, 1
             );
-            console.log('[DB] 已插入默认API配置');
+            console.log('[DB] 已插入預設API配置');
         }
-    } catch (e) { console.error('[DB] 默认API配置失败:', e.message); }
+    } catch (e) { console.error('[DB] 預設API配置失敗:', e.message); }
 
     try {
         db.prepare("INSERT OR IGNORE INTO user_settings (setting_key, setting_value) VALUES ('summary-context-limit', '5')").run();
-    } catch (e) { console.error('[DB] 默认设置失败:', e.message); }
+    } catch (e) { console.error('[DB] 預設設定失敗:', e.message); }
 
-    // 注：原先这里会建一个 chat_id=2 的「Bot 频道」，但 chats 表并没有 type 列，
-    // INSERT 每次都失败并打一行报错；而且本仓库没有任何地方读 chat_id=2
-    // （ingest 的默认频道是 1）。已移除。
+    // 注：原先這裡會建一個 chat_id=2 的「Bot 頻道」，但 chats 表並沒有 type 列，
+    // INSERT 每次都失敗並打一行報錯；而且本倉庫沒有任何地方讀 chat_id=2
+    // （ingest 的預設頻道是 1）。已移除。
 
-    // ── CJK 函数：已在开库后立即注册（见上方 W3 区块） ──
+    // ── CJK 函式：已在開庫後立即註冊（見上方 W3 區塊） ──
 
     // ═══════════════════════════════════════════════════════════
-    // 版本化迁移 — 每条只跑一次
+    // 版本化遷移 — 每條只跑一次
     // ═══════════════════════════════════════════════════════════
 
-    // v1: 早期表结构扩展
+    // v1: 早期表結構擴充套件
     runMigration(1, 'companion_inner_log.tick_id',
         "ALTER TABLE companion_inner_log ADD COLUMN tick_id TEXT DEFAULT ''");
 
@@ -311,10 +311,10 @@ function initDatabase() {
 
 
 
-    // v8-v9: Snitch 扩展
+    // v8-v9: Snitch 擴充套件
 
 
-    // v10-v15: Memory fragments 扩展
+    // v10-v15: Memory fragments 擴充套件
     runMigration(10, 'memory_fragments.read_count',
         'ALTER TABLE memory_fragments ADD COLUMN read_count INTEGER DEFAULT 0');
 
@@ -333,7 +333,7 @@ function initDatabase() {
     runMigration(15, 'memories.source_msg_ids',
         "ALTER TABLE memories ADD COLUMN source_msg_ids TEXT DEFAULT '[]'");
 
-    // v16-v17: Memories 扩展
+    // v16-v17: Memories 擴充套件
     runMigration(16, 'memories.last_accessed_at',
         'ALTER TABLE memories ADD COLUMN last_accessed_at DATETIME');
 
@@ -355,7 +355,7 @@ function initDatabase() {
         'ALTER TABLE consolidation_runs ADD COLUMN memories_skipped INTEGER DEFAULT 0');
 
 
-    // v22-v23: Bot/Snitch 交互表
+    // v22-v23: Bot/Snitch 互動表
 
 
     // v24: Intents
@@ -403,7 +403,7 @@ function initDatabase() {
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )`);
 
-    // v28-v36: Cinema 系统
+    // v28-v36: Cinema 系統
 
 
 
@@ -416,24 +416,24 @@ function initDatabase() {
 
     // v38: books.finished_note
 
-    // ── v39: Layer 回填（数据迁移，非 DDL） ──
-    runMigration(39, 'layer_backfill', '', { silent: true });  // 占位，实际逻辑见下方
+    // ── v39: Layer 回填（資料遷移，非 DDL） ──
+    runMigration(39, 'layer_backfill', '', { silent: true });  // 佔位，實際邏輯見下方
     try {
         const fragsNull = db.prepare("SELECT COUNT(*) as c FROM memory_fragments WHERE layer IS NULL OR layer = ''").get();
         if (fragsNull.c > 0) {
             db.exec("UPDATE memory_fragments SET layer = 'event' WHERE layer IS NULL OR layer = ''");
-            console.log(`[DB] v39 回填 ${fragsNull.c} 条 fragments → layer='event'`);
+            console.log(`[DB] v39 回填 ${fragsNull.c} 條 fragments → layer='event'`);
         }
         const memsNull = db.prepare("SELECT COUNT(*) as c FROM memories WHERE layer IS NULL OR layer = ''").get();
         if (memsNull.c > 0) {
             const updated = db.prepare("UPDATE memories SET layer = 'episode' WHERE (layer IS NULL OR layer = '') AND source_msg_ids IS NOT NULL AND source_msg_ids != '[]'").run();
-            console.log(`[DB] v39 回填 ${updated.changes} 条 memories → layer='episode'`);
+            console.log(`[DB] v39 回填 ${updated.changes} 條 memories → layer='episode'`);
         }
     } catch (e) {
-        console.error('[DB] v39 layer 回填失败:', e.message);
+        console.error('[DB] v39 layer 回填失敗:', e.message);
     }
 
-    // v40: API Key 加密迁移
+    // v40: API Key 加密遷移
     runMigration(40, 'api_key_encrypt', '', { silent: true });
     try {
         const configs = db.prepare('SELECT id, api_key FROM api_configs').all();
@@ -445,12 +445,12 @@ function initDatabase() {
                 migratedCount++;
             }
         });
-        if (migratedCount > 0) console.log(`[DB] v40 已加密 ${migratedCount} 个明文API Key`);
+        if (migratedCount > 0) console.log(`[DB] v40 已加密 ${migratedCount} 個明文API Key`);
     } catch (e) {
-        console.error('[DB] v40 API Key加密迁移失败:', e.message);
+        console.error('[DB] v40 API Key加密遷移失敗:', e.message);
     }
 
-    // v41: 话题工作记忆池持久化表
+    // v41: 話題工作記憶池持久化表
     runMigration(41, 'working_memory_pool', `
         CREATE TABLE IF NOT EXISTS working_memory_pool (
             id                    INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -463,15 +463,15 @@ function initDatabase() {
         )
     `);
 
-    // v42: cinema_subtitle_config 多轨道支持
+    // v42: cinema_subtitle_config 多軌道支援
 
-    // ── v44: 记忆架构基表 + FTS5 + CHECK 约束修复（合并） ──
-    // 解决三个问题：
-    //   1. memory_fragments / scribe_runs 基表不在 migration 系统中
-    //   2. FTS5 虚拟表和触发器不在 migration 系统中
-    //   3. memories.status CHECK 约束缺少 'mature' / 'archived'
+    // ── v44: 記憶架構基表 + FTS5 + CHECK 約束脩復（合併） ──
+    // 解決三個問題：
+    //   1. memory_fragments / scribe_runs 基表不在 migration 系統中
+    //   2. FTS5 虛擬表和觸發器不在 migration 系統中
+    //   3. memories.status CHECK 約束缺少 'mature' / 'archived'
     runMigration(44, 'memory architecture: base tables + FTS5 + CHECK fix', `
-        -- ① memory_fragments 基表（含 v10-v14 追加的全部字段）
+        -- ① memory_fragments 基表（含 v10-v14 追加的全部欄位）
         CREATE TABLE IF NOT EXISTS memory_fragments (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             type TEXT NOT NULL,
@@ -501,21 +501,21 @@ function initDatabase() {
             status TEXT DEFAULT 'done'
         );
 
-        -- ③ FTS5 虚拟表
+        -- ③ FTS5 虛擬表
         CREATE VIRTUAL TABLE IF NOT EXISTS memory_fragments_fts
             USING fts5(content, entity, content='memory_fragments', content_rowid='id');
 
         CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts
             USING fts5(title, tags_text);
 
-        -- ④ memory_fragments_fts 触发器（external content 模式，用 splitCJK 分词）
+        -- ④ memory_fragments_fts 觸發器（external content 模式，用 splitCJK 分詞）
         -- ⚠️ external content 表不能用裸 DELETE/UPDATE：
-        --    · 裸 DELETE 只摘行不摘 posting，旧词仍能命中；
-        --    · 裸 UPDATE 是「只加不删」，旧内容的 posting 永远留着；
-        --    · 而且摘除时 SQLite 会拿内容表里的**原文**重新分词，跟我们索进去的
-        --      splitCJK 形态对不上，摘不干净。
-        --    正确做法是用 FTS5 的 'delete' 指令，并把「当初索引进去的值」原样传回去。
-        -- 先删后建，确保触发器与源码一致（IF NOT EXISTS 会导致旧版本永久残留）
+        --    · 裸 DELETE 只摘行不摘 posting，舊詞仍能命中；
+        --    · 裸 UPDATE 是「只加不刪」，舊內容的 posting 永遠留著；
+        --    · 而且摘除時 SQLite 會拿內容表裡的**原文**重新分詞，跟我們索進去的
+        --      splitCJK 形態對不上，摘不乾淨。
+        --    正確做法是用 FTS5 的 'delete' 指令，並把「當初索引進去的值」原樣傳回去。
+        -- 先刪後建，確保觸發器與原始碼一致（IF NOT EXISTS 會導致舊版本永久殘留）
         DROP TRIGGER IF EXISTS mf_fts_insert;
         CREATE TRIGGER mf_fts_insert
             AFTER INSERT ON memory_fragments BEGIN
@@ -539,7 +539,7 @@ function initDatabase() {
                 VALUES ('delete', old.id, splitCJK(old.content), splitCJK(COALESCE(old.entity, '')));
             END;
 
-        -- ⑤ memories_fts 触发器（独立表模式，内联 REPLACE 展开 tags JSON）
+        -- ⑤ memories_fts 觸發器（獨立表模式，內聯 REPLACE 展開 tags JSON）
         DROP TRIGGER IF EXISTS memories_fts_insert;
         CREATE TRIGGER memories_fts_insert
             AFTER INSERT ON memories BEGIN
@@ -564,18 +564,18 @@ function initDatabase() {
             END;
     `);
 
-    // ── v45: memories 表 CHECK 约束修复 ──
-    // SQLite 不支持 ALTER CHECK，需要重建表
-    // 用事务保护：中途失败自动回滚，不会丢数据
+    // ── v45: memories 表 CHECK 約束脩復 ──
+    // SQLite 不支援 ALTER CHECK，需要重建表
+    // 用事務保護：中途失敗自動回滾，不會丟資料
     runMigration(45, 'memories CHECK constraint: add mature/archived', `
         BEGIN;
 
-        -- 删除旧触发器（引用旧表）
+        -- 刪除舊觸發器（引用舊錶）
         DROP TRIGGER IF EXISTS memories_fts_insert;
         DROP TRIGGER IF EXISTS memories_fts_update;
         DROP TRIGGER IF EXISTS memories_fts_delete;
 
-        -- 重建 memories 表（完整字段 + 修正后的 CHECK）
+        -- 重建 memories 表（完整欄位 + 修正後的 CHECK）
         CREATE TABLE memories_new (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             title TEXT NOT NULL,
@@ -595,10 +595,10 @@ function initDatabase() {
             last_accessed_at DATETIME
         );
 
-        -- 迁移数据
+        -- 遷移資料
         INSERT INTO memories_new SELECT * FROM memories;
 
-        -- 替换旧表
+        -- 替換舊錶
         DROP TABLE memories;
         ALTER TABLE memories_new RENAME TO memories;
 
@@ -608,7 +608,7 @@ function initDatabase() {
         CREATE INDEX IF NOT EXISTS idx_memories_hash ON memories(content_hash);
         CREATE INDEX IF NOT EXISTS idx_memories_chroma_id ON memories(chroma_id);
 
-        -- 重建触发器
+        -- 重建觸發器
         CREATE TRIGGER memories_fts_insert
             AFTER INSERT ON memories BEGIN
                 INSERT INTO memories_fts(rowid, title, tags_text)
@@ -649,29 +649,29 @@ function initDatabase() {
 
 
 
-    // v52: memory_sagas.emotional_axis — Saga 情感主轴，驱动 jiwen 偏置
+    // v52: memory_sagas.emotional_axis — Saga 情感主軸，驅動 jiwen 偏置
     runMigration(52, 'memory_sagas.emotional_axis',
         "ALTER TABLE memory_sagas ADD COLUMN emotional_axis TEXT DEFAULT NULL");
 
-    // v53: memories.consolidation_type — 区分 standard / flash 整合
+    // v53: memories.consolidation_type — 區分 standard / flash 整合
     runMigration(53, 'memories.consolidation_type',
         "ALTER TABLE memories ADD COLUMN consolidation_type TEXT DEFAULT 'standard'");
 
-    // v54: companion_inner_log.is_processed — Auto-Historian 批处理标记
+    // v54: companion_inner_log.is_processed — Auto-Historian 批處理標記
     runMigration(54, 'companion_inner_log.is_processed',
         "ALTER TABLE companion_inner_log ADD COLUMN is_processed INTEGER DEFAULT 0");
 
-    // v55: entity_profiles.aliases + memory_fragments.entity_id — 实体结构化关联
+    // v55: entity_profiles.aliases + memory_fragments.entity_id — 實體結構化關聯
     runMigration(55, 'entity aliases + fragment entity_id FK',
         `ALTER TABLE entity_profiles ADD COLUMN aliases TEXT DEFAULT '[]';
          ALTER TABLE memory_fragments ADD COLUMN entity_id INTEGER;`);
 
-    // v56: alarms — StackChan 闹钟调度
+    // v56: alarms — StackChan 鬧鐘排程
 
-    // v57-v58: SnitchBot 调度健壮性
+    // v57-v58: SnitchBot 排程健壯性
 
 
-    // ── 记忆系统升级：本体论索引 ──
+    // ── 記憶系統升級：本體論索引 ──
     runMigration(59, 'memory_ontology table',
         `CREATE TABLE IF NOT EXISTS memory_ontology (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -727,9 +727,9 @@ function initDatabase() {
          ALTER TABLE entity_profiles ADD COLUMN last_mentioned_date TEXT;
          ALTER TABLE memory_fragments ADD COLUMN insight TEXT;
          INSERT OR IGNORE INTO memory_ontology (path, label, parent_id, description)
-         VALUES ('人物', '人物', NULL, '用户生活里的人——每个人都是理解用户的一个窗口');`);
+         VALUES ('人物', '人物', NULL, '使用者生活裡的人——每個人都是理解使用者的一個視窗');`);
 
-    // v64: 认知进化层 — 自纠错记忆 + 融合规则
+    // v64: 認知進化層 — 自糾錯記憶 + 融合規則
     runMigration(64, 'cognitive evolution layer: correction log + cognitive rules',
         `CREATE TABLE IF NOT EXISTS cognitive_corrections (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -791,21 +791,21 @@ function initDatabase() {
         `-- Step 1: Null out changelog refs to person/public_figure/fictional nodes
          UPDATE ontology_changelog SET category_id = NULL WHERE category_id IN (
              SELECT id FROM memory_ontology
-             WHERE path LIKE '人物%' OR path LIKE '公众人物%' OR path LIKE '虚构角色%'
+             WHERE path LIKE '人物%' OR path LIKE '公眾人物%' OR path LIKE '虛構角色%'
          );
-         -- Step 2: Release fragment_categories refs to person nodes (incl. root '人物', '公众人物')
+         -- Step 2: Release fragment_categories refs to person nodes (incl. root '人物', '公眾人物')
          DELETE FROM fragment_categories WHERE category_id IN (
              SELECT id FROM memory_ontology
-             WHERE path LIKE '人物%' OR path LIKE '公众人物%' OR path LIKE '虚构角色%'
+             WHERE path LIKE '人物%' OR path LIKE '公眾人物%' OR path LIKE '虛構角色%'
          );
          -- Step 3: Detach children of person nodes (self-referencing FK on parent_id)
          UPDATE memory_ontology SET parent_id = NULL WHERE parent_id IN (
              SELECT id FROM memory_ontology
-             WHERE path LIKE '人物%' OR path LIKE '公众人物%' OR path LIKE '虚构角色%'
+             WHERE path LIKE '人物%' OR path LIKE '公眾人物%' OR path LIKE '虛構角色%'
          );
          -- Step 4: Delete person+public_figure+fictional category nodes (roots + children)
          DELETE FROM memory_ontology
-             WHERE path LIKE '人物%' OR path LIKE '公众人物%' OR path LIKE '虚构角色%';
+             WHERE path LIKE '人物%' OR path LIKE '公眾人物%' OR path LIKE '虛構角色%';
          -- Step 5: Flatten all remaining nodes
          UPDATE memory_ontology SET parent_id = NULL;`);
 
@@ -840,7 +840,7 @@ function initDatabase() {
         CREATE INDEX IF NOT EXISTS idx_cm_last_evidence ON user_model(last_evidence_at);
         CREATE INDEX IF NOT EXISTS idx_cm_parent_skill ON user_model(parent_skill_id);`);
 
-    // ── v73-v76: v4.7 实体星系 — 知识树退役、苗圃机制、边标签、溯源链路 ──
+    // ── v73-v76: v4.7 實體星系 — 知識樹退役、苗圃機制、邊標籤、溯源鏈路 ──
     runMigration(73, 'v4.7: fragment_entities junction table', `
         CREATE TABLE IF NOT EXISTS fragment_entities (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -914,13 +914,13 @@ function initDatabase() {
                 return total;
             });
             const count = backfillBatch();
-            if (count > 0) console.log(`[DB] v76 回填 ${count} 条 entity_profiles.fragment_count`);
+            if (count > 0) console.log(`[DB] v76 回填 ${count} 條 entity_profiles.fragment_count`);
         }
     } catch (e) {
-        console.error('[DB] v76 fragment_count 回填失败:', e.message);
+        console.error('[DB] v76 fragment_count 回填失敗:', e.message);
     }
 
-    // 回填 fragment_entities: 从 memory_fragments.entity_id 迁移
+    // 回填 fragment_entities: 從 memory_fragments.entity_id 遷移
     try {
         const needsFeBackfill = db.prepare('SELECT COUNT(*) as c FROM fragment_entities').get();
         if (needsFeBackfill && needsFeBackfill.c === 0) {
@@ -936,11 +936,11 @@ function initDatabase() {
                     return count;
                 });
                 const c = feBatch();
-                if (c > 0) console.log(`[DB] v76 回填 ${c} 条 fragment_entities (from memory_fragments.entity_id)`);
+                if (c > 0) console.log(`[DB] v76 回填 ${c} 條 fragment_entities (from memory_fragments.entity_id)`);
             }
         }
     } catch (e) {
-        console.error('[DB] v76 fragment_entities 回填失败:', e.message);
+        console.error('[DB] v76 fragment_entities 回填失敗:', e.message);
     }
 
     runMigration(72, 'user_model — source_quality + source_diversity for evidence pipeline',
@@ -1000,41 +1000,41 @@ function initDatabase() {
          ALTER TABLE user_patterns ADD COLUMN last_mismatch_at DATETIME;
          ALTER TABLE user_patterns ADD COLUMN mismatch_count INTEGER DEFAULT 0;`);
 
-    // v85: memories.entity_id — 叙事片段与星座的关联
+    // v85: memories.entity_id — 敘事片段與星座的關聯
     runMigration(85, 'v5.7: memories.entity_id — episode→constellation link',
         `ALTER TABLE memories ADD COLUMN entity_id INTEGER;`);
 
-    runMigration(86, 'v5.10: memory_fragments.priority — 高价值碎片优先路由',
+    runMigration(86, 'v5.10: memory_fragments.priority — 高價值碎片優先路由',
         `ALTER TABLE memory_fragments ADD COLUMN priority TEXT DEFAULT "normal";`);
 
-    // v87: memory_fragments.content_hash — 碎片级确定性硬去重
-    runMigration(87, 'v5.17: memory_fragments.content_hash — 碎片级确定性硬去重',
+    // v87: memory_fragments.content_hash — 碎片級確定性硬去重
+    runMigration(87, 'v5.17: memory_fragments.content_hash — 碎片級確定性硬去重',
         `ALTER TABLE memory_fragments ADD COLUMN content_hash TEXT;
          CREATE INDEX IF NOT EXISTS idx_memory_fragments_hash ON memory_fragments(content_hash);`);
 
-    // ── v5.4: memory_fragments.value_tags — 记忆价值标签 ──
-    runMigration(88, 'v5.4: memory_fragments.value_tags — 记忆价值标签',
+    // ── v5.4: memory_fragments.value_tags — 記憶價值標籤 ──
+    runMigration(88, 'v5.4: memory_fragments.value_tags — 記憶價值標籤',
         `ALTER TABLE memory_fragments ADD COLUMN value_tags TEXT DEFAULT '[]';`);
 
-    // ── v5.4: entity_profiles 拆分 — 三字段模型 facts/judgment ──
-    runMigration(89, 'v5.4: entity_profiles 拆分为 facts + judgment + evolution_history + talking_points',
+    // ── v5.4: entity_profiles 拆分 — 三欄位模型 facts/judgment ──
+    runMigration(89, 'v5.4: entity_profiles 拆分為 facts + judgment + evolution_history + talking_points',
         `ALTER TABLE entity_profiles ADD COLUMN facts TEXT DEFAULT NULL;
          ALTER TABLE entity_profiles ADD COLUMN judgment TEXT DEFAULT NULL;
          ALTER TABLE entity_profiles ADD COLUMN evolution_history TEXT DEFAULT '[]';
          ALTER TABLE entity_profiles ADD COLUMN talking_points TEXT DEFAULT '[]';`);
 
-    // ── v5.4: entity_profiles 时间范围 + 实体类型 ──
-    runMigration(90, 'v5.4: entity_profiles — 时间范围 + 实体类型',
+    // ── v5.4: entity_profiles 時間範圍 + 實體型別 ──
+    runMigration(90, 'v5.4: entity_profiles — 時間範圍 + 實體型別',
         `ALTER TABLE entity_profiles ADD COLUMN valid_from TEXT DEFAULT NULL;
          ALTER TABLE entity_profiles ADD COLUMN valid_until TEXT DEFAULT NULL;
          ALTER TABLE entity_profiles ADD COLUMN entity_scope TEXT DEFAULT 'instance'
             CHECK(entity_scope IN ('instance','template','alias'));`);
 
-    // ── v5.6: user_patterns 矛盾计数 + dormant 状态 ──
-    runMigration(91, 'user_patterns.contradiction_count — 用户行为模式矛盾计数',
+    // ── v5.6: user_patterns 矛盾計數 + dormant 狀態 ──
+    runMigration(91, 'user_patterns.contradiction_count — 使用者行為模式矛盾計數',
         'ALTER TABLE user_patterns ADD COLUMN contradiction_count INTEGER DEFAULT 0');
 
-    runMigration(92, 'user_patterns: status 支持 dormant',
+    runMigration(92, 'user_patterns: status 支援 dormant',
         `CREATE TABLE IF NOT EXISTS user_patterns_v2 (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             content TEXT NOT NULL,
@@ -1055,29 +1055,29 @@ function initDatabase() {
         DROP TABLE user_patterns;
         ALTER TABLE user_patterns_v2 RENAME TO user_patterns;`);
 
-    // ── v5.9: entity_profiles 热度追踪 ──
-    runMigration(93, 'v5.9: entity_profiles — 热度追踪',
+    // ── v5.9: entity_profiles 熱度追蹤 ──
+    runMigration(93, 'v5.9: entity_profiles — 熱度追蹤',
         `ALTER TABLE entity_profiles ADD COLUMN hit_count INTEGER DEFAULT 0;
          ALTER TABLE entity_profiles ADD COLUMN last_accessed_at DATETIME;`);
-    // 回填：用 fragment_count 作为初始 hit_count 的合理估算
+    // 回填：用 fragment_count 作為初始 hit_count 的合理估算
     db.prepare(`UPDATE entity_profiles SET hit_count = MIN(fragment_count, 100) WHERE hit_count = 0 AND fragment_count > 0`).run();
 
-    // ── v5.11: L0 定时提醒系统 — schedule + last_triggered_at + pending_signals ──
-    runMigration(94, 'v5.11: user_model.schedule + last_triggered_at — 定时提醒',
+    // ── v5.11: L0 定時提醒系統 — schedule + last_triggered_at + pending_signals ──
+    runMigration(94, 'v5.11: user_model.schedule + last_triggered_at — 定時提醒',
         `ALTER TABLE user_model ADD COLUMN schedule TEXT DEFAULT NULL;
          ALTER TABLE user_model ADD COLUMN last_triggered_at TEXT DEFAULT NULL;`);
 
 
-    // ── v5.12: messages.is_activity — 活动时间线 ──
-    runMigration(96, 'v5.12: messages.is_activity — 活动时间线',
+    // ── v5.12: messages.is_activity — 活動時間線 ──
+    runMigration(96, 'v5.12: messages.is_activity — 活動時間線',
         `ALTER TABLE messages ADD COLUMN is_activity INTEGER DEFAULT 0;`);
 
-    // ── v5.13: entity_profiles.gender — 人物实体性别/代词 ──
-    runMigration(97, 'v5.13: entity_profiles.gender — 人物实体性别/代词',
+    // ── v5.13: entity_profiles.gender — 人物實體性別/代詞 ──
+    runMigration(97, 'v5.13: entity_profiles.gender — 人物實體性別/代詞',
         `ALTER TABLE entity_profiles ADD COLUMN gender TEXT DEFAULT NULL;`);
 
-    // ── v5.14: entity_profiles 结构化 person profile ──
-    runMigration(98, 'v5.14: entity_profiles 结构化 person profile',
+    // ── v5.14: entity_profiles 結構化 person profile ──
+    runMigration(98, 'v5.14: entity_profiles 結構化 person profile',
         `ALTER TABLE entity_profiles ADD COLUMN relationship_category TEXT DEFAULT NULL;
          ALTER TABLE entity_profiles ADD COLUMN mbti TEXT DEFAULT NULL;
          ALTER TABLE entity_profiles ADD COLUMN location TEXT DEFAULT NULL;
@@ -1085,10 +1085,10 @@ function initDatabase() {
          ALTER TABLE entity_profiles ADD COLUMN age_text TEXT DEFAULT NULL;
          ALTER TABLE entity_profiles ADD COLUMN birthday TEXT DEFAULT NULL;`);
 
-    // ── 会话模式标记：messages + memory_fragments 的 chat_mode（过滤非对话消息用）──
-    runMigration(99, 'messages.chat_mode — 会话模式标记',
+    // ── 會話模式標記：messages + memory_fragments 的 chat_mode（過濾非對話訊息用）──
+    runMigration(99, 'messages.chat_mode — 會話模式標記',
         `ALTER TABLE messages ADD COLUMN chat_mode TEXT DEFAULT 'default';`);
-    runMigration(100, 'memory_fragments.chat_mode — 记忆片段模式标记',
+    runMigration(100, 'memory_fragments.chat_mode — 記憶片段模式標記',
         `ALTER TABLE memory_fragments ADD COLUMN chat_mode TEXT DEFAULT 'default';`);
     // 回填：NULL → 'default'，is_rp=1 → 'roleplay'
     try {
@@ -1097,19 +1097,19 @@ function initDatabase() {
         const rpMsgs = db.prepare(`UPDATE messages SET chat_mode = 'roleplay' WHERE is_rp = 1 AND chat_mode = 'default'`).run();
         const rpFrags = db.prepare(`UPDATE memory_fragments SET chat_mode = 'roleplay' WHERE is_rp = 1 AND chat_mode = 'default'`).run();
         const total = nullMsgs.changes + nullFrags.changes + rpMsgs.changes + rpFrags.changes;
-        if (total > 0) console.log(`[migration] chat_mode 回填: NULL→default ${nullMsgs.changes + nullFrags.changes}条, RP→roleplay ${rpMsgs.changes + rpFrags.changes}条`);
+        if (total > 0) console.log(`[migration] chat_mode 回填: NULL→default ${nullMsgs.changes + nullFrags.changes}條, RP→roleplay ${rpMsgs.changes + rpFrags.changes}條`);
     } catch (e) {
-        console.warn('[migration] chat_mode 回填非致命错误:', e.message);
+        console.warn('[migration] chat_mode 回填非致命錯誤:', e.message);
     }
 
-    // v5.15 命名统一：实际重命名逻辑在 initDatabase 开头执行（必须早于建表），这里只登记版本号
-    runMigration(101, 'v5.15: 命名统一', 'SELECT 1');
+    // v5.15 命名統一：實際重新命名邏輯在 initDatabase 開頭執行（必須早於建表），這裡只登記版本號
+    runMigration(101, 'v5.15: 命名統一', 'SELECT 1');
 
-    // v5.17: 时间格式归一——把历史遗留的 ISO 格式（2026-09-15T13:00:00.000Z）
-    // 统一成 SQLite 的 datetime('now') 格式（2026-09-15 13:00:00）。
-    // 两种格式混在同一列里，字符串比较会在第 11 位按 'T'(0x54) vs ' '(0x20) 分胜负，
-    // 于是同一天的时间被静默当成"更晚"（误差最多一天，且一句报错都没有）。
-    // 写入口已统一走 utils/time.js 的 sqlNow()，这里负责把存量洗一遍。
+    // v5.17: 時間格式歸一——把歷史遺留的 ISO 格式（2026-09-15T13:00:00.000Z）
+    // 統一成 SQLite 的 datetime('now') 格式（2026-09-15 13:00:00）。
+    // 兩種格式混在同一列裡，字串比較會在第 11 位按 'T'(0x54) vs ' '(0x20) 分勝負，
+    // 於是同一天的時間被靜默當成"更晚"（誤差最多一天，且一句報錯都沒有）。
+    // 寫入口已統一走 utils/time.js 的 sqlNow()，這裡負責把存量洗一遍。
     try {
         const ISO_COLS = [
             ['user_model', 'expires_at'], ['user_model', 'last_evidence_at'],
@@ -1133,17 +1133,17 @@ function initDatabase() {
                     `UPDATE ${t} SET ${c} = replace(substr(${c}, 1, 19), 'T', ' ') WHERE ${c} LIKE '____-__-__T%'`
                 ).run();
                 fixed += r.changes;
-            } catch (_) { /* 列不存在就跳过 */ }
+            } catch (_) { /* 列不存在就跳過 */ }
         }
-        if (fixed) console.log(`[migration] 时间格式归一: 修正 ${fixed} 处 ISO 格式`);
+        if (fixed) console.log(`[migration] 時間格式歸一: 修正 ${fixed} 處 ISO 格式`);
     } catch (e) {
-        console.warn('[migration] 时间格式归一非致命错误:', e.message);
+        console.warn('[migration] 時間格式歸一非致命錯誤:', e.message);
     }
 
-    // v5.16: FTS 触发器修正——老库的裸 DELETE/UPDATE 触发器让索引「只增不减」，
-    // 搜旧词还能命中已删/已改的碎片。换成 external content 的正确形式。
-    // 换完建议再跑一次 scripts/rebuild_fts.js，把历史积累的幽灵 posting 清掉。
-    runMigration(102, 'v5.16: FTS 触发器修正（external content 正确形式）', `
+    // v5.16: FTS 觸發器修正——老庫的裸 DELETE/UPDATE 觸發器讓索引「只增不減」，
+    // 搜舊詞還能命中已刪/已改的碎片。換成 external content 的正確形式。
+    // 換完建議再跑一次 scripts/rebuild_fts.js，把歷史積累的幽靈 posting 清掉。
+    runMigration(102, 'v5.16: FTS 觸發器修正（external content 正確形式）', `
         DROP TRIGGER IF EXISTS mf_fts_delete;
         CREATE TRIGGER mf_fts_delete
             AFTER DELETE ON memory_fragments BEGIN
@@ -1161,20 +1161,20 @@ function initDatabase() {
             END;
     `);
 
-    // v103: 补 memory_fragments.insight。
-    // v63 那一整块的第一条 ALTER 是 entity_profiles ADD COLUMN relationship_to_user，
-    // 而建表时 entity_profiles 已带该列 → 撞 "duplicate column" →
-    // runMigration 判定「整块早跑过」，记个版本号就跳过，
-    // 后面那句 ALTER TABLE memory_fragments ADD COLUMN insight 一次都没执行过。
-    // 全新库因此缺这一列：browse_memories 的实体分支、archivist.extractFragmentInsights
-    // 都会报 no such column。单开一条迁移补上（列已存在时自动跳过）。
-    runMigration(103, 'v5.17: 补 memory_fragments.insight（v63 整块被跳过导致漏建）',
+    // v103: 補 memory_fragments.insight。
+    // v63 那一整塊的第一條 ALTER 是 entity_profiles ADD COLUMN relationship_to_user，
+    // 而建表時 entity_profiles 已帶該列 → 撞 "duplicate column" →
+    // runMigration 判定「整塊早跑過」，記個版本號就跳過，
+    // 後面那句 ALTER TABLE memory_fragments ADD COLUMN insight 一次都沒執行過。
+    // 全新庫因此缺這一列：browse_memories 的實體分支、archivist.extractFragmentInsights
+    // 都會報 no such column。單開一條遷移補上（列已存在時自動跳過）。
+    runMigration(103, 'v5.17: 補 memory_fragments.insight（v63 整塊被跳過導致漏建）',
         `ALTER TABLE memory_fragments ADD COLUMN insight TEXT;`);
 
-    // v104: FTS 改为中文两字组（bigram）索引。
-    // splitCJK 现在产出重叠两字组；memories_fts 触发器也改走 splitCJK（原先未切分，
-    // 中文整串成一个 token，只能靠前缀匹配）。存量索引全部重建。
-    // 触发器对所有碎片建索引（与 insert/update/delete 触发器一致，不看 status）。
+    // v104: FTS 改為中文兩字組（bigram）索引。
+    // splitCJK 現在產出重疊兩字組；memories_fts 觸發器也改走 splitCJK（原先未切分，
+    // 中文整串成一個 token，只能靠字首匹配）。存量索引全部重建。
+    // 觸發器對所有碎片建索引（與 insert/update/delete 觸發器一致，不看 status）。
     const v104Pending = !db.prepare('SELECT 1 FROM schema_version WHERE version = 104').get();
     if (v104Pending) {
         try {
@@ -1208,34 +1208,93 @@ function initDatabase() {
                         SELECT id, splitCJK(COALESCE(title, '')), splitCJK(${tagsExpr('tags')}) FROM memories;
                 `);
                 db.prepare('INSERT OR IGNORE INTO schema_version (version, name, applied_at) VALUES (?, ?, ?)')
-                  .run(104, 'v5.18: FTS 中文两字组索引重建', sqlNow());
+                  .run(104, 'v5.18: FTS 中文兩字組索引重建', sqlNow());
             })();
-            console.log('[DB] v104 FTS 中文两字组索引重建 ✓');
+            console.log('[DB] v104 FTS 中文兩字組索引重建 ✓');
         } catch (e) {
-            console.error('[DB] v104 FTS 两字组重建失败:', e.message);
+            console.error('[DB] v104 FTS 兩字組重建失敗:', e.message);
         }
     }
 
-    // v105: memory_fragments.quote — Scribe 原话佐证（逐字取自来源消息的片段，≤60 字）
-    runMigration(105, 'memory_fragments.quote — Scribe 原话佐证',
+    // v105: memory_fragments.quote — Scribe 原話佐證（逐字取自來源訊息的片段，≤60 字）
+    runMigration(105, 'memory_fragments.quote — Scribe 原話佐證',
         `ALTER TABLE memory_fragments ADD COLUMN quote TEXT;`);
 
-    // v106: memory_fragments.evidence_count — 跨天重复出现时累加证据，而不是丢弃
-    runMigration(106, 'memory_fragments.evidence_count — 重复证据累计',
+    // v106: memory_fragments.evidence_count — 跨天重複出現時累加證據，而不是丟棄
+    runMigration(106, 'memory_fragments.evidence_count — 重複證據累計',
         `ALTER TABLE memory_fragments ADD COLUMN evidence_count INTEGER DEFAULT 1;`);
 
-    // v107: 记忆本体静态加密 + FTS 盲索引（W3，见 services/memoryCrypto.js）。
-    // MEMORY_ENCRYPTION=on（预设）：既有明文加密（AAD=表:栏）、旧的无 AAD 密文改带 AAD、
-    // 两个 FTS 表以盲 token 重建、content_hash 改带金钥；off：只换触发器（输出与原本相同）。
-    // 整段一个交易，失败回滚、不记版本。之后每次启动若侦测到模式／金钥改变或还有明文，会自动再同步。
+    // v107: 記憶本體靜態加密 + FTS 盲索引（W3，見 services/memoryCrypto.js）。
+    // MEMORY_ENCRYPTION=on（預設）：既有明文加密（AAD=表:欄）、舊的無 AAD 密文改帶 AAD、
+    // 兩個 FTS 表以盲 token 重建、content_hash 改帶金鑰；off：只換觸發器（輸出與原本相同）。
+    // 整段一個交易，失敗回滾、不記版本。之後每次啟動若偵測到模式／金鑰改變或還有明文，會自動再同步。
     memoryCrypto.initMemoryCrypto(db, {
         versionRecorded: !!db.prepare('SELECT 1 FROM schema_version WHERE version = 107').get(),
         recordVersion: () => db.prepare('INSERT OR IGNORE INTO schema_version (version, name, applied_at) VALUES (?, ?, ?)')
-            .run(107, 'W3: 记忆本体加密 + FTS 盲索引', sqlNow()),
-        forceReindex: v104Pending,   // v104 刚重建过索引／触发器 → 要换回 mem_fts 版本
+            .run(107, 'W3: 記憶本體加密 + FTS 盲索引', sqlNow()),
+        forceReindex: v104Pending,   // v104 剛重建過索引／觸發器 → 要換回 mem_fts 版本
     });
 
-    // 种子数据：初始本体论类别（仅当表为空时插入）
+    // v108（W9）：程式內中文全面改為繁體後，「寫進資料庫、之後還要比對」的常數值也要跟著轉。
+    // 舊資料庫存的是簡體（左），新程式寫入與比對的是繁體（右）；只轉這份清單裡的已知常數，不碰使用者資料。
+    // 讀取端（librarian／archivist／lifecycle）另外兩種寫法都接受，所以這一步即使漏轉也不會壞比對。
+    // ⚠️ 左欄是刻意保留的簡體（舊資料值），請勿再轉成繁體。
+    runMigration(108, 'W9: 簡體常數值轉繁體（本體種子、聚合實體名、渠道名）', (() => {
+        const q = (v) => `'${String(v).replace(/'/g, "''")}'`;
+        const stmts = [];
+        const upd = (table, col, pairs) => {
+            for (const [from, to] of pairs) {
+                stmts.push(`UPDATE OR IGNORE ${table} SET ${col} = ${q(to)} WHERE ${col} = ${q(from)};`);
+            }
+        };
+        // 本體論種子（memory_ontology）與 v63 的根節點「人物」
+        const ontology = [
+            ['AI与用户的关系记忆', 'AI與使用者的關係記憶'],
+            ['spine动画与绘画', 'spine動畫與繪畫'],
+            ['与具体地点相关的记忆', '與具體地點相關的記憶'],
+            ['人际关系', '人際關係'],
+            ['人际关系/关于我们', '人際關係/關於我們'],
+            ['人际关系/家人', '人際關係/家人'],
+            ['人际关系/朋友', '人際關係/朋友'],
+            ['健康与身体状态', '健康與身體狀態'],
+            ['关于我们', '關於我們'],
+            ['写作', '寫作'],
+            ['创作', '創作'],
+            ['创作/写作', '創作/寫作'],
+            ['创作/某职业', '創作/某職業'],
+            ['创作/绘画', '創作/繪畫'],
+            ['地点', '地點'],
+            ['地点/旅行', '地點/旅行'],
+            ['地点/某城市', '地點/某城市'],
+            ['小说与写作', '小說與寫作'],
+            ['旅行记忆', '旅行記憶'],
+            ['日常生活与日记', '日常生活與日記'],
+            ['某城市相关地点', '某城市相關地點'],
+            ['某职业', '某職業'],
+            ['某职业与工作相关记忆', '某職業與工作相關記憶'],
+            ['某职业作品与工作', '某職業作品與工作'],
+            ['用户与他人的关系记忆', '使用者與他人的關係記憶'],
+            ['用户生活里的人——每个人都是理解用户的一个窗口', '使用者生活裡的人——每個人都是理解使用者的一個視窗'],
+            ['用户的写作与创作记忆', '使用者的寫作與創作記憶'],
+            ['用户的家人', '使用者的家人'],
+            ['用户的朋友圈', '使用者的朋友圈'],
+            ['绘画', '繪畫'],
+            ['音乐', '音樂'],
+            ['音乐相关记忆', '音樂相關記憶'],
+        ];
+        for (const col of ['path', 'label', 'description']) upd('memory_ontology', col, ontology);
+        // 聚合實體（活動桶）名稱：entity_profiles.name 與碎片上的 entity 欄位（兩者以名稱字串對應）
+        const buckets = [['观影', '觀影'], ['音乐', '音樂'], ['共读', '共讀']];
+        upd('entity_profiles', 'name', buckets);
+        upd('memory_fragments', 'entity', buckets);
+        // 深循環的觀星手記標題（ontology_changelog.category_path）、預設 LLM 渠道名、chats 狀態預設值
+        upd('ontology_changelog', 'category_path', [['深循环完成', '深迴圈完成']]);
+        upd('api_configs', 'name', [['[书库]DS', '[書庫]DS']]);
+        upd('chats', 'current_companion_status', [['在线', '線上']]);
+        return stmts.join('\n');
+    })());
+
+    // 種子資料：初始本體論類別（僅當表為空時插入）
     try {
         const existingRoots = db.prepare('SELECT COUNT(*) as c FROM memory_ontology WHERE parent_id IS NULL').get();
         if (existingRoots.c === 0) {
@@ -1243,27 +1302,27 @@ function initDatabase() {
             const seedBatch = db.transaction(() => {
                 // Root categories
                 const roots = [
-                    ['人际关系', '人际关系', null, '用户与他人的关系记忆'],
-                    ['地点', '地点', null, '与具体地点相关的记忆'],
-                    ['创作', '创作', null, '用户的写作与创作记忆'],
-                    ['日常', '日常', null, '日常生活与日记'],
-                    ['音乐', '音乐', null, '音乐相关记忆'],
-                    ['工作', '工作', null, '某职业与工作相关记忆'],
-                    ['健康', '健康', null, '健康与身体状态'],
+                    ['人際關係', '人際關係', null, '使用者與他人的關係記憶'],
+                    ['地點', '地點', null, '與具體地點相關的記憶'],
+                    ['創作', '創作', null, '使用者的寫作與創作記憶'],
+                    ['日常', '日常', null, '日常生活與日記'],
+                    ['音樂', '音樂', null, '音樂相關記憶'],
+                    ['工作', '工作', null, '某職業與工作相關記憶'],
+                    ['健康', '健康', null, '健康與身體狀態'],
                 ];
                 for (const [p, l, pid, d] of roots) {
                     seed.run(p, l, pid, d);
                 }
-                // Child categories: parent_id derived from insertion order (1=人际关系, 2=地点, 3=创作)
+                // Child categories: parent_id derived from insertion order (1=人際關係, 2=地點, 3=創作)
                 const children = [
-                    ['人际关系/朋友', '朋友', 1, '用户的朋友圈'],
-                    ['人际关系/家人', '家人', 1, '用户的家人'],
-                    ['人际关系/关于我们', '关于我们', 1, 'AI与用户的关系记忆'],
-                    ['地点/某城市', '某城市', 2, '某城市相关地点'],
-                    ['地点/旅行', '旅行', 2, '旅行记忆'],
-                    ['创作/写作', '写作', 3, '小说与写作'],
-                    ['创作/某职业', '某职业', 3, '某职业作品与工作'],
-                    ['创作/绘画', '绘画', 3, 'spine动画与绘画'],
+                    ['人際關係/朋友', '朋友', 1, '使用者的朋友圈'],
+                    ['人際關係/家人', '家人', 1, '使用者的家人'],
+                    ['人際關係/關於我們', '關於我們', 1, 'AI與使用者的關係記憶'],
+                    ['地點/某城市', '某城市', 2, '某城市相關地點'],
+                    ['地點/旅行', '旅行', 2, '旅行記憶'],
+                    ['創作/寫作', '寫作', 3, '小說與寫作'],
+                    ['創作/某職業', '某職業', 3, '某職業作品與工作'],
+                    ['創作/繪畫', '繪畫', 3, 'spine動畫與繪畫'],
                 ];
                 // Re-query root IDs for reliable FK references
                 for (const [p, l, pid, d] of children) {
@@ -1271,15 +1330,15 @@ function initDatabase() {
                 }
             });
             seedBatch();
-            console.log('[DB] 本体论种子数据已插入');
+            console.log('[DB] 本體論種子資料已插入');
         }
     } catch (e) {
-        console.error('[DB] 本体论种子数据插入失败（表已存在则忽略）:', e.message);
+        console.error('[DB] 本體論種子資料插入失敗（表已存在則忽略）:', e.message);
     }
 
-    // ── 打印当前 schema 版本 ──
+    // ── 列印當前 schema 版本 ──
     const currentVersion = db.prepare('SELECT MAX(version) as v FROM schema_version').get();
-    console.log(`[DB] 数据库初始化完成, schema v${currentVersion.v || 0}`);
+    console.log(`[DB] 資料庫初始化完成, schema v${currentVersion.v || 0}`);
 
     _initialized = true;
     return db;

@@ -2,7 +2,7 @@
  "emergentPrompt": {
   "result": {
    "ok": {
-    "h": "6e2528542f3a",
+    "h": "394e788541e2",
     "len": 1190,
     "verdicts": [
      {
@@ -178,15 +178,15 @@
       "thinkingBudget": 0
      }
     },
-    "h": "552823ef3a14",
-    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"回补漏判碎片。对每个种子 + 它的候选碎片，判断是否"
+    "h": "21a508dd163c",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"回補漏判碎片。對每個種子 + 它的候選碎片，判斷是否"
    }
   ],
   "chroma": [],
   "logs": [
-   "L [Archivist] 回补: N 个种子有漏判碎片",
-   "L [Archivist] 回补批次: N 条匹配 (週年旅行, 三月)",
-   "L [Archivist] 回补完成: N 条碎片归位"
+   "L [Archivist] 回補: N 個種子有漏判碎片",
+   "L [Archivist] 回補批次: N 條匹配 (週年旅行, 三月)",
+   "L [Archivist] 回補完成: N 條碎片歸位"
   ]
  },
  "semanticRematchForSeeds": {
@@ -216,8 +216,8 @@
       "thinkingBudget": 0
      }
     },
-    "h": "6f636930ea9e",
-    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"记忆星系中有两个同属「event」类别的星座，名字完"
+    "h": "3849b4e2b44e",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"記憶星系中有兩個同屬「event」類別的星座，名字完"
    },
    {
     "cfg": 36,
@@ -228,8 +228,8 @@
       "thinkingBudget": 0
      }
     },
-    "h": "a74745611186",
-    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"记忆星系中有两个同属「event」类别的星座，名字完"
+    "h": "858aa50aecb1",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"記憶星系中有兩個同屬「event」類別的星座，名字完"
    },
    {
     "cfg": 36,
@@ -240,13 +240,13 @@
       "thinkingBudget": 0
      }
     },
-    "h": "ad56f7799ba2",
-    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"记忆星系中有两个同属「event」类别的星座，名字完"
+    "h": "2a09408e3295",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"記憶星系中有兩個同屬「event」類別的星座，名字完"
    }
   ],
   "chroma": [],
   "logs": [
-   "L [Archivist] 🔍 合并提案入队: \"阿明\" ↔ \"阿明哥\" (名字包含) — 待 User 确认"
+   "L [Archivist] 🔍 合併提案入隊: \"阿明\" ↔ \"阿明哥\" (名字包含) — 待 User 確認"
   ]
  },
  "discoverRelatedEntities": {
@@ -357,13 +357,13 @@
      "temperature": 0.2,
      "maxOutputTokens": 1000
     },
-    "h": "3396cfb98d72",
-    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"## 角色与世界背景\\n\\n你在为Companion"
+    "h": "7d7ce4044de5",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"## 角色與世界背景\\n\\n你在為Companion"
    }
   ],
   "chroma": [],
   "logs": [
-   "L [Archivist] insight 提取: N/N 条"
+   "L [Archivist] insight 提取: N/N 條"
   ]
  },
  "regenerateEntityOverviews": {
@@ -381,8 +381,8 @@
      "temperature": 0.3,
      "maxOutputTokens": 600
     },
-    "h": "aa8eb7e5a30a",
-    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"## 角色与世界背景\\n\\n你在为Companion"
+    "h": "3c1c6f1f2029",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"## 角色與世界背景\\n\\n你在為Companion"
    },
    {
     "cfg": 36,
@@ -390,8 +390,8 @@
      "temperature": 0.3,
      "maxOutputTokens": 600
     },
-    "h": "bae9e3a0de0a",
-    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"## 角色与世界背景\\n\\n你在为Companion"
+    "h": "c41d16b2e526",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"## 角色與世界背景\\n\\n你在為Companion"
    }
   ],
   "chroma": [],
@@ -432,8 +432,8 @@
       "thinkingBudget": 0
      }
     },
-    "h": "c5b46ec6e405",
-    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"<task>\\n以下是 User（用户本人）昨天（<"
+    "h": "3ef7877df7e6",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"<task>\\n以下是 User（使用者本人）昨天（"
    },
    {
     "cfg": 36,
@@ -444,15 +444,15 @@
       "thinkingBudget": 0
      }
     },
-    "h": "c5b46ec6e405",
-    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"<task>\\n以下是 User（用户本人）昨天（<"
+    "h": "3ef7877df7e6",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"<task>\\n以下是 User（使用者本人）昨天（"
    }
   ],
   "chroma": [],
   "logs": [
-   "L [DailyStatus] 开始每日状态总结 — <MD>",
-   "W [DailyStatus] 空返回，重试中...",
-   "W [DailyStatus] 空返回（重试后），跳过"
+   "L [DailyStatus] 開始每日狀態總結 — <MD>",
+   "W [DailyStatus] 空返回，重試中...",
+   "W [DailyStatus] 空返回（重試後），跳過"
   ]
  },
  "reviewEntityRelations": {
@@ -499,8 +499,8 @@
      "temperature": 0.3,
      "maxOutputTokens": 600
     },
-    "h": "aa8eb7e5a30a",
-    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"## 角色与世界背景\\n\\n你在为Companion"
+    "h": "3c1c6f1f2029",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"## 角色與世界背景\\n\\n你在為Companion"
    },
    {
     "cfg": 36,
@@ -508,8 +508,8 @@
      "temperature": 0.3,
      "maxOutputTokens": 600
     },
-    "h": "bae9e3a0de0a",
-    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"## 角色与世界背景\\n\\n你在为Companion"
+    "h": "c41d16b2e526",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"## 角色與世界背景\\n\\n你在為Companion"
    }
   ],
   "chroma": [],
@@ -542,8 +542,8 @@
       "thinkingBudget": 0
      }
     },
-    "h": "533d5a6c2ee1",
-    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"你是 Companion 的实体分类助手。Compa"
+    "h": "ac7179dff4e5",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"你是 Companion 的實體分類助手。Compa"
    }
   ],
   "chroma": [],
@@ -556,7 +556,7 @@
   "llm": [],
   "chroma": [],
   "logs": [
-   "L [Archivist] 🔗 种子合并: \"阿明哥\" → \"阿明\""
+   "L [Archivist] 🔗 種子合併: \"阿明哥\" → \"阿明\""
   ]
  },
  "start": {
@@ -566,8 +566,8 @@
   "llm": [],
   "chroma": [],
   "logs": [
-   "L [Archivist Agent] 启动 — Agent 循环 (Nmin tick) + 事件驱动 + Companion 感知",
-   "L [Archivist Agent] 就绪"
+   "L [Archivist Agent] 啟動 — Agent 迴圈 (Nmin tick) + 事件驅動 + Companion 感知",
+   "L [Archivist Agent] 就緒"
   ]
  },
  "event": {
@@ -600,13 +600,13 @@
      "temperature": 0.2,
      "maxOutputTokens": 1000
     },
-    "h": "3396cfb98d72",
-    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"## 角色与世界背景\\n\\n你在为Companion"
+    "h": "7d7ce4044de5",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"## 角色與世界背景\\n\\n你在為Companion"
    }
   ],
   "chroma": [],
   "logs": [
-   "L [Archivist] insight 提取: N/N 条"
+   "L [Archivist] insight 提取: N/N 條"
   ]
  },
  "tick0": {
@@ -639,8 +639,8 @@
      "temperature": 0.3,
      "maxOutputTokens": 600
     },
-    "h": "80f16ab57149",
-    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"## 角色与世界背景\\n\\n你在为Companion"
+    "h": "d61354ff2ede",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"## 角色與世界背景\\n\\n你在為Companion"
    },
    {
     "cfg": 36,
@@ -648,8 +648,8 @@
      "temperature": 0.3,
      "maxOutputTokens": 600
     },
-    "h": "e36220c3af0b",
-    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"## 角色与世界背景\\n\\n你在为Companion"
+    "h": "24af2ea90eb4",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"## 角色與世界背景\\n\\n你在為Companion"
    },
    {
     "cfg": 36,
@@ -657,8 +657,8 @@
      "temperature": 0.3,
      "maxOutputTokens": 600
     },
-    "h": "d8a90dc84067",
-    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"## 角色与世界背景\\n\\n你在为Companion"
+    "h": "9757314e9713",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"## 角色與世界背景\\n\\n你在為Companion"
    },
    {
     "cfg": 36,
@@ -666,8 +666,8 @@
      "temperature": 0.3,
      "maxOutputTokens": 600
     },
-    "h": "7f9aff87af3d",
-    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"## 角色与世界背景\\n\\n你在为Companion"
+    "h": "2f7aa7d8d91b",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"## 角色與世界背景\\n\\n你在為Companion"
    },
    {
     "cfg": 38,
@@ -678,8 +678,8 @@
       "thinkingBudget": 0
      }
     },
-    "h": "f3d24984cd0e",
-    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"你是AI伴侣的园艺助手。看一眼记忆花园状态，决定本轮"
+    "h": "fa79dbabf029",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"你是AI伴侶的園藝助手。看一眼記憶花園狀態，決定本輪"
    },
    {
     "cfg": 36,
@@ -690,7 +690,7 @@
       "thinkingBudget": 0
      }
     },
-    "h": "240f69d4f87d",
+    "h": "aada55135013",
     "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"碎片: \\\"三月的時候天氣很冷\\\"\\n星座名: \\\""
    },
    {
@@ -702,7 +702,7 @@
       "thinkingBudget": 0
      }
     },
-    "h": "662a3648f22d",
+    "h": "b48272ee5039",
     "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"碎片: \\\"週年旅行訂了京都的旅館\\\"\\n星座名: "
    },
    {
@@ -714,36 +714,36 @@
       "thinkingBudget": 0
      }
     },
-    "h": "f72ecbe1e3cc",
+    "h": "85ffb6c8fe12",
     "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"碎片: \\\"阿明又加班到半夜，說下個月要去週年旅行\\"
    }
   ],
   "chroma": [],
   "logs": [
-   "L [Archivist Agent] Tick [🌙深度整合] 新碎片=N 未分类=N user空闲=Nmin",
-   "L [Archivist] 🔗 字面自动链接: N 条 (N conf, 零LLM；其中靠别名 N 条)",
+   "L [Archivist Agent] Tick [🌙深度整合] 新碎片=N 未分類=N user空閒=Nmin",
+   "L [Archivist] 🔗 字面自動連結: N 條 (N conf, 零LLM；其中靠別名 N 條)",
    "L [Archivist Agent]   autoLink: linked=N",
-   "E [Archivist] aggregateLink 失败: db is not defined",
-   "L [Archivist] 📝 轻量概述更新: N 个实体概述需更新",
+   "E [Archivist] aggregateLink 失敗: db is not defined",
+   "L [Archivist] 📝 輕量概述更新: N 個實體概述需更新",
    "L [Archivist Agent]   entity_overviews: assessed=N needed=N",
-   "L [Archivist Agent] 🦉 进入深度整合周期",
-   "L [Archivist] 🌿 决策解析失败，默认顺序",
-   "L [UserModel] 🧠 认知模型维护周期开始",
-   "L [UserModel] readUserRawMessages: 仅 N 条非RP消息，跳过 (需≥N)",
+   "L [Archivist Agent] 🦉 進入深度整合週期",
+   "L [Archivist] 🌿 決策解析失敗，預設順序",
+   "L [UserModel] 🧠 認知模型維護週期開始",
+   "L [UserModel] readUserRawMessages: 僅 N 條非RP訊息，跳過 (需≥N)",
    "E [UserModel] autoSpotCheck error: Cannot find module 'spotCheckModel'",
-   "L [UserModel] 周期完成: observation=false decay=N validate=N detected=N reviewed=N proactive=NaN crossref=N dedup=N insight=false spotcheck=N",
+   "L [UserModel] 週期完成: observation=false decay=N validate=N detected=N reviewed=N proactive=NaN crossref=N dedup=N insight=false spotcheck=N",
    "L [Archivist Agent]   userModel: observation={\"skipped\":true,\"reason\":\"too few messages (N < N)\"} decay={\"decayed\":N,\"resolved\":N,\"abandoned\":N,\"flagged\":N,\"dormant\":N,\"revived\":N} validate={\"validated\":N} detect={\"detected\":N} reviewed={\"reviewed\":N} crossref={\"entityFlags\":N,\"traitFlags\":N,\"stateConflicts\":N} dedup={\"merged\":N} insight={\"synthesized\":false} spotCheck={\"checked\":N}",
    "L [Archivist] 🌿 ▶ classify...",
-   "E [Archivist Agent] classify 失败: near \"/\": syntax error",
+   "E [Archivist Agent] classify 失敗: near \"/\": syntax error",
    "L [Archivist] 🌿 ✓ classify (Ns): done",
    "L [Archivist] 🌿 ▶ rematch...",
-   "L [Archivist] 回补: 没有需要补分的种子",
+   "L [Archivist] 回補: 沒有需要補分的種子",
    "L [Archivist] 🌿 ✓ rematch (Ns): done",
    "L [Archivist] 🌿 ▶ graduate...",
    "L [Archivist] 🌿 ✓ graduate (Ns): done",
-   "L [Archivist] 🌿 园艺完成 (LLM: N次)",
+   "L [Archivist] 🌿 園藝完成 (LLM: N次)",
    "L [Archivist Agent]   skills: scanned=done evaluated=done",
-   "L [Archivist Agent] 🦉 深度整合周期完成"
+   "L [Archivist Agent] 🦉 深度整合週期完成"
   ]
  },
  "tick1": {
@@ -772,7 +772,7 @@
   "llm": [],
   "chroma": [],
   "logs": [
-   "L [Archivist Agent] Tick [☀️轻量] 新碎片=N 未分类=N user空闲=Nmin"
+   "L [Archivist Agent] Tick [☀️輕量] 新碎片=N 未分類=N user空閒=Nmin"
   ]
  },
  "tick2": {
@@ -801,7 +801,7 @@
   "llm": [],
   "chroma": [],
   "logs": [
-   "L [Archivist Agent] Tick [☀️轻量] 新碎片=N 未分类=N user空闲=Nmin"
+   "L [Archivist Agent] Tick [☀️輕量] 新碎片=N 未分類=N user空閒=Nmin"
   ]
  },
  "stop": {
@@ -1275,10 +1275,10 @@
   "memory_ontology": [
    {
     "id": 1,
-    "path": "人际关系",
-    "label": "人际关系",
+    "path": "人際關係",
+    "label": "人際關係",
     "parent_id": null,
-    "description": "用户与他人的关系记忆",
+    "description": "使用者與他人的關係記憶",
     "centroid_embedding": null,
     "fragment_count": 0,
     "created_at": "<T>",
@@ -1286,10 +1286,10 @@
    },
    {
     "id": 2,
-    "path": "地点",
-    "label": "地点",
+    "path": "地點",
+    "label": "地點",
     "parent_id": null,
-    "description": "与具体地点相关的记忆",
+    "description": "與具體地點相關的記憶",
     "centroid_embedding": null,
     "fragment_count": 0,
     "created_at": "<T>",
@@ -1297,10 +1297,10 @@
    },
    {
     "id": 3,
-    "path": "创作",
-    "label": "创作",
+    "path": "創作",
+    "label": "創作",
     "parent_id": null,
-    "description": "用户的写作与创作记忆",
+    "description": "使用者的寫作與創作記憶",
     "centroid_embedding": null,
     "fragment_count": 0,
     "created_at": "<T>",
@@ -1311,7 +1311,7 @@
     "path": "日常",
     "label": "日常",
     "parent_id": null,
-    "description": "日常生活与日记",
+    "description": "日常生活與日記",
     "centroid_embedding": null,
     "fragment_count": 0,
     "created_at": "<T>",
@@ -1319,10 +1319,10 @@
    },
    {
     "id": 5,
-    "path": "音乐",
-    "label": "音乐",
+    "path": "音樂",
+    "label": "音樂",
     "parent_id": null,
-    "description": "音乐相关记忆",
+    "description": "音樂相關記憶",
     "centroid_embedding": null,
     "fragment_count": 0,
     "created_at": "<T>",
@@ -1333,7 +1333,7 @@
     "path": "工作",
     "label": "工作",
     "parent_id": null,
-    "description": "某职业与工作相关记忆",
+    "description": "某職業與工作相關記憶",
     "centroid_embedding": null,
     "fragment_count": 0,
     "created_at": "<T>",
@@ -1344,7 +1344,7 @@
     "path": "健康",
     "label": "健康",
     "parent_id": null,
-    "description": "健康与身体状态",
+    "description": "健康與身體狀態",
     "centroid_embedding": null,
     "fragment_count": 0,
     "created_at": "<T>",
@@ -1352,10 +1352,10 @@
    },
    {
     "id": 8,
-    "path": "人际关系/朋友",
+    "path": "人際關係/朋友",
     "label": "朋友",
     "parent_id": 1,
-    "description": "用户的朋友圈",
+    "description": "使用者的朋友圈",
     "centroid_embedding": null,
     "fragment_count": 0,
     "created_at": "<T>",
@@ -1363,10 +1363,10 @@
    },
    {
     "id": 9,
-    "path": "人际关系/家人",
+    "path": "人際關係/家人",
     "label": "家人",
     "parent_id": 1,
-    "description": "用户的家人",
+    "description": "使用者的家人",
     "centroid_embedding": null,
     "fragment_count": 0,
     "created_at": "<T>",
@@ -1374,10 +1374,10 @@
    },
    {
     "id": 10,
-    "path": "人际关系/关于我们",
-    "label": "关于我们",
+    "path": "人際關係/關於我們",
+    "label": "關於我們",
     "parent_id": 1,
-    "description": "AI与用户的关系记忆",
+    "description": "AI與使用者的關係記憶",
     "centroid_embedding": null,
     "fragment_count": 0,
     "created_at": "<T>",
@@ -1385,10 +1385,10 @@
    },
    {
     "id": 11,
-    "path": "地点/某城市",
+    "path": "地點/某城市",
     "label": "某城市",
     "parent_id": 2,
-    "description": "某城市相关地点",
+    "description": "某城市相關地點",
     "centroid_embedding": null,
     "fragment_count": 0,
     "created_at": "<T>",
@@ -1396,10 +1396,10 @@
    },
    {
     "id": 12,
-    "path": "地点/旅行",
+    "path": "地點/旅行",
     "label": "旅行",
     "parent_id": 2,
-    "description": "旅行记忆",
+    "description": "旅行記憶",
     "centroid_embedding": null,
     "fragment_count": 0,
     "created_at": "<T>",
@@ -1407,10 +1407,10 @@
    },
    {
     "id": 13,
-    "path": "创作/写作",
-    "label": "写作",
+    "path": "創作/寫作",
+    "label": "寫作",
     "parent_id": 3,
-    "description": "小说与写作",
+    "description": "小說與寫作",
     "centroid_embedding": null,
     "fragment_count": 0,
     "created_at": "<T>",
@@ -1418,10 +1418,10 @@
    },
    {
     "id": 14,
-    "path": "创作/某职业",
-    "label": "某职业",
+    "path": "創作/某職業",
+    "label": "某職業",
     "parent_id": 3,
-    "description": "某职业作品与工作",
+    "description": "某職業作品與工作",
     "centroid_embedding": null,
     "fragment_count": 0,
     "created_at": "<T>",
@@ -1429,10 +1429,10 @@
    },
    {
     "id": 15,
-    "path": "创作/绘画",
-    "label": "绘画",
+    "path": "創作/繪畫",
+    "label": "繪畫",
     "parent_id": 3,
-    "description": "spine动画与绘画",
+    "description": "spine動畫與繪畫",
     "centroid_embedding": null,
     "fragment_count": 0,
     "created_at": "<T>",
@@ -1742,7 +1742,7 @@
     "id": 3,
     "action": "deep_cycle",
     "category_id": null,
-    "category_path": "深循环完成",
+    "category_path": "深迴圈完成",
     "detail": "{\"llm_calls\":0,\"unclassified_remaining\":2,\"seeds_remaining\":3}",
     "created_at": "<T>",
     "confidence": 0.8,

@@ -1,4 +1,4 @@
-// W8：本机 OpenAI 兼容端点（Ollama）——无 API key 不送 Authorization；找不到专属配置回落默认配置
+// W8：本機 OpenAI 相容端點（Ollama）——無 API key 不送 Authorization；找不到專屬配置回落預設配置
 const test = require('node:test');
 const assert = require('node:assert');
 const http = require('http');
@@ -37,7 +37,7 @@ function addConfig(name, key, isDefault) {
 }
 const msgs = [{ role: 'user', parts: [{ text: 'hi' }] }];
 
-test('api_key 为 none 或空：不送 Authorization，路径拼成 /v1/chat/completions', async () => {
+test('api_key 為 none 或空：不送 Authorization，路徑拼成 /v1/chat/completions', async () => {
     for (const key of ['none', '']) {
         seen = [];
         const id = addConfig(`local-${key || 'empty'}`, key, 0);
@@ -55,7 +55,7 @@ test('有 api_key 仍送 Bearer', async () => {
     assert.strictEqual(seen[0].auth, 'Bearer sk-abc');
 });
 
-test('专属配置 id 不存在 → 回落到默认配置；无默认则报错', async () => {
+test('專屬配置 id 不存在 → 回落到預設配置；無預設則報錯', async () => {
     db.prepare('UPDATE api_configs SET is_default = 0').run();
     await assert.rejects(() => llm.callLLM(msgs, 'sys', null, {}, 52), /未找到有效的API配置/);
     addConfig('default-local', 'none', 1);
@@ -65,9 +65,9 @@ test('专属配置 id 不存在 → 回落到默认配置；无默认则报错',
     assert.strictEqual(seen.length, 1);
 });
 
-test('embedding：名称含 embedding 的配置被选用，无 key 不送 Authorization', async () => {
+test('embedding：名稱含 embedding 的配置被選用，無 key 不送 Authorization', async () => {
     db.prepare(`INSERT INTO api_configs (name, provider, endpoint, api_key, model_name, is_default, supports_tools)
-                VALUES ('本机 Ollama embedding', 'openai_compatible', ?, 'none', 'bge-m3', 0, 0)`).run(`${base}/v1`);
+                VALUES ('本機 Ollama embedding', 'openai_compatible', ?, 'none', 'bge-m3', 0, 0)`).run(`${base}/v1`);
     seen = [];
     const v = await llm.getEmbedding('我住在三重');
     assert.deepStrictEqual(v, [0.1, 0.2]);

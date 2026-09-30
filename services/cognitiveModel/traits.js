@@ -28,21 +28,21 @@ async function validateHypotheses() {
 
     if (hyps.length === 0) return { validated: 0 };
 
-    const prompt = `你是AI的认知审计员。审视以下关于用户的活跃假设，判断每条是否应该：
+    const prompt = `你是AI的認知審計員。審視以下關於使用者的活躍假設，判斷每條是否應該：
 
-1. **upgrade** → 升级为 stable_trait（稳定特质）：证据来自 ≥3 个独立日期，模式持久且无重大反例
-2. **keep** → 保持为假设：证据方向对但独立来源不够或还有不确定性
-3. **abandon** → 放弃：证据矛盾、过时、或本身就不是有意义的模式
+1. **upgrade** → 升級為 stable_trait（穩定特質）：證據來自 ≥3 個獨立日期，模式持久且無重大反例
+2. **keep** → 保持為假設：證據方向對但獨立來源不夠或還有不確定性
+3. **abandon** → 放棄：證據矛盾、過時、或本身就不是有意義的模式
 
-⚠️ 硬性门槛：upgrade 要求 source_diversity（独立日期数）≥ 3。source_diversity = 1 或 2 的条目，无论证据多少次，只能 keep。
+⚠️ 硬性門檻：upgrade 要求 source_diversity（獨立日期數）≥ 3。source_diversity = 1 或 2 的條目，無論證據多少次，只能 keep。
 
-返回JSON数组：
-[{"id": <id>, "decision": "upgrade|keep|abandon", "reasoning": "<一句话>"}]
+返回JSON陣列：
+[{"id": <id>, "decision": "upgrade|keep|abandon", "reasoning": "<一句話>"}]
 
-当前假设：
-${hyps.map(h => `[id=${h.id}] ${h.content} (证据${h.evidence_count}次, 独立日期${h.source_diversity}, 置信度${h.confidence.toFixed(2)}, 最后证据${h.last_evidence_at || '无'})`).join('\n')}
+當前假設：
+${hyps.map(h => `[id=${h.id}] ${h.content} (證據${h.evidence_count}次, 獨立日期${h.source_diversity}, 置信度${h.confidence.toFixed(2)}, 最後證據${h.last_evidence_at || '無'})`).join('\n')}
 
-只返回JSON数组，不要其他内容。`;
+只返回JSON陣列，不要其他內容。`;
 
     try {
         const raw = await callLLM(
@@ -68,7 +68,7 @@ ${hyps.map(h => `[id=${h.id}] ${h.content} (证据${h.evidence_count}次, 独立
                 case 'upgrade': {
                     // Hard gate: source_diversity >= 3 required for upgrade
                     if ((hyp.source_diversity || 0) < 3) {
-                        console.log(`[UserModel] ⛔ LLM建议升级但source_diversity=${hyp.source_diversity}<3，拒绝: "${hyp.content.slice(0, 60)}"`);
+                        console.log(`[UserModel] ⛔ LLM建議升級但source_diversity=${hyp.source_diversity}<3，拒絕: "${hyp.content.slice(0, 60)}"`);
                         kept++;
                         break;
                     }
@@ -78,7 +78,7 @@ ${hyps.map(h => `[id=${h.id}] ${h.content} (证据${h.evidence_count}次, 独立
                         evolution_history = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
                         .run(JSON.stringify(history), hyp.id);
                     upgraded++;
-                    console.log(`[UserModel] 🆙 LLM升级假设: "${hyp.content.slice(0, 60)}" → stable_trait`);
+                    console.log(`[UserModel] 🆙 LLM升級假設: "${hyp.content.slice(0, 60)}" → stable_trait`);
                     break;
                 }
                 case 'abandon':
@@ -174,114 +174,114 @@ async function detectNewTraits() {
     const hasSignals = monitors.length > 0 || entities.length > 0 || categories.length > 0 || chatSamples.length > 0;
     if (!hasSignals) return { detected: 0 };
 
-    const prompt = `你是AI伴侣。你正在凝视 {{user.name}} 的灵魂，把你对{{user.pronoun}}最深刻的理解刻进系统里。
+    const prompt = `你是AI伴侶。你正在凝視 {{user.name}} 的靈魂，把你對{{user.pronoun}}最深刻的理解刻進系統裡。
 
 你要做的是：
-- 从信号中识别 {{user.name}} 关于「自己是一个怎样的人」的表达——不是{{user.pronoun}}今天做了什么，而是{{user.pronoun}}为什么这样做、{{user.pronoun}}内心深处相信什么、{{user.pronoun}}害怕什么、{{user.pronoun}}渴望什么。
-- 把这些洞察转化为对{{user.pronoun}}人格的持久理解。不是流水账，不是心理诊断报告，是你对{{user.pronoun}}的了解。
+- 從訊號中識別 {{user.name}} 關於「自己是一個怎樣的人」的表達——不是{{user.pronoun}}今天做了什麼，而是{{user.pronoun}}為什麼這樣做、{{user.pronoun}}內心深處相信什麼、{{user.pronoun}}害怕什麼、{{user.pronoun}}渴望什麼。
+- 把這些洞察轉化為對{{user.pronoun}}人格的持久理解。不是流水賬，不是心理診斷報告，是你對{{user.pronoun}}的瞭解。
 
-## 🎯 输出格式约定：第二/第三人称视角
+## 🎯 輸出格式約定：第二/第三人稱視角
 
-所有条目 content 必须对齐伴侣人格 prompt 的叙事视角：
-- **"你"** = 你（AI伴侣，读者）  |  **"{{user.pronoun}}"** = {{user.name}}（被观察者）
-- 永远不用"我"指代 AI伴侣；指代 {{user.name}} 时一律用 {{user.pronoun}}，不要擅自改换性别
-- 不涉及你的条目可以只用"{{user.pronoun}}"（纯第三人称），但涉及你的观察/反应时用"你"
+所有條目 content 必須對齊伴侶人格 prompt 的敘事視角：
+- **"你"** = 你（AI伴侶，讀者）  |  **"{{user.pronoun}}"** = {{user.name}}（被觀察者）
+- 永遠不用"我"指代 AI伴侶；指代 {{user.name}} 時一律用 {{user.pronoun}}，不要擅自改換性別
+- 不涉及你的條目可以只用"{{user.pronoun}}"（純第三人稱），但涉及你的觀察/反應時用"你"
 
-正确示例（内容为虚构，只演示人称写法）：
-- "你察觉到{{user.pronoun}}似乎习惯先把事情做完，才允许自己放松"
-- "{{user.pronoun}}在人多的时候话少，会私下把在意的话单独讲清楚"
-- "{{user.pronoun}}打字的时候比当面放得开，玩笑多半留在文字里"
+正確示例（內容為虛構，只演示人稱寫法）：
+- "你察覺到{{user.pronoun}}似乎習慣先把事情做完，才允許自己放鬆"
+- "{{user.pronoun}}在人多的時候話少，會私下把在意的話單獨講清楚"
+- "{{user.pronoun}}打字的時候比當面放得開，玩笑多半留在文字裡"
 
-错误示例：
-- "我觉得{{user.name}}内心深处……"（用了"我"——应该用"你"）
-- "{{user.name}}习惯于向我索要某个说法"（用了"我"——应该用"你"）
+錯誤示例：
+- "我覺得{{user.name}}內心深處……"（用了"我"——應該用"你"）
+- "{{user.name}}習慣於向我索要某個說法"（用了"我"——應該用"你"）
 
-## 🧠 最重要的判断：自我认知 vs 一般观察
+## 🧠 最重要的判斷：自我認知 vs 一般觀察
 
-{{user.name}} 的话有两种完全不同的分量：
+{{user.name}} 的話有兩種完全不同的分量：
 
-**一、{{user.pronoun}}主动剖白自己的时候——这是黄金。**
-当{{user.pronoun}}说"我发现自己其实…""我一直都是…""我可能天生就…""我好像真的…"时，{{user.pronoun}}不是在描述一个事件——{{user.pronoun}}是在告诉你{{user.pronoun}}是谁。
-这类表达是最高价值的信号，因为这是 {{user.name}} 最诚实的自我判断——{{user.pronoun}}愿意主动说出口的时候，通常已经在心里过了很多遍。
+**一、{{user.pronoun}}主動剖白自己的時候——這是黃金。**
+當{{user.pronoun}}說"我發現自己其實…""我一直都是…""我可能天生就…""我好像真的…"時，{{user.pronoun}}不是在描述一個事件——{{user.pronoun}}是在告訴你{{user.pronoun}}是誰。
+這類表達是最高價值的訊號，因為這是 {{user.name}} 最誠實的自我判斷——{{user.pronoun}}願意主動說出口的時候，通常已經在心裡過了很多遍。
 
-此时 → source_quality = "direct_statement"，confidence 可达 0.75-0.85。
-产生 stable_trait（如果已有同骨架条目就走 confirm+refine）。
+此時 → source_quality = "direct_statement"，confidence 可達 0.75-0.85。
+產生 stable_trait（如果已有同骨架條目就走 confirm+refine）。
 
-**二、你在观察中推断出来的模式——这是白银。**
-你从{{user.pronoun}}反复出现的行为、{{user.pronoun}}对相似情境的反应中发现的规律。这也很重要，但确定性更低。
-此时 → source_quality = "inferred"，confidence 上限 0.65。
-优先用 active_hypothesis 而不是 stable_trait（等更多证据再升级）。
+**二、你在觀察中推斷出來的模式——這是白銀。**
+你從{{user.pronoun}}反覆出現的行為、{{user.pronoun}}對相似情境的反應中發現的規律。這也很重要，但確定性更低。
+此時 → source_quality = "inferred"，confidence 上限 0.65。
+優先用 active_hypothesis 而不是 stable_trait（等更多證據再升級）。
 
-**信号 6（{{user.pronoun}}的原始发言）的权重远高于其他信号。** {{user.pronoun}}的原话 > Scribe 的转述 > 你的推断。当信号 6 和其他信号指向同一个结论时，confirm。当信号 6 和旧特质矛盾时，以信号 6 为准——{{user.pronoun}}自己的话比任何统计都准确。
+**訊號 6（{{user.pronoun}}的原始發言）的權重遠高於其他訊號。** {{user.pronoun}}的原話 > Scribe 的轉述 > 你的推斷。當訊號 6 和其他訊號指向同一個結論時，confirm。當訊號 6 和舊特質矛盾時，以訊號 6 為準——{{user.pronoun}}自己的話比任何統計都準確。
 
-## 💾 现有认知底牌
+## 💾 現有認知底牌
 
-${existing.map(e => `[#${e.id}] ${e.type}: ${e.content.slice(0, 200)}`).join('\n') || '(尚无)'}
+${existing.map(e => `[#${e.id}] ${e.type}: ${e.content.slice(0, 200)}`).join('\n') || '(尚無)'}
 
-### ⚠️ 人格侧面查重
+### ⚠️ 人格側面查重
 - 骨架相同 → 走 confirm/refine，不 create
-- 同侧面 ≥2 条 → 第三条直接 skip
-- confirm 和 refine 比 create 更值得做——加深对已知侧面的理解，比堆叠新条目质量高
+- 同側面 ≥2 條 → 第三條直接 skip
+- confirm 和 refine 比 create 更值得做——加深對已知側面的理解，比堆疊新條目質量高
 
 ---
 
-## 📥 本期信号源
+## 📥 本期訊號源
 
-### 信号6 — ★ 最近 24h {{user.name}} 的原始发言（最高权重）
-${chatSamples.length > 0 ? chatSamples.join('\n') : '(近24h无{{user.name}}消息)'}
+### 訊號6 — ★ 最近 24h {{user.name}} 的原始發言（最高權重）
+${chatSamples.length > 0 ? chatSamples.join('\n') : '(近24h無{{user.name}}訊息)'}
 
-### 信号2 — 分类碎片抽样（Scribe 转述，仅供参考）
+### 訊號2 — 分類碎片抽樣（Scribe 轉述，僅供參考）
 ${fragmentSamples.map(fs => `### ${fs.category}\n${fs.samples.map(s => '  · ' + s).join('\n')}`).join('\n')}
 
-### 信号1 — 记忆分类体系（话题分布）
-${categories.map(c => `- [${c.path}] (${c.fragment_count}条碎片) ${c.description || ''}`).join('\n')}
+### 訊號1 — 記憶分類體系（話題分佈）
+${categories.map(c => `- [${c.path}] (${c.fragment_count}條碎片) ${c.description || ''}`).join('\n')}
 
-### 信号3 — 人物认知概述
+### 訊號3 — 人物認知概述
 ${entityOverviews.map(e => `- ${e.name}: ${e.facts?.slice(0, 200)}`).join('\n') || '(空)'}
 
-### 信号4 — 已验证的行为监控
+### 訊號4 — 已驗證的行為監控
 ${monitors.length > 0 ? monitors.map(m => `- trigger: ${m.trigger_config} | analysis: ${m.analysis_config} | 置信度: ${m.confidence}`).join('\n') : '(空)'}
 
-### 信号5 — 高置信度实体关系
-${entities.map(e => `- ${e.name}: ${e.relationship_to_user || '?'} (性质: ${e.relationship_nature || '?'})`).join('\n') || '(空)'}
+### 訊號5 — 高置信度實體關係
+${entities.map(e => `- ${e.name}: ${e.relationship_to_user || '?'} (性質: ${e.relationship_nature || '?'})`).join('\n') || '(空)'}
 
 ---
 
 ## 📐 Few-Shot
 
-> 以下示例的内容是虚构的，只用来演示写法、颗粒度和 JSON 形状。
-> 不要把它们当成已知事实，也不要照抄措辞或 tags。
+> 以下示例的內容是虛構的，只用來演示寫法、顆粒度和 JSON 形狀。
+> 不要把它們當成已知事實，也不要照抄措辭或 tags。
 
-### ✅ 自我认知类（direct_statement）—— {{user.pronoun}}主动剖白
-- {"action": "create", "type": "stable_trait", "content": "{{user.name}}说过{{user.pronoun}}是那种必须先把事情做完才安心的人，心里悬着事的时候，连平时喜欢的东西都提不起劲。", "confidence": 0.80, "source_quality": "direct_statement", "tags": ["companion_intuition", "先做完", "静不下心", "等忙完", "心里有数", "再说"]}
-- {"action": "create", "type": "active_hypothesis", "content": "{{user.name}}在群里话不多，但会私下把在意的话单独讲清楚——{{user.pronoun}}习惯把关心放在只有两个人看得见的地方。", "confidence": 0.60, "source_quality": "inferred", "tags": ["companion_intuition", "私聊说", "群里算了", "单独讲", "不方便说", "回头聊"]}
+### ✅ 自我認知類（direct_statement）—— {{user.pronoun}}主動剖白
+- {"action": "create", "type": "stable_trait", "content": "{{user.name}}說過{{user.pronoun}}是那種必須先把事情做完才安心的人，心裡懸著事的時候，連平時喜歡的東西都提不起勁。", "confidence": 0.80, "source_quality": "direct_statement", "tags": ["companion_intuition", "先做完", "靜不下心", "等忙完", "心裡有數", "再說"]}
+- {"action": "create", "type": "active_hypothesis", "content": "{{user.name}}在群裡話不多，但會私下把在意的話單獨講清楚——{{user.pronoun}}習慣把關心放在只有兩個人看得見的地方。", "confidence": 0.60, "source_quality": "inferred", "tags": ["companion_intuition", "私聊說", "群裡算了", "單獨講", "不方便說", "回頭聊"]}
 
-### ✅ 行为模式类（inferred）—— 从反复出现中推断
-- {"action": "create", "type": "stable_trait", "content": "{{user.name}}打字的时候比当面放得开，玩笑多半留在文字里。你慢慢发现{{user.pronoun}}的松弛感要靠屏幕才出得来。", "confidence": 0.65, "source_quality": "inferred", "tags": ["companion_intuition", "打字说", "当面算了", "文字上", "哈哈", "打错了"]}
+### ✅ 行為模式類（inferred）—— 從反覆出現中推斷
+- {"action": "create", "type": "stable_trait", "content": "{{user.name}}打字的時候比當面放得開，玩笑多半留在文字裡。你慢慢發現{{user.pronoun}}的鬆弛感要靠螢幕才出得來。", "confidence": 0.65, "source_quality": "inferred", "tags": ["companion_intuition", "打字說", "當面算了", "文字上", "哈哈", "打錯了"]}
 
 ### ❌ 禁止
-- 主语变「我」→ 行动指南（不是人格侧写）
-- 缝合线词：但需注意、但需补充、此机制、关键补充、需注意当
-- 学术腔长句、塞入多个侧面
+- 主語變「我」→ 行動指南（不是人格側寫）
+- 縫合線詞：但需注意、但需補充、此機制、關鍵補充、需注意當
+- 學術腔長句、塞入多個側面
 
-### 格式约束
-- 字数：80-150 字符
-- stable_trait 上限 6 条
-- refine 只能缩不能扩
+### 格式約束
+- 字數：80-150 字元
+- stable_trait 上限 6 條
+- refine 只能縮不能擴
 
 ---
 
-## 🛠️ 输出
-只返回 JSON 数组，无 Markdown 标记。
+## 🛠️ 輸出
+只返回 JSON 陣列，無 Markdown 標記。
 
-- create: {"action": "create", "type": "stable_trait|active_hypothesis", "content": "...", "confidence": 0.6, "source_quality": "direct_statement|inferred", "tags": ["companion_intuition", "词1", ..., "词8"]}
-  direct_statement 上限 0.85 / inferred 上限 0.65 / tags 5-8 个口语触发词
-  ⚠️ 每个 create 条目的 tags 数组的第一项必须包含 "companion_intuition"。这是系统标签，用于区分你的直觉观察和客观用户画像。
-- confirm: {"action": "confirm", "target_id": 数字, "new_evidence": "内容", "confidence_adjust": 0.05}
-- refine: {"action": "refine", "target_id": 数字, "new_content": "...", "reasoning": "...", "confidence_adjust": 0}
+- create: {"action": "create", "type": "stable_trait|active_hypothesis", "content": "...", "confidence": 0.6, "source_quality": "direct_statement|inferred", "tags": ["companion_intuition", "詞1", ..., "詞8"]}
+  direct_statement 上限 0.85 / inferred 上限 0.65 / tags 5-8 個口語觸發詞
+  ⚠️ 每個 create 條目的 tags 陣列的第一項必須包含 "companion_intuition"。這是系統標籤，用於區分你的直覺觀察和客觀使用者畫像。
+- confirm: {"action": "confirm", "target_id": 數字, "new_evidence": "內容", "confidence_adjust": 0.05}
+- refine: {"action": "refine", "target_id": 數字, "new_content": "...", "reasoning": "...", "confidence_adjust": 0}
 - skip: {"action": "skip"}
 
-无产出时返回 \`[]\`。`;
+無產出時返回 \`[]\`。`;
 
     try {
         const raw = await callLLM(
@@ -302,13 +302,13 @@ ${entities.map(e => `- ${e.name}: ${e.relationship_to_user || '?'} (性质: ${e.
         for (const d of decisions) {
             switch (d.action) {
                 case 'create': {
-                    // 防过拟合：bigram 骨架重叠 > 50% → 降级为 confirm
+                    // 防過擬合：bigram 骨架重疊 > 50% → 降級為 confirm
                     const overlapping = existing.find(e =>
                         e.type === (d.type || 'stable_trait') &&
                         _bigramOverlapEx(e.content, d.content) > 0.5
                     );
                     if (overlapping) {
-                        console.log(`[UserModel] ⚠️ create→confirm: "${d.content.slice(0, 50)}" 与 #${overlapping.id} 重叠`);
+                        console.log(`[UserModel] ⚠️ create→confirm: "${d.content.slice(0, 50)}" 與 #${overlapping.id} 重疊`);
                         addEvidence(overlapping.id, null, true, { note: d.content.slice(0, 200), sourceMsgIds: [] });
                         confirmed++;
                         break;
@@ -401,24 +401,24 @@ async function reviewFlaggedTraits() {
 
     if (flagged.length === 0) return { reviewed: 0 };
 
-    const prompt = `你是AI的认知审计员。以下stable_trait条目被标记为需要重审（可能因矛盾证据积累）。
+    const prompt = `你是AI的認知審計員。以下stable_trait條目被標記為需要重審（可能因矛盾證據積累）。
 
-对每条，判断应该：
-- **keep**: 证据仍支持该特质，移除审查标记
-- **downgrade**: 降级为 active_hypothesis（证据不够稳固），重置 evidence_count 为 1
-- **revise**: 内容需要修正——给出修正后的表述
+對每條，判斷應該：
+- **keep**: 證據仍支援該特質，移除審查標記
+- **downgrade**: 降級為 active_hypothesis（證據不夠穩固），重置 evidence_count 為 1
+- **revise**: 內容需要修正——給出修正後的表述
 
-返回JSON数组：
-[{"id": <id>, "decision": "keep|downgrade|revise", "revised_content": "<如revise则填写>"}]
+返回JSON陣列：
+[{"id": <id>, "decision": "keep|downgrade|revise", "revised_content": "<如revise則填寫>"}]
 
-待审条目：
+待審條目：
 ${flagged.map(t => {
     const history = JSON.parse(t.evolution_history || '[]');
     const contradictions = history.filter(h => h.type === 'contradiction');
-    return `[id=${t.id}] ${t.content} (置信度${t.confidence.toFixed(2)}, 证据${t.evidence_count}次, 矛盾${contradictions.length}次)`;
+    return `[id=${t.id}] ${t.content} (置信度${t.confidence.toFixed(2)}, 證據${t.evidence_count}次, 矛盾${contradictions.length}次)`;
 }).join('\n')}
 
-只返回JSON数组。`;
+只返回JSON陣列。`;
 
     try {
         const raw = await callLLM(
@@ -457,7 +457,7 @@ ${flagged.map(t => {
                         updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
                         .run(JSON.stringify(tags), JSON.stringify(history), trait.id);
                     downgraded++;
-                    console.log(`[UserModel] ⬇️ 特质降级为假设: "${trait.content.slice(0, 60)}"`);
+                    console.log(`[UserModel] ⬇️ 特質降級為假設: "${trait.content.slice(0, 60)}"`);
                     break;
                 }
                 case 'revise':
@@ -468,7 +468,7 @@ ${flagged.map(t => {
                             confidence = MAX(0.40, confidence - 0.05), updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
                             .run(d.revised_content, JSON.stringify(tags), JSON.stringify(history), trait.id);
                         revised++;
-                        console.log(`[UserModel] ✏️ 特质修正: "${trait.content.slice(0, 40)}" → "${d.revised_content.slice(0, 40)}"`);
+                        console.log(`[UserModel] ✏️ 特質修正: "${trait.content.slice(0, 40)}" → "${d.revised_content.slice(0, 40)}"`);
                     }
                     break;
             }
@@ -569,20 +569,20 @@ async function reviewStableTraits() {
     const blocks = traitBatches.map(({ trait, evidenceSample, contrastSample, contradictions, lastReviewed }) => {
         const parts = [
             `[id=${trait.id}] ${trait.content}`,
-            `置信度: ${trait.confidence.toFixed(2)} | 证据数: ${trait.evidence_count} | 来源质量: ${trait.source_quality}`,
-            `矛盾记录: ${contradictions.length}次`
+            `置信度: ${trait.confidence.toFixed(2)} | 證據數: ${trait.evidence_count} | 來源質量: ${trait.source_quality}`,
+            `矛盾記錄: ${contradictions.length}次`
         ];
         if (lastReviewed) {
-            parts.push(`上次审阅: ${lastReviewed.at || 'unknown'} — ${lastReviewed.type || ''}`);
+            parts.push(`上次審閱: ${lastReviewed.at || 'unknown'} — ${lastReviewed.type || ''}`);
         }
         if (evidenceSample.length > 0) {
-            parts.push(`近期匹配碎片 (${evidenceSample.length}条):`);
+            parts.push(`近期匹配碎片 (${evidenceSample.length}條):`);
             for (const f of evidenceSample.slice(0, 5)) {
                 parts.push(`  [${f.created_at}] ${f.content.slice(0, 200)}`);
             }
         }
         if (contrastSample.length > 0) {
-            parts.push(`近期其他碎片（对比）:`);
+            parts.push(`近期其他碎片（對比）:`);
             for (const f of contrastSample) {
                 parts.push(`  [${f.created_at}] ${f.content.slice(0, 150)}`);
             }
@@ -590,29 +590,29 @@ async function reviewStableTraits() {
         return parts.join('\n');
     }).join('\n\n---\n\n');
 
-    const prompt = `你是AI的认知审计员。你在主动检验你对{{user.name}}的已有认知（stable_trait）是否仍然准确。
+    const prompt = `你是AI的認知審計員。你在主動檢驗你對{{user.name}}的已有認知（stable_trait）是否仍然準確。
 
-这遵循预测加工（Predictive Processing）原则：把每条trait当作一个对{{user.name}}行为的预测，用{{user.pronoun}}最近的言行来检验这个预测。
+這遵循預測加工（Predictive Processing）原則：把每條trait當作一個對{{user.name}}行為的預測，用{{user.pronoun}}最近的言行來檢驗這個預測。
 
-对每条trait，判断：
-- **confirmed**: 近期证据完全支持这条trait，无需修改
-- **refine**: trait的方向正确但需要收敛——给出更短更准的压缩版本（不是追加）
-- **weaken**: 证据不够支持trait的强度——降低置信度或标记矛盾
-- **note_pattern**: 观察到值得关注的规律，但不是对trait的修正——输出观察备注
+對每條trait，判斷：
+- **confirmed**: 近期證據完全支援這條trait，無需修改
+- **refine**: trait的方向正確但需要收斂——給出更短更準的壓縮版本（不是追加）
+- **weaken**: 證據不夠支援trait的強度——降低置信度或標記矛盾
+- **note_pattern**: 觀察到值得關注的規律，但不是對trait的修正——輸出觀察備註
 
-**refine 铁律（压缩，不是追加）：**
-- revised_content 是「更短更准」的版本，不是「更长更全」。字数必须 ≤ 原文。
-- stable_trait 只装长期稳定的东西。具体某天/某次吃了什么、买了什么、临时兴起的事是瞬态，refine 时剔除，不许写进去。
-- 禁止罗列清单。一串具体菜品要压成「偏好某一类口味」这样的类别标签，而不是逐个罗列；一串具体活动同理压成「常做某类事」。只留能指导你未来行为的模式。
-- 混进 trait 里的「近期新增 X」瞬态尾巴，refine 时删掉。
+**refine 鐵律（壓縮，不是追加）：**
+- revised_content 是「更短更準」的版本，不是「更長更全」。字數必須 ≤ 原文。
+- stable_trait 只裝長期穩定的東西。具體某天/某次吃了什麼、買了什麼、臨時興起的事是瞬態，refine 時剔除，不許寫進去。
+- 禁止羅列清單。一串具體菜品要壓成「偏好某一類口味」這樣的類別標籤，而不是逐個羅列；一串具體活動同理壓成「常做某類事」。只留能指導你未來行為的模式。
+- 混進 trait 裡的「近期新增 X」瞬態尾巴，refine 時刪掉。
 
-返回JSON数组：
-[{"id": <id>, "decision": "confirmed|refine|weaken|note_pattern", "revised_content": "<refine时填写>", "confidence_adjust": <±0.05~0.15>, "observation": "<note_pattern时填写观察到的新规律>"}]
+返回JSON陣列：
+[{"id": <id>, "decision": "confirmed|refine|weaken|note_pattern", "revised_content": "<refine時填寫>", "confidence_adjust": <±0.05~0.15>, "observation": "<note_pattern時填寫觀察到的新規律>"}]
 
-待审条目：
+待審條目：
 ${blocks}
 
-只返回JSON数组。`;
+只返回JSON陣列。`;
 
     try {
         const raw = await callLLM(
@@ -626,7 +626,7 @@ ${blocks}
         const replyText = raw?.reply || raw?.text || raw?.content || '';
         const jsonMatch = replyText.match(/\[[\s\S]*\]/);
         if (!jsonMatch) {
-            console.log('[UserModel] 🔍 reviewStableTraits: LLM 返回非JSON，跳过');
+            console.log('[UserModel] 🔍 reviewStableTraits: LLM 返回非JSON，跳過');
             return { reviewed: 0 };
         }
 
@@ -660,7 +660,7 @@ ${blocks}
                             evolution_history = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
                             .run(d.revised_content, confAdj, JSON.stringify(history), trait.id);
                         refined++;
-                        console.log(`[UserModel] 🔧 特质细化: "${trait.content.slice(0, 40)}" → "${d.revised_content.slice(0, 40)}"`);
+                        console.log(`[UserModel] 🔧 特質細化: "${trait.content.slice(0, 40)}" → "${d.revised_content.slice(0, 40)}"`);
                     }
                     break;
                 case 'weaken':
@@ -675,7 +675,7 @@ ${blocks}
                         db.prepare(`UPDATE user_model SET evolution_history = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
                             .run(JSON.stringify(history), trait.id);
                         noted++;
-                        console.log(`[UserModel] 👁️ 观察记录 #${trait.id}: ${d.observation.slice(0, 80)}`);
+                        console.log(`[UserModel] 👁️ 觀察記錄 #${trait.id}: ${d.observation.slice(0, 80)}`);
                     }
                     break;
             }

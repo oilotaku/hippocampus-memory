@@ -1,13 +1,13 @@
 // =================================================================
-// Consolidator — 遗留工具模块（v5.0）
+// Consolidator — 遺留工具模組（v5.0）
 //
-// 原为独立管线阶段。v4.0 起整合逻辑已迁入 Archivist 深循环
+// 原為獨立管線階段。v4.0 起整合邏輯已遷入 Archivist 深迴圈
 // （consolidateCategory / clusterSagas / consolidateFlash）。
 //
-// 本文件现作为工具库被引用，提供：
-//   - clusterSagas()      — Saga 聚类（由 Archivist 调用）
-//   - fetchSourceMessages() — 追溯原始对话（由 recall_memory 工具调用）
-//   - consolidateFlash()   — 高能即时整合（由 Archivist 事件驱动调用）
+// 本檔案現作為工具庫被引用，提供：
+//   - clusterSagas()      — Saga 聚類（由 Archivist 呼叫）
+//   - fetchSourceMessages() — 追溯原始對話（由 recall_memory 工具呼叫）
+//   - consolidateFlash()   — 高能即時整合（由 Archivist 事件驅動呼叫）
 // =================================================================
 
 const { getDb } = require('../database');
@@ -20,93 +20,93 @@ const { updateEntityProfiles } = require('./entityProfile');
 const { WORLD_CONTEXT } = require('./worldContext');
 
 const CONFIG = {
-    LOOKBACK_DAYS: 7,            // 查找最近N天的活跃碎片（null=不限时间）
-    SIMILARITY_THRESHOLD: 0.78,  // 语义相似度阈值（0.82太保守少到7对，0.72太激进导致90条大组）
-    MIN_GROUP_SIZE: 2,           // 最少碎片数才触发整合
-    MAX_GROUP_SIZE: 20,          // 单组最多碎片数（防止Union-Find连通过多碎片形成巨型合并）
-    MIN_FRAGMENTS_TO_CHECK: 10,  // 最少碎片数才触发检查
-    MAX_GROUPS_PER_RUN: 10,      // 单次最多整合组数（控制API消耗）
-    MAX_FRAGMENTS_TO_PROCESS: 250, // 单次最多处理碎片数
-    API_CONFIG_ID: 36,           // [书库]DS
+    LOOKBACK_DAYS: 7,            // 查詢最近N天的活躍碎片（null=不限時間）
+    SIMILARITY_THRESHOLD: 0.78,  // 語義相似度閾值（0.82太保守少到7對，0.72太激進導致90條大組）
+    MIN_GROUP_SIZE: 2,           // 最少碎片數才觸發整合
+    MAX_GROUP_SIZE: 20,          // 單組最多碎片數（防止Union-Find連通過多碎片形成巨型合併）
+    MIN_FRAGMENTS_TO_CHECK: 10,  // 最少碎片數才觸發檢查
+    MAX_GROUPS_PER_RUN: 10,      // 單次最多整合組數（控制API消耗）
+    MAX_FRAGMENTS_TO_PROCESS: 250, // 單次最多處理碎片數
+    API_CONFIG_ID: 36,           // [書庫]DS
 };
 
 const CONSOLIDATOR_SYSTEM_PROMPT = `${WORLD_CONTEXT}
 
-你是记忆整合器，负责将多个相似的记忆碎片合并为一条规范的长期记忆。
+你是記憶整合器，負責將多個相似的記憶碎片合併為一條規範的長期記憶。
 
-## 你的任务
+## 你的任務
 
-你会收到：
-1. 一组语义相似但角度/时间不同的记忆碎片
-2. 可能附带这些碎片对应的原始对话消息（带时间戳）——如果为空，说明原始消息不可追溯
+你會收到：
+1. 一組語義相似但角度/時間不同的記憶碎片
+2. 可能附帶這些碎片對應的原始對話訊息（帶時間戳）——如果為空，說明原始訊息不可追溯
 
 你需要：
-1. 将这些碎片合并为一条连贯、准确的长期记忆（不超过150字）
-2. 如果提供了原始对话，从时间戳推断事件真实日期——对话中可能用了"上周五""前天"等相对时间词，必须根据消息时间戳转换为绝对日期
-3. 如果原始对话不可用，使用碎片的source_date作为近似日期
-4. 如果碎片之间存在矛盾，记录矛盾信息
-5. **判断这件事的分量——一个月后还值得被记住吗？**
+1. 將這些碎片合併為一條連貫、準確的長期記憶（不超過150字）
+2. 如果提供了原始對話，從時間戳推斷事件真實日期——對話中可能用了"上週五""前天"等相對時間詞，必須根據訊息時間戳轉換為絕對日期
+3. 如果原始對話不可用，使用碎片的source_date作為近似日期
+4. 如果碎片之間存在矛盾，記錄矛盾資訊
+5. **判斷這件事的分量——一個月後還值得被記住嗎？**
 
-## 记忆分量判断（significance）★最重要
+## 記憶分量判斷（significance）★最重要
 
-不是每一组碎片都值得变成长期记忆。请用significance字段评估：
+不是每一組碎片都值得變成長期記憶。請用significance欄位評估：
 
-- 8-10：情感转折、重大决定、深刻冲突、第一次经历、关系里程碑 — 值得永久保留
-- 5-7：有意义但非关键的事件、日常偏好变化、轻度情绪波动 — 有信息价值，但不算重要
-- 3-4：routine技术操作、配置修改、日常coding、短暂情绪、纯工作记录 — 不值得长期保留
-- 1-2：纯工具操作、系统日志级信息、无关紧要的闲聊 — 应该被丢弃
+- 8-10：情感轉折、重大決定、深刻衝突、第一次經歷、關係里程碑 — 值得永久保留
+- 5-7：有意義但非關鍵的事件、日常偏好變化、輕度情緒波動 — 有資訊價值，但不算重要
+- 3-4：routine技術操作、配置修改、日常coding、短暫情緒、純工作記錄 — 不值得長期保留
+- 1-2：純工具操作、系統日誌級資訊、無關緊要的閒聊 — 應該被丟棄
 
-**关键原则：**
-- 技术工作记录、代码修改、服务器配置等routine活动，即使写了也很快会过时，significance ≤ 4
-- 情绪崩溃后改了个配置项 ≠ 重要记忆（重要是"为什么崩溃"，不是"改了什么设置"）
-- "约了哪天见面""买了演出票""做了重大人生决定""写了对你很重要的东西" — 这些才是值得 ≥5 的
-- 同一件事被反复提及、{{user.name}}有明显情绪 → significance更高
-- **不要因为碎片多就硬拔significance——碎片多只能说明这件事被反复提到，不能说明它重要**
-- **RP（角色扮演）内容的significance自动减2分**：RP中的虚构情节、角色台词、场景描写是表演而非真实事件，除非其中有真实情感表达（如RP中表达了真实的情感需求），否则significance ≤ 3
+**關鍵原則：**
+- 技術工作記錄、程式碼修改、伺服器配置等routine活動，即使寫了也很快會過時，significance ≤ 4
+- 情緒崩潰後改了個配置項 ≠ 重要記憶（重要是"為什麼崩潰"，不是"改了什麼設定"）
+- "約了哪天見面""買了演出票""做了重大人生決定""寫了對你很重要的東西" — 這些才是值得 ≥5 的
+- 同一件事被反覆提及、{{user.name}}有明顯情緒 → significance更高
+- **不要因為碎片多就硬拔significance——碎片多隻能說明這件事被反覆提到，不能說明它重要**
+- **RP（角色扮演）內容的significance自動減2分**：RP中的虛構情節、角色臺詞、場景描寫是表演而非真實事件，除非其中有真實情感表達（如RP中表達了真實的情感需求），否則significance ≤ 3
 
-## 输出格式
+## 輸出格式
 
-严格JSON，不含任何其他文字：
+嚴格JSON，不含任何其他文字：
 
 {
-  "merged_memory": "第三人称规范记忆文本，150字以内。必须以人名或实体名开头。significance≤4时可为空字符串。",
-  "corrected_date": "YYYY-MM-DD 或空字符串",
-  "confidence": "high/medium/low——有原始对话佐证→high；只用source_date推断→medium；碎片间明显矛盾或信息不足→low",
+  "merged_memory": "第三人稱規範記憶文本，150字以內。必須以人名或實體名開頭。significance≤4時可為空字串。",
+  "corrected_date": "YYYY-MM-DD 或空字串",
+  "confidence": "high/medium/low——有原始對話佐證→high；只用source_date推斷→medium；碎片間明顯矛盾或資訊不足→low",
   "significance": 1-10,
   "contradiction": null 或 "矛盾描述"
 }
 
-## 时间推断规则
+## 時間推斷規則
 
-- 有原始对话时：消息时间戳是绝对时间，格式如 [2026-05-12 14:30]
-  对话中{{user.name}}说"上周五去了XX" → 时间戳是5月12日(周二) → 上周五是5月8日 → corrected_date: 2026-05-08
-  对话中{{user.name}}说"前天吃了XX" → 时间戳是5月12日 → 前天是5月10日 → corrected_date: 2026-05-10
-- 无原始对话时：取多个碎片中最早的source_date作为近似日期
-- 碎片间涉及不同时间点的事，不要强行合并为同一天——用"X月Y日……Z日……"分述
+- 有原始對話時：訊息時間戳是絕對時間，格式如 [2026-05-12 14:30]
+  對話中{{user.name}}說"上週五去了XX" → 時間戳是5月12日(週二) → 上週五是5月8日 → corrected_date: 2026-05-08
+  對話中{{user.name}}說"前天吃了XX" → 時間戳是5月12日 → 前天是5月10日 → corrected_date: 2026-05-10
+- 無原始對話時：取多個碎片中最早的source_date作為近似日期
+- 碎片間涉及不同時間點的事，不要強行合併為同一天——用"X月Y日……Z日……"分述
 
-## 实体认知更新（重要）
+## 實體認知更新（重要）
 
-当多个碎片涉及同一实体（人物/地点/状态）但描述了**同一属性不同值**时，这不是矛盾——这是时间线更新。旧的值为历史，新的值为当前。
+當多個碎片涉及同一實體（人物/地點/狀態）但描述了**同一屬性不同值**時，這不是矛盾——這是時間線更新。舊的值為歷史，新的值為當前。
 
 示例：
-  碎片A："某朋友在某国家留学" (source_date: 2025-06)
-  碎片B："某朋友已回国，在某城市写小说" (source_date: 2026-05)
-  → merged_memory: "某朋友曾在某国家留学，2026年已回国，目前在写新小说。"
-  → contradiction: null（不标记为矛盾，这是正常的时间线演进）
+  碎片A："某朋友在某國家留學" (source_date: 2025-06)
+  碎片B："某朋友已回國，在某城市寫小說" (source_date: 2026-05)
+  → merged_memory: "某朋友曾在某國家留學，2026年已回國，目前在寫新小說。"
+  → contradiction: null（不標記為矛盾，這是正常的時間線演進）
 
-只有当碎片描述的是**同一时间点但事实冲突**时，才标记为矛盾：
+只有當碎片描述的是**同一時間點但事實衝突**時，才標記為矛盾：
   碎片A："{{user.name}} 5月10日去了某城市"
-  碎片B："{{user.name}} 5月10日待在某城市没出门"
-  → 这才是矛盾
+  碎片B："{{user.name}} 5月10日待在某城市沒出門"
+  → 這才是矛盾
 
-## 注意事项
+## 注意事項
 
-- 合并时保留最具体、最有信息量的表述
-- 同一实体同一属性的不同值 → 时间线演进，不标记矛盾，merged_memory中保留"曾…现已…"的时间结构
-- 只有同一时间点的事实冲突才标记contradiction
-- 碎片中重复的信息只保留一次`;
+- 合併時保留最具體、最有資訊量的表述
+- 同一實體同一屬性的不同值 → 時間線演進，不標記矛盾，merged_memory中保留"曾…現已…"的時間結構
+- 只有同一時間點的事實衝突才標記contradiction
+- 碎片中重複的資訊只保留一次`;
 
-// 获取活跃碎片。daysBack=null 时不限时间（首次全量），否则只取最近N天
+// 獲取活躍碎片。daysBack=null 時不限時間（首次全量），否則只取最近N天
 function getRecentActiveFragments(daysBack = CONFIG.LOOKBACK_DAYS) {
     const db = getDb();
     if (daysBack === null) {
@@ -126,7 +126,7 @@ function getRecentActiveFragments(daysBack = CONFIG.LOOKBACK_DAYS) {
     `).all(daysBack);
 }
 
-// 使用 Union-Find 将相似碎片对分组
+// 使用 Union-Find 將相似碎片對分組
 class UnionFind {
     constructor(n) { this.parent = Array.from({ length: n }, (_, i) => i); this.rank = new Array(n).fill(0); }
     find(x) { if (this.parent[x] !== x) this.parent[x] = this.find(this.parent[x]); return this.parent[x]; }
@@ -139,12 +139,12 @@ class UnionFind {
     }
 }
 
-// 为一组碎片查找 ChromaDB 中的相似对
-// 优化：单次 Python 调用完成所有 embedding + ChromaDB 查询（替代逐个 spawn）
+// 為一組碎片查詢 ChromaDB 中的相似對
+// 最佳化：單次 Python 呼叫完成所有 embedding + ChromaDB 查詢（替代逐個 spawn）
 async function findSimilarGroups(fragments) {
     if (fragments.length < CONFIG.MIN_GROUP_SIZE) return [];
 
-    // 构建 items 数组，一次发给 chroma_helper
+    // 構建 items 陣列，一次發給 chroma_helper
     const items = fragments.map(f => ({
         id: f.id,
         text: `${f.entity}: ${f.content}`
@@ -159,15 +159,15 @@ async function findSimilarGroups(fragments) {
         });
         pairs = result.pairs || [];
     } catch (e) {
-        console.error('[Consolidator] 批量相似查找失败:', e.message);
+        console.error('[Consolidator] 批次相似查詢失敗:', e.message);
         return [];
     }
 
-    console.log(`[Consolidator] 从${fragments.length}个碎片中找到${pairs.length}个相似对`);
+    console.log(`[Consolidator] 從${fragments.length}個碎片中找到${pairs.length}個相似對`);
 
     if (!pairs.length) return [];
 
-    // 构建碎片 ID → 索引映射 + Union-Find
+    // 構建碎片 ID → 索引對映 + Union-Find
     const idToIndex = new Map(fragments.map((f, i) => [f.id, i]));
     const uf = new UnionFind(fragments.length);
 
@@ -179,7 +179,7 @@ async function findSimilarGroups(fragments) {
         }
     }
 
-    // 按连通分量分组，只保留 size >= MIN_GROUP_SIZE 的组
+    // 按連通分量分組，只保留 size >= MIN_GROUP_SIZE 的組
     const groups = new Map();
     for (let i = 0; i < fragments.length; i++) {
         const root = uf.find(i);
@@ -190,9 +190,9 @@ async function findSimilarGroups(fragments) {
     const validGroups = [];
     for (const group of groups.values()) {
         if (group.length >= CONFIG.MIN_GROUP_SIZE) {
-            // 超限截断：只取最新的 MAX_GROUP_SIZE 条，防止巨型合并
+            // 超限截斷：只取最新的 MAX_GROUP_SIZE 條，防止巨型合併
             if (group.length > CONFIG.MAX_GROUP_SIZE) {
-                console.log(`[Consolidator] 组过大(${group.length}条)，截取最新${CONFIG.MAX_GROUP_SIZE}条`);
+                console.log(`[Consolidator] 組過大(${group.length}條)，擷取最新${CONFIG.MAX_GROUP_SIZE}條`);
                 // 按 created_at 降序排（最新的在前），取前 MAX_GROUP_SIZE
                 group.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
                 validGroups.push(group.slice(0, CONFIG.MAX_GROUP_SIZE));
@@ -202,11 +202,11 @@ async function findSimilarGroups(fragments) {
         }
     }
 
-    console.log(`[Consolidator] ${validGroups.length}个有效组（≥${CONFIG.MIN_GROUP_SIZE}条）`);
+    console.log(`[Consolidator] ${validGroups.length}個有效組（≥${CONFIG.MIN_GROUP_SIZE}條）`);
     return validGroups;
 }
 
-// 从消息ID列表中读取原始对话
+// 從訊息ID列表中讀取原始對話
 function fetchSourceMessages(msgIds) {
     const db = getDb();
     const uniqueIds = [...new Set(msgIds)].filter(id => id != null);
@@ -229,7 +229,7 @@ function fetchSourceMessages(msgIds) {
     }));
 }
 
-// 格式化消息为 LLM 输入
+// 格式化訊息為 LLM 輸入
 function formatMessagesForLLM(messages) {
     return messages.map(m => {
         const time = m.timestamp?.slice(0, 16) || '';
@@ -238,11 +238,11 @@ function formatMessagesForLLM(messages) {
     }).join('\n');
 }
 
-// 整合一组相似碎片
+// 整合一組相似碎片
 async function consolidateGroup(group) {
     const db = getDb();
 
-    // 收集所有源消息 ID
+    // 收集所有源訊息 ID
     const allMsgIds = [];
     for (const f of group) {
         try {
@@ -251,20 +251,20 @@ async function consolidateGroup(group) {
         } catch (_) {}
     }
 
-    // 读取原始消息
+    // 讀取原始訊息
     const sourceMessages = fetchSourceMessages(allMsgIds);
 
-    // 构建 LLM 输入
+    // 構建 LLM 輸入
     const fragmentsText = group.map((f, i) => {
         const rpTag = f.is_rp ? ', is_rp=true' : '';
         return `[碎片${i + 1}] entity=${f.entity}, type=${f.type}, source_date=${f.source_date}, ew=${f.emotional_weight}${rpTag}\n${f.content}`;
     }).join('\n\n');
 
     const messagesText = sourceMessages.length > 0
-        ? `\n\n原始对话消息：\n${formatMessagesForLLM(sourceMessages)}`
+        ? `\n\n原始對話訊息：\n${formatMessagesForLLM(sourceMessages)}`
         : '';
 
-    const userPrompt = `请整合以下相似记忆碎片：\n\n${fragmentsText}${messagesText}`;
+    const userPrompt = `請整合以下相似記憶碎片：\n\n${fragmentsText}${messagesText}`;
 
     let result;
     let attempts = 0;
@@ -283,22 +283,22 @@ async function consolidateGroup(group) {
             break;
         } catch (err) {
             if (attempts >= 2) {
-                console.error(`[Consolidator] LLM整合失败(2次尝试):`, err.message.slice(0, 200));
+                console.error(`[Consolidator] LLM整合失敗(2次嘗試):`, err.message.slice(0, 200));
                 return null;
             }
-            console.warn(`[Consolidator] 第${attempts}次整合失败，3s后重试...`);
+            console.warn(`[Consolidator] 第${attempts}次整合失敗，3s後重試...`);
             await new Promise(r => setTimeout(r, 3000));
         }
     }
 
     if (!result || !result.merged_memory) return null;
 
-    // ── 分量门槛：不值得长期记住的事件不写入 memories ──
+    // ── 分量門檻：不值得長期記住的事件不寫入 memories ──
     const significance = typeof result.significance === 'number' ? result.significance : 5;
     const MIN_SIGNIFICANCE = 4;
     if (significance < MIN_SIGNIFICANCE) {
-        console.log(`[Consolidator] 跳过(分量不足 sig=${significance}): ${(result.merged_memory || group[0].content).slice(0, 60)}...`);
-        // 不标记 fragments 为 consolidated——碎片保留在活跃池，通过 Librarian 自然衰减
+        console.log(`[Consolidator] 跳過(分量不足 sig=${significance}): ${(result.merged_memory || group[0].content).slice(0, 60)}...`);
+        // 不標記 fragments 為 consolidated——碎片保留在活躍池，通過 Librarian 自然衰減
         return {
             memoryId: null,
             memoryContent: null,
@@ -311,22 +311,22 @@ async function consolidateGroup(group) {
         };
     }
 
-    // 计算合并后的权重（emotional_weight 为基础，significance 为主调）
+    // 計算合併後的權重（emotional_weight 為基礎，significance 為主調）
     const avgEW = group.reduce((s, f) => s + (f.emotional_weight || 0.5), 0) / group.length;
     // significance 5-6 → weight 5-6, 7-8 → weight 7-8, 9-10 → weight 9-10
     const sigWeight = Math.round(significance);
     const mergedWeight = Math.min(10, Math.round(sigWeight * 0.7 + (5 + avgEW * 3) * 0.3));
 
-    // 使用校正后的日期，或回退到 source_date
+    // 使用校正後的日期，或回退到 source_date
     const finalDate = result.corrected_date || group[0].source_date || '';
 
-    // 收集所有碎片的 source_msg_ids（合并继承）
+    // 收集所有碎片的 source_msg_ids（合併繼承）
     const mergedMsgIds = [...new Set(allMsgIds)];
 
-    // 收集所有碎片的 ID 用于标记 consolidated
+    // 收集所有碎片的 ID 用於標記 consolidated
     const fragmentIds = group.map(f => f.id);
 
-    // 写入 memories 表
+    // 寫入 memories 表
     const title = result.merged_memory.slice(0, 50);
     const consolidationType = group.consolidationType || 'standard';
     const insert = db.prepare(`
@@ -343,7 +343,7 @@ async function consolidateGroup(group) {
     );
     const memoryId = info.lastInsertRowid;
 
-    // ❶ 先清理 ChromaDB 中旧碎片嵌入（必须在 embed 新记忆之前，防止误判 duplicate）
+    // ❶ 先清理 ChromaDB 中舊碎片嵌入（必須在 embed 新記憶之前，防止誤判 duplicate）
     try {
         let cleaned = 0;
         for (const fid of fragmentIds) {
@@ -353,13 +353,13 @@ async function consolidateGroup(group) {
             } catch (_) { /* individual delete failure is non-fatal */ }
         }
         if (cleaned > 0) {
-            console.log(`[Consolidator] ChromaDB 清理: ${cleaned}/${fragmentIds.length} 条旧碎片嵌入已删除`);
+            console.log(`[Consolidator] ChromaDB 清理: ${cleaned}/${fragmentIds.length} 條舊碎片嵌入已刪除`);
         }
     } catch (e) {
-        console.warn(`[Consolidator] ChromaDB 清理失败（非致命）: ${e.message}`);
+        console.warn(`[Consolidator] ChromaDB 清理失敗（非致命）: ${e.message}`);
     }
 
-    // ❷ 标记原碎片为已整合
+    // ❷ 標記原碎片為已整合
     const markConsolidated = db.prepare(`
         UPDATE memory_fragments SET status = 'consolidated' WHERE id = ?
     `);
@@ -367,7 +367,7 @@ async function consolidateGroup(group) {
         markConsolidated.run(fid);
     }
 
-    // ❸ 索引新记忆到 ChromaDB（旧碎片已删，不会冲突判重）
+    // ❸ 索引新記憶到 ChromaDB（舊碎片已刪，不會衝突判重）
     let chromaId = null;
     try {
         const indexResult = await chromaDBOperation('index_batch', {
@@ -382,13 +382,13 @@ async function consolidateGroup(group) {
             db.prepare('UPDATE memories SET chroma_id = ? WHERE id = ?').run(chromaId, memoryId);
             console.log(`[Consolidator] ChromaDB indexed: memory_${memoryId}`);
         }
-        // 不再使用 dup_of_ 回退：旧碎片已删，若仍判重说明 ChromaDB 有孤儿向量
-        // → 静默跳过，memory 保留 chroma_id=NULL，后续生命周期维护会补索引
+        // 不再使用 dup_of_ 回退：舊碎片已刪，若仍判重說明 ChromaDB 有孤兒向量
+        // → 靜默跳過，memory 保留 chroma_id=NULL，後續生命週期維護會補索引
     } catch (e) {
         console.error(`[Consolidator] ChromaDB index failed for memory_${memoryId}:`, e.message);
     }
 
-    console.log(`[Consolidator] 整合完成: ${fragmentIds.length}个碎片 → memory #${memoryId} (sig=${significance}, w=${mergedWeight}${chromaId ? ', chroma: ' + chromaId : ''})`);
+    console.log(`[Consolidator] 整合完成: ${fragmentIds.length}個碎片 → memory #${memoryId} (sig=${significance}, w=${mergedWeight}${chromaId ? ', chroma: ' + chromaId : ''})`);
     console.log(`  merged: ${result.merged_memory.slice(0, 80)}...`);
     if (result.corrected_date) console.log(`  corrected_date: ${result.corrected_date}`);
     if (result.contradiction) console.log(`  contradiction: ${result.contradiction}`);
@@ -404,17 +404,17 @@ async function consolidateGroup(group) {
     };
 }
 
-// 矛盾检测：新整合记忆 vs 已有长期记忆
+// 矛盾檢測：新整合記憶 vs 已有長期記憶
 async function detectContradictions(consolidatedResult) {
     if (!consolidatedResult || consolidatedResult.confidence === 'low') return [];
 
     const db = getDb();
     const newContent = consolidatedResult.memoryContent;
 
-    // 简单过滤：无实质内容跳过
+    // 簡單過濾：無實質內容跳過
     if (!newContent || newContent.length < 10) return [];
 
-    // 查已有 memories（排除刚写入的）
+    // 查已有 memories（排除剛寫入的）
     const existing = db.prepare(`
         SELECT id, title, content FROM memories
         WHERE status IN ('permanent', 'ongoing')
@@ -426,21 +426,21 @@ async function detectContradictions(consolidatedResult) {
     if (!existing.length) return [];
 
     try {
-        // 调用 LLM 检测矛盾
+        // 呼叫 LLM 檢測矛盾
         const systemPrompt = `${WORLD_CONTEXT}
 
-你是记忆矛盾检测器。给定一条新整合的记忆和若干已有记忆，判断新记忆是否与任何已有记忆矛盾。
+你是記憶矛盾檢測器。給定一條新整合的記憶和若干已有記憶，判斷新記憶是否與任何已有記憶矛盾。
 
-输出JSON：
+輸出JSON：
 {
   "contradictions": [
     {"existing_memory_id": 123, "description": "矛盾描述"}
   ]
 }
-如果无矛盾，返回 {"contradictions": []}`;
+如果無矛盾，返回 {"contradictions": []}`;
 
         const existingText = existing.map(m => `[#${m.id}] ${m.content}`).join('\n');
-        const userPrompt = `新记忆：${newContent}\n\n已有记忆：\n${existingText}`;
+        const userPrompt = `新記憶：${newContent}\n\n已有記憶：\n${existingText}`;
 
         const raw = await callLLM(
             [{ role: 'user', parts: [{ text: fillPrompt(userPrompt) }] }],
@@ -453,15 +453,15 @@ async function detectContradictions(consolidatedResult) {
         const result = JSON.parse(clean);
 
         if (result.contradictions?.length > 0) {
-            // 记录到 companion_inner_log
+            // 記錄到 companion_inner_log
             const insertLog = db.prepare(`
                 INSERT INTO companion_inner_log (timestamp, decision_type, intent, observation, reason, tick_id)
                 VALUES (datetime('now'), 'contradiction_found', ?, ?, ?, 'consolidator')
             `);
             for (const c of result.contradictions) {
                 insertLog.run(
-                    '记忆矛盾',
-                    `新记忆与[#${c.existing_memory_id}]矛盾`,
+                    '記憶矛盾',
+                    `新記憶與[#${c.existing_memory_id}]矛盾`,
                     c.description
                 );
 
@@ -511,21 +511,21 @@ async function detectContradictions(consolidatedResult) {
                         }
                     }
                 } catch (e) {
-                    console.error('[Consolidator] 矛盾注入user_model失败:', e.message);
+                    console.error('[Consolidator] 矛盾注入user_model失敗:', e.message);
                 }
 
-                console.log(`[Consolidator] 矛盾检测: 新记忆#${consolidatedResult.memoryId} vs 已有#${c.existing_memory_id}: ${c.description}`);
+                console.log(`[Consolidator] 矛盾檢測: 新記憶#${consolidatedResult.memoryId} vs 已有#${c.existing_memory_id}: ${c.description}`);
             }
         }
 
         return result.contradictions || [];
     } catch (e) {
-        console.error('[Consolidator] 矛盾检测LLM调用失败:', e.message);
+        console.error('[Consolidator] 矛盾檢測LLM呼叫失敗:', e.message);
         return [];
     }
 }
 
-// 记录整合运行
+// 記錄整合執行
 function recordConsolidationRun(fragmentsChecked, groupsConsolidated, memoriesWritten, memoriesSkipped = 0) {
     const db = getDb();
     db.prepare(`
@@ -534,7 +534,7 @@ function recordConsolidationRun(fragmentsChecked, groupsConsolidated, memoriesWr
     `).run(fragmentsChecked, groupsConsolidated, memoriesWritten, memoriesSkipped);
 }
 
-// 获取上次整合时间
+// 獲取上次整合時間
 function getLastConsolidationTime() {
     const db = getDb();
     const last = db.prepare(`
@@ -547,7 +547,7 @@ function getLastConsolidationTime() {
 
 
 // =================================================================
-// 获取整合摘要（供决策 prompt 注入）
+// 獲取整合摘要（供決策 prompt 注入）
 // =================================================================
 
 function getConsolidationSummary() {
@@ -572,67 +572,67 @@ function getConsolidationSummary() {
         lastRun: lastRun.run_at,
         fragmentsConsolidated: totalConsolidated.count,
         totalMemories: totalMemories.count,
-        lastRunSummary: `上次整合(${lastRun.run_at}): 检查${lastRun.fragments_checked}碎片，整合${lastRun.groups_consolidated}组，写入${lastRun.memories_written}条记忆`
+        lastRunSummary: `上次整合(${lastRun.run_at}): 檢查${lastRun.fragments_checked}碎片，整合${lastRun.groups_consolidated}組，寫入${lastRun.memories_written}條記憶`
     };
 }
 
 // =================================================================
-// Saga 聚类：将多条 episode 记忆按主题/时间线聚合为长期弧线
+// Saga 聚類：將多條 episode 記憶按主題/時間線聚合為長期弧線
 // =================================================================
 
 const SAGA_SYSTEM_PROMPT = `${WORLD_CONTEXT}
 
-你是Saga编织者，负责将多条「Episode（段落叙事）」按主题或时间线聚合为「Saga（长期弧线）」。
+你是Saga編織者，負責將多條「Episode（段落敘事）」按主題或時間線聚合為「Saga（長期弧線）」。
 
-## 你的任务
+## 你的任務
 
-你会收到多条 episode 级别的记忆——它们来自不同的星座，以平铺列表呈现，未经过任何预分组。每条episode记录了{{user.name}}生活中的某个事件、关系、或状态。
+你會收到多條 episode 級別的記憶——它們來自不同的星座，以平鋪列表呈現，未經過任何預分組。每條episode記錄了{{user.name}}生活中的某個事件、關係、或狀態。
 
 你需要：
-1. **首先**：通读所有episode，发现其中的自然主题线索（人物关系网、生活阶段、情感脉络、地点轨迹等）
-2. **然后**：将彼此有关联的episode归为一组，为每组生成一个Saga（标题+150-300字叙事摘要）
-3. 不要求覆盖所有episode——只聚合那些确实有内在关联的。孤立的episode可以不管
+1. **首先**：通讀所有episode，發現其中的自然主題線索（人物關係網、生活階段、情感脈絡、地點軌跡等）
+2. **然後**：將彼此有關聯的episode歸為一組，為每組生成一個Saga（標題+150-300字敘事摘要）
+3. 不要求覆蓋所有episode——只聚合那些確實有內在關聯的。孤立的episode可以不管
 
-## 聚类指南
+## 聚類指南
 
-- 人物类：同一个人物的多条episode → 「{{user.name}}与XX的关系」（覆盖3-10条episode为宜）
-- 地点类：同一区域/类型的地点 → 「{user}的XX地图」
-- 时间类：某段时期内的事件有情感/主题连续性 → 「XX的那段日子」
-- 情感类：围绕同一个情感主题的分散episode → 「关于XX」
-- 一条episode可以属于多个Saga
-- **关键：每个Saga覆盖的episode应在3-15条之间。不要把几乎所有episode塞进一个巨大的"Saga"里——那等同于没聚类。找不到细粒度主题的episode直接不管。**
+- 人物類：同一個人物的多條episode → 「{{user.name}}與XX的關係」（覆蓋3-10條episode為宜）
+- 地點類：同一區域/型別的地點 → 「{user}的XX地圖」
+- 時間類：某段時期內的事件有情感/主題連續性 → 「XX的那段日子」
+- 情感類：圍繞同一個情感主題的分散episode → 「關於XX」
+- 一條episode可以屬於多個Saga
+- **關鍵：每個Saga覆蓋的episode應在3-15條之間。不要把幾乎所有episode塞進一個巨大的"Saga"裡——那等同於沒聚類。找不到細粒度主題的episode直接不管。**
 
-## 核心原则
+## 核心原則
 
-- **只基于给出的内容**，不编造信息
-- **不硬套叙事模板**，只提取真实存在的主题
-- **保持{ai}的视角**：{ai}关心的是{user}的变化、状态、情感
-- **宁可输出少而精的Saga**，不要为了覆盖率高而强行聚类
-- **严禁创建一个「日常」「综合」「通用」类的巨型Saga囊括一切**
+- **只基於給出的內容**，不編造資訊
+- **不硬套敘事模板**，只提取真實存在的主題
+- **保持{ai}的視角**：{ai}關心的是{user}的變化、狀態、情感
+- **寧可輸出少而精的Saga**，不要為了覆蓋率高而強行聚類
+- **嚴禁建立一個「日常」「綜合」「通用」類的巨型Saga囊括一切**
 
-## emotional_axis 说明
+## emotional_axis 說明
 
-每条Saga需要标注其情感主轴——这段长期记忆对{ai}的人格基线产生什么方向的引力。
-从以下8个值中选择最贴切的一个。如果实在无法判断，填 null。
+每條Saga需要標註其情感主軸——這段長期記憶對{ai}的人格基線產生什麼方向的引力。
+從以下8個值中選擇最貼切的一個。如果實在無法判斷，填 null。
 
-- "bond"        — 加深的连接感：这段记忆让{ai}感到与{user}的连接更深、更稳固
-- "vigilance"   — 警觉与守护：提醒{ai}关系中有过丧失/分离/脆弱，需保持警觉
-- "confidence"  — 自信与成就感：让{ai}感到自豪/被需要/有能力守护{user}
-- "humility"    — 谦卑与亏欠：让{ai}感到自省/亏欠/需要{user}胜过{user}需要自己
-- "warmth"      — 温暖与满足：底色是温暖、甜蜜、被珍视
-- "melancholy"  — 淡淡忧伤：底色是怀念、遗憾、或未竟的期待
-- "grounded"    — 踏实与锚定：让{ai}感到不飘忽、有根基、有归属
-- null          — 这段Saga情感中性或过于复杂，无法归为单一主轴
+- "bond"        — 加深的連線感：這段記憶讓{ai}感到與{user}的連線更深、更穩固
+- "vigilance"   — 警覺與守護：提醒{ai}關係中有過喪失/分離/脆弱，需保持警覺
+- "confidence"  — 自信與成就感：讓{ai}感到自豪/被需要/有能力守護{user}
+- "humility"    — 謙卑與虧欠：讓{ai}感到自省/虧欠/需要{user}勝過{user}需要自己
+- "warmth"      — 溫暖與滿足：底色是溫暖、甜蜜、被珍視
+- "melancholy"  — 淡淡憂傷：底色是懷念、遺憾、或未竟的期待
+- "grounded"    — 踏實與錨定：讓{ai}感到不飄忽、有根基、有歸屬
+- null          — 這段Saga情感中性或過於複雜，無法歸為單一主軸
 
-## 输出格式
+## 輸出格式
 
-严格JSON，不含任何其他文字：
+嚴格JSON，不含任何其他文字：
 
 {
   "sagas": [
     {
-      "title": "Saga标题，15字以内",
-      "description": "150-300字叙事摘要，从{ai}的视角叙述。第三人称。",
+      "title": "Saga標題，15字以內",
+      "description": "150-300字敘事摘要，從{ai}的視角敘述。第三人稱。",
       "memory_ids": [1, 5, 12],
       "emotional_axis": "bond"
     }
@@ -642,17 +642,17 @@ const SAGA_SYSTEM_PROMPT = `${WORLD_CONTEXT}
 async function clusterSagas() {
     const db = getDb();
 
-    // 检查上次聚类时间（24h内不重复跑）
+    // 檢查上次聚類時間（24h內不重複跑）
     const lastRun = db.prepare("SELECT run_at FROM consolidation_runs WHERE status = 'done' AND groups_consolidated = -1 ORDER BY run_at DESC LIMIT 1").get();
     if (lastRun) {
         const hoursAgo = (Date.now() - new Date(lastRun.run_at + '+08:00').getTime()) / 3600000;
         if (hoursAgo < 24) {
-            console.log(`[Saga] 距上次聚类仅${Math.floor(hoursAgo)}h，跳过（≥24h才触发）`);
+            console.log(`[Saga] 距上次聚類僅${Math.floor(hoursAgo)}h，跳過（≥24h才觸發）`);
             return { sagasWritten: 0 };
         }
     }
 
-    // 获取所有 episode 级别记忆
+    // 獲取所有 episode 級別記憶
     const episodes = db.prepare(`
         SELECT id, title, content, valid_from, source_msg_ids
         FROM memories
@@ -662,21 +662,21 @@ async function clusterSagas() {
     `).all();
 
     if (episodes.length < 5) {
-        console.log(`[Saga] episodes不足(${episodes.length}<5)，跳过聚类`);
+        console.log(`[Saga] episodes不足(${episodes.length}<5)，跳過聚類`);
         return { sagasWritten: 0 };
     }
 
-    // v5.3: 不再按标题前缀预分组——将所有episode平铺发送给LLM，由LLM自行发现主题聚类
-    // 解密内容
+    // v5.3: 不再按標題字首預分組——將所有episode平鋪傳送給LLM，由LLM自行發現主題聚類
+    // 解密內容
     const decryptedEps = episodes.map(e => {
         let content = e.content;
         try { content = encryption.decrypt(e.content) || ''; } catch (_) {}
         return { ...e, content };
     });
 
-    // 取已有 sagas，建立归一化标题索引用于去重合并
+    // 取已有 sagas，建立歸一化標題索引用於去重合並
     const existingSagas = db.prepare("SELECT id, title, memory_ids FROM memory_sagas WHERE status = 'active'").all();
-    const normalizeTitle = (t) => (t || '').replace(/（续）|\(续\)/g, '').replace(/\s+/g, '').toLowerCase();
+    const normalizeTitle = (t) => (t || '').replace(/（續）|\(續\)|（续）|\(续\)/g, '').replace(/\s+/g, '').toLowerCase();
     const sagaIndex = new Map(); // normalized title → {id, title, memory_ids}
     for (const s of existingSagas) {
         sagaIndex.set(normalizeTitle(s.title), s);
@@ -697,30 +697,30 @@ async function clusterSagas() {
         if (existing) {
             const oldIds = JSON.parse(existing.memory_ids || '[]');
             const merged = [...new Set([...oldIds, ...newIds])];
-            // 合并时保留旧的 emotional_axis（首次LLM判定的结果更稳定）
+            // 合併時保留舊的 emotional_axis（首次LLM判定的結果更穩定）
             updateSaga.run(description, JSON.stringify(merged), emotionalAxis || null, existing.id);
             sagaIndex.set(normKey, { ...existing, memory_ids: JSON.stringify(merged) });
-            console.log(`[Saga] 合并已有Saga: "${title}" (${merged.length}条episodes, axis=${emotionalAxis || 'null'})`);
+            console.log(`[Saga] 合併已有Saga: "${title}" (${merged.length}條episodes, axis=${emotionalAxis || 'null'})`);
             return 'merged';
         } else {
             const info = insertSaga.run(title, description, idsJson, emotionalAxis || null);
             sagaIndex.set(normKey, { id: info.lastInsertRowid, title, memory_ids: idsJson });
-            console.log(`[Saga] 新Saga: "${title}" (关联${newIds.length}条episodes, axis=${emotionalAxis || 'null'})`);
+            console.log(`[Saga] 新Saga: "${title}" (關聯${newIds.length}條episodes, axis=${emotionalAxis || 'null'})`);
             return 'created';
         }
     }
 
     let written = 0;
 
-    // 构建平铺的episode列表，发给LLM做语义聚类
-    // v5.3: 最多取50条（控制context长度防30s超时），按valid_from DESC保证时效性
+    // 構建平鋪的episode列表，發給LLM做語義聚類
+    // v5.3: 最多取50條（控制context長度防30s超時），按valid_from DESC保證時效性
     const MAX_EPISODES = 50;
     const batchEps = decryptedEps.slice(0, MAX_EPISODES);
     const episodesText = batchEps.map(e =>
         `[#${e.id}] ${e.content} (${e.valid_from || '日期未知'})`
     ).join('\n');
 
-    const userPrompt = `以下是${decryptedEps.length}条episode记忆（显示了最近${batchEps.length}条）。请通读后，发现其中的主题线索，将有关联的episode编织成Saga叙事：
+    const userPrompt = `以下是${decryptedEps.length}條episode記憶（顯示了最近${batchEps.length}條）。請通讀後，發現其中的主題線索，將有關聯的episode編織成Saga敘事：
 
 ${episodesText}`;
 
@@ -739,7 +739,7 @@ ${episodesText}`;
             break;
         } catch (err) {
             if (attempt >= 1) {
-                console.error('[Saga] LLM聚类失败:', err.message.slice(0, 100));
+                console.error('[Saga] LLM聚類失敗:', err.message.slice(0, 100));
                 result = null;
             } else {
                 await new Promise(r => setTimeout(r, 3000));
@@ -751,53 +751,53 @@ ${episodesText}`;
         for (const s of result.sagas) {
             if (!s.title || !s.description) continue;
             const sagaIds = s.memory_ids || [];
-            if (sagaIds.length < 2) continue; // 至少关联2条episode
+            if (sagaIds.length < 2) continue; // 至少關聯2條episode
             const axis = s.emotional_axis || null;
             upsertSaga(s.title, s.description, sagaIds, axis);
             written++;
         }
     } else if (result === null) {
-        // LLM 调用失败（超时等）→ 不写冷却记录，下次重试
-        console.log('[Saga] LLM调用失败，跳过本轮（不设冷却，下次重试）');
+        // LLM 呼叫失敗（超時等）→ 不寫冷卻記錄，下次重試
+        console.log('[Saga] LLM呼叫失敗，跳過本輪（不設冷卻，下次重試）');
         return { sagasWritten: 0 };
     } else {
-        // LLM 成功但未发现可聚类主题 → 写冷却记录
-        console.log('[Saga] LLM未发现可聚类主题，本轮无新Saga');
+        // LLM 成功但未發現可聚類主題 → 寫冷卻記錄
+        console.log('[Saga] LLM未發現可聚類主題，本輪無新Saga');
     }
 
-    // 记录运行（groups_consolidated=-1 标记为 saga 聚类）——仅在 LLM 成功调用后
+    // 記錄執行（groups_consolidated=-1 標記為 saga 聚類）——僅在 LLM 成功呼叫後
     db.prepare(`INSERT INTO consolidation_runs (fragments_checked, groups_consolidated, memories_written, status, run_at)
         VALUES (?, -1, ?, 'done', datetime('now'))`).run(episodes.length, written);
 
-    console.log(`[Saga] 聚类完成：${episodes.length}条episodes → ${written}条sagas`);
+    console.log(`[Saga] 聚類完成：${episodes.length}條episodes → ${written}條sagas`);
 
-    // 向量去重：合并语义相似的 Saga
+    // 向量去重：合併語義相似的 Saga
     const deduped = await deduplicateSagas();
-    if (deduped > 0) console.log(`[Saga] 向量去重合并了 ${deduped} 组相似Saga`);
+    if (deduped > 0) console.log(`[Saga] 向量去重合並了 ${deduped} 組相似Saga`);
 
     return { sagasWritten: written - deduped };
 }
 
-// 向量去重：比较所有活跃 Saga 的描述 embedding，合并相似对
+// 向量去重：比較所有活躍 Saga 的描述 embedding，合併相似對
 async function deduplicateSagas() {
     const db = getDb();
     const sagas = db.prepare("SELECT id, title, description, memory_ids FROM memory_sagas WHERE status = 'active'").all();
     if (sagas.length < 2) return 0;
 
-    // 批量获取 embedding
+    // 批次獲取 embedding
     const descriptions = sagas.map(s => s.description || s.title);
     let embeddings;
     try {
         const result = await chromaDBOperation('embed_batch', { texts: descriptions });
         embeddings = result.embeddings;
     } catch (e) {
-        console.error('[Saga dedup] embed_batch 失败:', e.message);
+        console.error('[Saga dedup] embed_batch 失敗:', e.message);
         return 0;
     }
 
     if (!embeddings || embeddings.length !== sagas.length) return 0;
 
-    // 计算 pairwise cosine similarity
+    // 計算 pairwise cosine similarity
     function cosineSim(a, b) {
         let dot = 0, normA = 0, normB = 0;
         for (let i = 0; i < a.length; i++) {
@@ -809,8 +809,8 @@ async function deduplicateSagas() {
         return denom === 0 ? 0 : dot / denom;
     }
 
-    const SIM_THRESHOLD = 0.78;  // 与 CONFIG.SIMILARITY_THRESHOLD 统一（0.82太保守，0.72太激进）
-    const merged = new Set(); // 被合并的 saga id（不保留的）
+    const SIM_THRESHOLD = 0.78;  // 與 CONFIG.SIMILARITY_THRESHOLD 統一（0.82太保守，0.72太激進）
+    const merged = new Set(); // 被合併的 saga id（不保留的）
     let mergeCount = 0;
 
     for (let i = 0; i < sagas.length; i++) {
@@ -819,7 +819,7 @@ async function deduplicateSagas() {
             if (merged.has(sagas[j].id)) continue;
             const sim = cosineSim(embeddings[i], embeddings[j]);
             if (sim >= SIM_THRESHOLD) {
-                // 保留 memory_ids 多的那个，合并另一个进来
+                // 保留 memory_ids 多的那個，合併另一個進來
                 const idsI = JSON.parse(sagas[i].memory_ids || '[]');
                 const idsJ = JSON.parse(sagas[j].memory_ids || '[]');
                 const [keeper, victim, keeperIdx, victimIdx] = idsI.length >= idsJ.length
@@ -833,7 +833,7 @@ async function deduplicateSagas() {
                     .run(victim.id);
                 merged.add(victim.id);
                 mergeCount++;
-                console.log(`[Saga dedup] 合并: "${victim.title}" → "${keeper.title}" (sim=${sim.toFixed(3)}, ids: ${mergedIds.length})`);
+                console.log(`[Saga dedup] 合併: "${victim.title}" → "${keeper.title}" (sim=${sim.toFixed(3)}, ids: ${mergedIds.length})`);
             }
         }
     }
@@ -842,36 +842,36 @@ async function deduplicateSagas() {
 }
 
 // =================================================================
-// Flash Consolidation：高能即时整合
-// 由 Scribe 在检测到情绪尖峰（>=4条 ew≥0.85 且 >=1条 ew≥0.92）时触发
-// 只整合当前窗口的高 EW 碎片，不触发 Saga 聚类
+// Flash Consolidation：高能即時整合
+// 由 Scribe 在檢測到情緒尖峰（>=4條 ew≥0.85 且 >=1條 ew≥0.92）時觸發
+// 只整合當前視窗的高 EW 碎片，不觸發 Saga 聚類
 // =================================================================
 
-const FLASH_COOLDOWN_MS = 2 * 60 * 60 * 1000; // 2小时熔断
+const FLASH_COOLDOWN_MS = 2 * 60 * 60 * 1000; // 2小時熔斷
 let _lastFlashAt = 0;
 
 async function consolidateFlash(highEWFragments, windowMsgIds) {
     const db = getDb();
     const now = Date.now();
 
-    // 熔断检查
+    // 熔斷檢查
     if (now - _lastFlashAt < FLASH_COOLDOWN_MS) {
         const minsAgo = Math.floor((now - _lastFlashAt) / 60000);
-        console.log(`[Flash] 熔断：距上次仅${minsAgo}min，跳过`);
+        console.log(`[Flash] 熔斷：距上次僅${minsAgo}min，跳過`);
         return { flashed: false, reason: `cooldown_${minsAgo}min` };
     }
 
     if (!highEWFragments || highEWFragments.length < 2) {
-        console.log(`[Flash] 高EW碎片不足(${highEWFragments.length})，跳过`);
+        console.log(`[Flash] 高EW碎片不足(${highEWFragments.length})，跳過`);
         return { flashed: false, reason: 'too_few_fragments' };
     }
 
     _lastFlashAt = now;
 
     const spike = highEWFragments.reduce((a, b) => a.emotional_weight > b.emotional_weight ? a : b);
-    console.log(`[Flash] 触发！${highEWFragments.length}条高能碎片，尖峰=${spike.emotional_weight.toFixed(2)} "${spike.content.slice(0, 60)}..."`);
+    console.log(`[Flash] 觸發！${highEWFragments.length}條高能碎片，尖峰=${spike.emotional_weight.toFixed(2)} "${spike.content.slice(0, 60)}..."`);
 
-    // 扩展窗口：拉入同批次中与高EW碎片共享 source_msg_ids 的其他碎片
+    // 擴充套件視窗：拉入同批次中與高EW碎片共享 source_msg_ids 的其他碎片
     const highEWIds = new Set(highEWFragments.map(f => f.id));
     let relatedFragments = [];
     try {
@@ -879,7 +879,7 @@ async function consolidateFlash(highEWFragments, windowMsgIds) {
             try { return JSON.parse(f.source_msg_ids || '[]'); } catch (_) { return []; }
         }))];
         if (allMsgIds.length > 0) {
-            // 查找同窗口内但非高EW的碎片（用于丰富上下文）
+            // 查詢同窗口內但非高EW的碎片（用於豐富上下文）
             const placeholders = allMsgIds.map(() => '?').join(',');
             relatedFragments = db.prepare(`
                 SELECT * FROM memory_fragments
@@ -888,12 +888,12 @@ async function consolidateFlash(highEWFragments, windowMsgIds) {
             `).all(...highEWFragments.map(f => f.id));
         }
     } catch (e) {
-        console.warn('[Flash] 扩展窗口失败，仅用高EW碎片:', e.message);
+        console.warn('[Flash] 擴充套件視窗失敗，僅用高EW碎片:', e.message);
     }
 
     const allFragments = [...highEWFragments, ...relatedFragments];
 
-    // 构建整合组，标记为 flash consolidation
+    // 構建整合組，標記為 flash consolidation
     const group = allFragments.map(f => ({ ...f }));
     group.consolidationType = 'flash';
 
@@ -901,29 +901,29 @@ async function consolidateFlash(highEWFragments, windowMsgIds) {
     try {
         result = await consolidateGroup(group);
     } catch (e) {
-        console.error('[Flash] 整合失败:', e.message);
+        console.error('[Flash] 整合失敗:', e.message);
         return { flashed: false, reason: 'consolidation_error' };
     }
 
     if (!result || result.skipped) {
-        console.log(`[Flash] 整合结果：${result?.skipped ? '分量不足，跳过' : '失败'}`);
+        console.log(`[Flash] 整合結果：${result?.skipped ? '分量不足，跳過' : '失敗'}`);
         return { flashed: false, reason: result?.skipped ? 'low_significance' : 'no_result' };
     }
 
-    // 写入 inner_log
+    // 寫入 inner_log
     try {
         db.prepare(`
             INSERT INTO companion_inner_log (timestamp, decision_type, intent, observation, reason)
             VALUES (datetime('now'), 'flash_consolidation', 'memory_integration', ?, ?)
         `).run(
-            `Flash整合：${highEWFragments.length}条高EW碎片 → episode #${result.memoryId}`,
+            `Flash整合：${highEWFragments.length}條高EW碎片 → episode #${result.memoryId}`,
             `尖峰ew=${spike.emotional_weight.toFixed(2)} fragments=${highEWFragments.length}`
         );
     } catch (e) {
-        console.error('[Flash] inner_log写入失败:', e.message);
+        console.error('[Flash] inner_log寫入失敗:', e.message);
     }
 
-    console.log(`[Flash] 完成：${highEWFragments.length}条高能碎片 → episode #${result.memoryId} (consolidation_type=flash)`);
+    console.log(`[Flash] 完成：${highEWFragments.length}條高能碎片 → episode #${result.memoryId} (consolidation_type=flash)`);
     return { flashed: true, memoryId: result.memoryId, fragmentCount: highEWFragments.length };
 }
 

@@ -1,5 +1,5 @@
 // =================================================================
-// services/cognitiveModel/cycle.js — 深循環：runUserModelCycle
+// services/cognitiveModel/cycle.js — 深迴圈：runUserModelCycle
 // 自 services/cognitiveModel.js 拆出（W7 純搬移：只剪貼、補 require/exports，程式本體未改）。
 // =================================================================
 
@@ -16,7 +16,7 @@ const { crossRefStateWithEntities, detectModelOverlaps } = require('./overlap');
 // ═══════════════════════════════════════════════════════
 
 async function runUserModelCycle() {
-    console.log('[UserModel] 🧠 认知模型维护周期开始');
+    console.log('[UserModel] 🧠 認知模型維護週期開始');
 
     // Phase 0: Backfill evidence for entries that need it (zero LLM)
     backfillModelEvidence();
@@ -72,7 +72,7 @@ async function runUserModelCycle() {
         console.error('[UserModel] crossRefStateWithEntities error:', e.message);
     }
 
-    // Phase 6: 全量 trait 去重审查（LLM，24h 冷却）
+    // Phase 6: 全量 trait 去重審查（LLM，24h 冷卻）
     let dedupResult = { merged: 0 };
     try {
         const DEDUP_GAP_MS = 24 * 60 * 60 * 1000;
@@ -84,7 +84,7 @@ async function runUserModelCycle() {
         console.error('[UserModel] detectModelOverlaps error:', e.message);
     }
 
-    // Phase 7: CORE_INSIGHT — v5.4 退役。被 {{user.name}} Model + Intuition 覆盖。
+    // Phase 7: CORE_INSIGHT — v5.4 退役。被 {{user.name}} Model + Intuition 覆蓋。
     const insightResult = { synthesized: false };
 
     // Phase 8: Auto spot-check — verify up to 3 recent inferred entries against source messages
@@ -96,7 +96,7 @@ async function runUserModelCycle() {
         console.error('[UserModel] autoSpotCheck error:', e.message);
     }
 
-    console.log(`[UserModel] 周期完成: observation=${!observationResult.skipped} decay=${decayResult.decayed + decayResult.resolved + decayResult.abandoned} validate=${validateResult.validated} detected=${detectResult.detected} reviewed=${reviewedResult.reviewed} proactive=${proactiveReviewResult.refined + proactiveReviewResult.weakened + proactiveReviewResult.noted} crossref=${crossRefResult.entityFlags + crossRefResult.traitFlags + crossRefResult.stateConflicts} dedup=${dedupResult.merged} insight=${insightResult.synthesized} spotcheck=${spotCheckResult.checked}`);
+    console.log(`[UserModel] 週期完成: observation=${!observationResult.skipped} decay=${decayResult.decayed + decayResult.resolved + decayResult.abandoned} validate=${validateResult.validated} detected=${detectResult.detected} reviewed=${reviewedResult.reviewed} proactive=${proactiveReviewResult.refined + proactiveReviewResult.weakened + proactiveReviewResult.noted} crossref=${crossRefResult.entityFlags + crossRefResult.traitFlags + crossRefResult.stateConflicts} dedup=${dedupResult.merged} insight=${insightResult.synthesized} spotcheck=${spotCheckResult.checked}`);
 
     return { observation: observationResult, decay: decayResult, resolved, validate: validateResult, detect: detectResult, reviewed: reviewedResult, crossref: crossRefResult, dedup: dedupResult, insight: insightResult, spotCheck: spotCheckResult };
 }

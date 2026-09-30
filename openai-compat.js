@@ -1,12 +1,12 @@
 // =================================================================
-// openai-compat.js - Gemini ↔ OpenAI 格式转换层
-// 当使用反代（OpenAI兼容端点）时，自动转换请求和响应格式
+// openai-compat.js - Gemini ↔ OpenAI 格式轉換層
+// 當使用反代（OpenAI相容端點）時，自動轉換請求和響應格式
 // =================================================================
 
 /**
- * 判断是否为 OpenAI 兼容端点（反代）
- * 空端点或含 googleapis.com → Gemini 原生
- * 其他 → OpenAI 兼容
+ * 判斷是否為 OpenAI 相容端點（反代）
+ * 空端點或含 googleapis.com → Gemini 原生
+ * 其他 → OpenAI 相容
  */
 function isOpenAICompat(endpoint) {
     if (!endpoint || endpoint.trim() === '') return false;
@@ -15,7 +15,7 @@ function isOpenAICompat(endpoint) {
 }
 
 /**
- * 构建 OpenAI 兼容的请求 URL 和 Headers
+ * 構建 OpenAI 相容的請求 URL 和 Headers
  */
 function buildOpenAIRequestMeta(endpoint, apiKey) {
     let baseUrl = endpoint.replace(/\/+$/, '');
@@ -29,18 +29,18 @@ function buildOpenAIRequestMeta(endpoint, apiKey) {
 }
 
 /**
- * 将 Gemini 格式的 parts 转换为 OpenAI 格式的 content
- * 处理文本、图片（inline_data → image_url）、文件
+ * 將 Gemini 格式的 parts 轉換為 OpenAI 格式的 content
+ * 處理文本、圖片（inline_data → image_url）、檔案
  */
 function convertPartsToContent(parts) {
     if (!parts || parts.length === 0) return '';
 
-    // 如果只有一个纯文本 part，直接返回字符串
+    // 如果只有一個純文本 part，直接返回字串
     if (parts.length === 1 && parts[0].text) {
         return parts[0].text;
     }
 
-    // 多个 parts 或含有非文本内容 → 返回数组
+    // 多個 parts 或含有非文本內容 → 返回陣列
     const content = [];
     for (const part of parts) {
         if (part.text) {
@@ -52,15 +52,15 @@ function convertPartsToContent(parts) {
                     image_url: { url: dataUri }
                 });
         } else if (part.functionCall) {
-            // functionCall 在 parts 里不转 content，跳过
+            // functionCall 在 parts 裡不轉 content，跳過
             continue;
         } else if (part.functionResponse) {
-            // functionResponse 也跳过，单独处理
+            // functionResponse 也跳過，單獨處理
             continue;
         }
     }
 
-    // 如果最终只有一个文本，简化为字符串
+    // 如果最終只有一個文本，簡化為字串
     if (content.length === 1 && content[0].type === 'text') {
         return content[0].text;
     }
@@ -69,13 +69,13 @@ function convertPartsToContent(parts) {
 }
 
 /**
- * 将 Gemini contents 数组转换为 OpenAI messages 数组
- * 同时处理 systemInstruction
+ * 將 Gemini contents 陣列轉換為 OpenAI messages 陣列
+ * 同時處理 systemInstruction
  */
 function convertContentsToMessages(contents, systemInstruction) {
     const messages = [];
 
-    // 系统提示
+    // 系統提示
     if (systemInstruction?.parts?.[0]?.text) {
         messages.push({
             role: 'system',
@@ -86,14 +86,14 @@ function convertContentsToMessages(contents, systemInstruction) {
     for (const item of contents) {
         const role = item.role === 'model' ? 'assistant' : 'user';
 
-        // 检查是否包含 functionCall（model 的工具调用）
+        // 檢查是否包含 functionCall（model 的工具呼叫）
         const functionCalls = item.parts?.filter(p => p.functionCall) || [];
         if (functionCalls.length > 0) {
-            // 先处理文本部分
+            // 先處理文本部分
             const textParts = item.parts.filter(p => p.text);
             const textContent = textParts.map(p => p.text).join('');
 
-            // 构建 assistant 消息 + tool_calls
+            // 構建 assistant 訊息 + tool_calls
             const toolCalls = functionCalls.map((fc, idx) => ({
                 id: `call_${Date.now()}_${idx}`,
                 type: 'function',
@@ -112,10 +112,10 @@ function convertContentsToMessages(contents, systemInstruction) {
             continue;
         }
 
-        // 检查是否包含 functionResponse（工具结果）
+        // 檢查是否包含 functionResponse（工具結果）
         const functionResponses = item.parts?.filter(p => p.functionResponse) || [];
         if (functionResponses.length > 0) {
-            // 找到上一条 assistant 消息中对应的 tool_call_id
+            // 找到上一條 assistant 訊息中對應的 tool_call_id
             const lastAssistantMsg = [...messages].reverse().find(
                 m => m.role === 'assistant' && m.tool_calls
             );
@@ -140,7 +140,7 @@ function convertContentsToMessages(contents, systemInstruction) {
             continue;
         }
 
-        // 普通消息
+        // 普通訊息
         const convertedContent = convertPartsToContent(item.parts);
         messages.push({
             role,
@@ -152,7 +152,7 @@ function convertContentsToMessages(contents, systemInstruction) {
         }
 
 /**
- * 将 Gemini functionDeclarations 转换为 OpenAI tools 格式
+ * 將 Gemini functionDeclarations 轉換為 OpenAI tools 格式
  */
 function convertToolsToOpenAI(geminiTools) {
     if (!geminiTools) return undefined;
@@ -171,7 +171,7 @@ function convertToolsToOpenAI(geminiTools) {
 }
 
 /**
- * 递归转换 Gemini schema（大写 TYPE）→ OpenAI schema（小写 type）
+ * 遞迴轉換 Gemini schema（大寫 TYPE）→ OpenAI schema（小寫 type）
  */
 function convertGeminiSchema(schema) {
     if (!schema) return {};
@@ -202,7 +202,7 @@ function convertGeminiSchema(schema) {
 }
 
 /**
- * 构建完整的 OpenAI 兼容请求体
+ * 構建完整的 OpenAI 相容請求體
  */
 function buildOpenAIRequestBody(geminiRequestBody, modelName) {
     const body = {
@@ -214,13 +214,13 @@ function buildOpenAIRequestBody(geminiRequestBody, modelName) {
         )
     };
 
-    // 生成参数
+    // 生成引數
     const gc = geminiRequestBody.generationConfig;
     if (gc) {
         if (gc.maxOutputTokens) body.max_tokens = gc.maxOutputTokens;
         if (gc.temperature !== undefined) body.temperature = gc.temperature;
         if (gc.topP !== undefined) body.top_p = gc.topP;
-        // topK 在 OpenAI 格式中不支持，忽略
+        // topK 在 OpenAI 格式中不支援，忽略
     }
 
     // 工具
@@ -230,12 +230,12 @@ function buildOpenAIRequestBody(geminiRequestBody, modelName) {
             body.tools = openaiTools;
         }
     }
-    // 安全设置（Gemini默认过滤会拦截生理期/健康等正常对话，必须传BLOCK_NONE）
+    // 安全設定（Gemini預設過濾會攔截生理期/健康等正常對話，必須傳BLOCK_NONE）
     if (geminiRequestBody.safetySettings && geminiRequestBody.safetySettings.length > 0) {
         body.safety_settings = geminiRequestBody.safetySettings;
     }
-    // GLM/DeepSeek/Gemini 禁用thinking，避免消耗额外token
-    // Gemini thinking 会吃掉输出预算导致空回复/截断（即使3.x也未修复）
+    // GLM/DeepSeek/Gemini 停用thinking，避免消耗額外token
+    // Gemini thinking 會吃掉輸出預算導致空回覆/截斷（即使3.x也未修復）
     const modelLower = (modelName || '').toLowerCase();
     if (modelLower.includes('glm') || modelLower.includes('deepseek') || modelLower.includes('gemini')) {
         body.thinking = { type: "disabled" };
@@ -244,17 +244,17 @@ function buildOpenAIRequestBody(geminiRequestBody, modelName) {
 }
 
 // =================================================================
-// SSE 响应解析：OpenAI 流式格式 → 统一内部格式
+// SSE 響應解析：OpenAI 流式格式 → 統一內部格式
 // =================================================================
 
 /**
- * 解析 OpenAI SSE 的一行数据
+ * 解析 OpenAI SSE 的一行資料
  * 返回: { type: 'text'|'tool_call'|'tool_call_delta'|'done'|null, ... }
  * 
- * OpenAI 的 tool_calls 是增量发送的：
- *   第一个 chunk: tool_calls[0] = { id, function: { name, arguments: "" } }
- *   后续 chunks: tool_calls[0] = { function: { arguments: "..." } }  (增量拼接)
- *   finish_reason: "tool_calls" 表示所有工具调用完成
+ * OpenAI 的 tool_calls 是增量傳送的：
+ *   第一個 chunk: tool_calls[0] = { id, function: { name, arguments: "" } }
+ *   後續 chunks: tool_calls[0] = { function: { arguments: "..." } }  (增量拼接)
+ *   finish_reason: "tool_calls" 表示所有工具呼叫完成
  */
 function parseOpenAISSEChunk(jsonStr) {
     if (jsonStr === '[DONE]') {
@@ -266,14 +266,14 @@ function parseOpenAISSEChunk(jsonStr) {
         const choice = data.choices?.[0];
         if (!choice) return null;
 
-        // 检查结束原因
+        // 檢查結束原因
         if (choice.finish_reason === 'tool_calls' || choice.finish_reason === 'function_call') {
             return { type: 'tool_calls_complete' };
         }
         if (choice.finish_reason === 'stop') {
             return { type: 'done' };
         }
-        // Gemini 安全过滤器拦截（即使设了BLOCK_NONE也可能触发，尤其在OpenAI兼容路径丢失safety_settings时）
+        // Gemini 安全過濾器攔截（即使設了BLOCK_NONE也可能觸發，尤其在OpenAI相容路徑丟失safety_settings時）
         if (choice.finish_reason === 'error' || choice.native_finish_reason === 'SAFETY') {
             return { type: 'safety_block', native_reason: choice.native_finish_reason || 'ERROR' };
         }
@@ -281,12 +281,12 @@ function parseOpenAISSEChunk(jsonStr) {
         const delta = choice.delta;
         if (!delta) return null;
 
-        // 文本内容
+        // 文本內容
         if (delta.content) {
             return { type: 'text', text: delta.content };
         }
 
-        // 工具调用（增量）
+        // 工具呼叫（增量）
         if (delta.tool_calls && delta.tool_calls.length > 0) {
             return {
                 type: 'tool_call_delta',
@@ -307,8 +307,8 @@ function parseOpenAISSEChunk(jsonStr) {
 }
 
 /**
- * 工具调用累积器
- * OpenAI 流式中 tool_calls 是增量发送的，需要累积完整的调用信息
+ * 工具呼叫累積器
+ * OpenAI 流式中 tool_calls 是增量傳送的，需要累積完整的呼叫資訊
  */
 class ToolCallAccumulator {
     constructor() {
@@ -317,7 +317,7 @@ class ToolCallAccumulator {
     }
 
     /**
-     * 处理一个增量 delta
+     * 處理一個增量 delta
      */
     feed(toolCallDeltas) {
         for (const delta of toolCallDeltas) {
@@ -333,7 +333,7 @@ class ToolCallAccumulator {
     }
 
     /**
-     * 获取所有完整的工具调用
+     * 獲取所有完整的工具呼叫
      * 返回: [{ id, name, args }]
      */
     getCompletedCalls() {
@@ -344,7 +344,7 @@ class ToolCallAccumulator {
             try {
                 args = JSON.parse(call.arguments);
             } catch (e) {
-                console.error(`⚠️ [OpenAI兼容] 工具参数解析失败:`, call.arguments);
+                console.error(`⚠️ [OpenAI相容] 工具引數解析失敗:`, call.arguments);
             }
             results.push({
                 id: call.id,
@@ -357,7 +357,7 @@ class ToolCallAccumulator {
     }
 
     /**
-     * 重置累积器（新一轮工具调用时）
+     * 重置累積器（新一輪工具呼叫時）
      */
     reset() {
         this.calls = {};
@@ -365,15 +365,15 @@ class ToolCallAccumulator {
 }
 
 /**
- * 构建工具调用结果的 messages（用于下一轮请求）
- * @param {Array} toolCalls - [{ id, name, args }] 从 accumulator 获取
- * @param {Array} toolResults - 对应的执行结果
- * @param {string|null} textBeforeTools - 工具调用前的文本（如果有）
+ * 構建工具呼叫結果的 messages（用於下一輪請求）
+ * @param {Array} toolCalls - [{ id, name, args }] 從 accumulator 獲取
+ * @param {Array} toolResults - 對應的執行結果
+ * @param {string|null} textBeforeTools - 工具呼叫前的文本（如果有）
  */
 function buildToolResultMessages(toolCalls, toolResults, textBeforeTools) {
     const messages = [];
 
-    // assistant 消息：包含 tool_calls
+    // assistant 訊息：包含 tool_calls
     const assistantMsg = {
         role: 'assistant',
         content: textBeforeTools || null,
@@ -388,7 +388,7 @@ function buildToolResultMessages(toolCalls, toolResults, textBeforeTools) {
     };
     messages.push(assistantMsg);
 
-    // tool 消息：每个工具调用一条
+    // tool 訊息：每個工具呼叫一條
     for (let i = 0; i < toolCalls.length; i++) {
         messages.push({
             role: 'tool',

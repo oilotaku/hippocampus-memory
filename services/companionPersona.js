@@ -22,8 +22,8 @@ function getCompanionPersonaBase() {
         const SECTION_LABELS = {
             identity:     '身份',
             personality:  '性格',
-            relationship:'与用户的关系',
-            ai_self:      '作为AI的自我认识',
+            relationship:'與使用者的關係',
+            ai_self:      '作為AI的自我認識',
             sanctuary:    '{{project.name}} — 你的世界',
         };
         const parts = [];

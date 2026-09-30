@@ -1,30 +1,30 @@
-// services/memoryCrypto.js — 记忆本体静态加密（W3）
+// services/memoryCrypto.js — 記憶本體靜態加密（W3）
 //
-// 范围（MEMORY_ENCRYPTION=on，预设）：
+// 範圍（MEMORY_ENCRYPTION=on，預設）：
 //   memory_fragments.content / quote
 //   memories.content / title
 //   entity_profiles.facts / current_status / judgment / overview
-// 刻意不加密：entity_profiles.name 与 aliases（实体比对、星图、SQL 以名字 JOIN/比对都需要明文）、
+// 刻意不加密：entity_profiles.name 與 aliases（實體比對、星圖、SQL 以名字 JOIN/比對都需要明文）、
 //   memory_fragments.entity（同理）、tags。
 //
-// 写入：所有写这些栏位的地方一律经过 sealField(表, 栏, 值)。
-//   on  → AES-256-GCM（encryption.js v2），AAD = "表:栏"（插入时还没有 id，见下方取舍说明）
-//   off → 原样写明文（行为与加密功能上线前相同）
-// 读取：wrapDatabase(db) 把 db.prepare 包一层——凡是结果栏位的「来源」是上述栏位
-//   （better-sqlite3 的 stmt.columns() 给出 table/column，别名也追得到），值是 enc: 开头就解密。
-//   所以全专案的 SELECT 不必逐一改；解密失败回 null（绝不回 enc: 字串，也绝不写回）。
-//   两种模式读取端相同：是 enc: 就解密，否则原样 → 明文与密文可以并存。
-// 全文索引：FTS 触发器改呼叫 mem_fts(domain, aad, 值)——在 JS 端解密后，
-//   on 产生盲 token（utils/blindIndex.js），off 产生原本的两字组；查询端用 fragmentsMatchQuery／
-//   memoriesMatchQuery 依模式产生对应的 MATCH 字串。所以写入点不必管索引。
-// SQL 文字操作：LIKE / length 对密文无意义，改用 mem_like(aad, 值, 样式)／mem_len(aad, 值)。
+// 寫入：所有寫這些欄位的地方一律經過 sealField(表, 欄, 值)。
+//   on  → AES-256-GCM（encryption.js v2），AAD = "表:欄"（插入時還沒有 id，見下方取捨說明）
+//   off → 原樣寫明文（行為與加密功能上線前相同）
+// 讀取：wrapDatabase(db) 把 db.prepare 包一層——凡是結果欄位的「來源」是上述欄位
+//   （better-sqlite3 的 stmt.columns() 給出 table/column，別名也追得到），值是 enc: 開頭就解密。
+//   所以全專案的 SELECT 不必逐一改；解密失敗回 null（絕不回 enc: 字串，也絕不寫回）。
+//   兩種模式讀取端相同：是 enc: 就解密，否則原樣 → 明文與密文可以並存。
+// 全文索引：FTS 觸發器改呼叫 mem_fts(domain, aad, 值)——在 JS 端解密後，
+//   on 產生盲 token（utils/blindIndex.js），off 產生原本的兩字組；查詢端用 fragmentsMatchQuery／
+//   memoriesMatchQuery 依模式產生對應的 MATCH 字串。所以寫入點不必管索引。
+// SQL 文字操作：LIKE / length 對密文無意義，改用 mem_like(aad, 值, 樣式)／mem_len(aad, 值)。
 //
-// AAD 取舍：绑「表:栏」而非「表:栏:id」。INSERT 当下没有 id，要做到逐列绑定得把每个写入点
-//   改成「先插入再回填」或集中改写，改动面太大。残余风险：同表同栏的密文在列之间可互换
-//   （能写资料库的人可以把 A 碎片的 content 密文搬到 B 碎片，解密会成功）；跨栏／跨表搬动会被 AAD 挡下。
+// AAD 取捨：綁「表:欄」而非「表:欄:id」。INSERT 當下沒有 id，要做到逐列繫結得把每個寫入點
+//   改成「先插入再回填」或集中改寫，改動面太大。殘餘風險：同表同欄的密文在列之間可互換
+//   （能寫資料庫的人可以把 A 碎片的 content 密文搬到 B 碎片，解密會成功）；跨欄／跨表搬動會被 AAD 擋下。
 
 const { encryption } = require('../encryption');
-const { toIndexTokens } = require('../utils/cjkTokenize');
+const { toIndexTokens, TOKENIZER_VERSION } = require('../utils/cjkTokenize');
 const blind = require('../utils/blindIndex');
 
 const FIELDS = Object.freeze({
@@ -34,7 +34,7 @@ const FIELDS = Object.freeze({
 });
 
 const AAD_SET = new Set();
-const NAME_CANDIDATES = new Map();   // 栏位名 → 可能的 AAD（用于来源不明的运算式栏位）
+const NAME_CANDIDATES = new Map();   // 欄位名 → 可能的 AAD（用於來源不明的運算式欄位）
 for (const [t, cols] of Object.entries(FIELDS)) {
     for (const c of cols) {
         const aad = `${t}:${c}`;
@@ -44,7 +44,7 @@ for (const [t, cols] of Object.entries(FIELDS)) {
     }
 }
 
-// FTS 栏位的盲索引 domain（每栏一把子金钥）
+// FTS 欄位的盲索引 domain（每欄一把子金鑰）
 const DOMAIN_MF_CONTENT = 'memory_fragments_fts.content';
 const DOMAIN_MEM_TITLE = 'memories_fts.title';
 
@@ -55,14 +55,14 @@ function isEnabled() {
     if (v === 'off' || v === '0' || v === 'false' || v === 'no') return false;
     if (!['on', '1', 'true', 'yes', ''].includes(v) && !_warnedMode) {
         _warnedMode = true;
-        console.warn(`[memoryCrypto] MEMORY_ENCRYPTION=${raw} 无法辨识，按 on 处理（fail-closed）`);
+        console.warn(`[memoryCrypto] MEMORY_ENCRYPTION=${raw} 無法辨識，按 on 處理（fail-closed）`);
     }
     return true;
 }
 
 function aadFor(table, col) {
     const aad = `${table}:${col}`;
-    if (!AAD_SET.has(aad)) throw new Error(`memoryCrypto: ${aad} 不在加密栏位清单内`);
+    if (!AAD_SET.has(aad)) throw new Error(`memoryCrypto: ${aad} 不在加密欄位清單內`);
     return aad;
 }
 
@@ -70,8 +70,8 @@ function isEncryptedField(table, col) {
     return AAD_SET.has(`${table}:${col}`);
 }
 
-// 写入前呼叫。非字串／空字串原样回传（'' 保持 ''，SQL 的 != '' 判断不受影响）。
-// 加密失败抛 EncryptionError（fail-closed：宁可写入失败，也不写明文）。
+// 寫入前呼叫。非字串／空字串原樣回傳（'' 保持 ''，SQL 的 != '' 判斷不受影響）。
+// 加密失敗拋 EncryptionError（fail-closed：寧可寫入失敗，也不寫明文）。
 function sealField(table, col, value) {
     const aad = aadFor(table, col);
     if (!isEnabled()) return value;
@@ -79,9 +79,9 @@ function sealField(table, col, value) {
     return encryption.encrypt(value, { aad });
 }
 
-// ── 解密（带快取） ──
-// 快取键含 AAD：同一密文换个栏位读，不会因为命中快取而绕过 AAD 检查。
-const CACHE_MAX = 20000;   // 约 2 万列的全表 mem_like 扫描也能全部命中快取
+// ── 解密（帶快取） ──
+// 快取鍵含 AAD：同一密文換個欄位讀，不會因為命中快取而繞過 AAD 檢查。
+const CACHE_MAX = 20000;   // 約 2 萬列的全表 mem_like 掃描也能全部命中快取
 const _cache = new Map();
 function _cacheGet(k) { return _cache.get(k); }
 function _cacheSet(k, v) {
@@ -94,11 +94,11 @@ let _failCount = 0;
 function _warnFail(aad) {
     _failCount++;
     if (_failCount <= 5 || _failCount % 100 === 0) {
-        console.warn(`[memoryCrypto] ${aad} 解密失败（金钥/AAD 不符或资料被窜改），以 null 处理（累计 ${_failCount} 次）`);
+        console.warn(`[memoryCrypto] ${aad} 解密失敗（金鑰/AAD 不符或資料被竄改），以 null 處理（累計 ${_failCount} 次）`);
     }
 }
 
-// 解密一个值。回传 { ok, value, legacy }：legacy=true 表示是没有 AAD 的旧密文（v1 或无 AAD 的 v2）。
+// 解密一個值。回傳 { ok, value, legacy }：legacy=true 表示是沒有 AAD 的舊密文（v1 或無 AAD 的 v2）。
 function _open(aad, value, { allowLegacy = true } = {}) {
     if (typeof value !== 'string' || !value.startsWith('enc:')) return { ok: true, value, legacy: false, plain: true };
     const ck = aad + '\u0000' + value;
@@ -107,19 +107,19 @@ function _open(aad, value, { allowLegacy = true } = {}) {
     let out = encryption.decrypt(value, { aad, silent: true });
     let legacy = false;
     if (out === null && allowLegacy) {
-        // 加密功能上线前 routes/memory-api.js 就会以「无 AAD」加密 memories.content；v1 本来就没有 AAD。
-        // 新写入的密文一律带 AAD，所以这个退路不会让「搬到别栏的新密文」解开。
+        // 加密功能上線前 routes/memory-api.js 就會以「無 AAD」加密 memories.content；v1 本來就沒有 AAD。
+        // 新寫入的密文一律帶 AAD，所以這個退路不會讓「搬到別欄的新密文」解開。
         out = encryption.decrypt(value, { silent: true });
         legacy = out !== null;
     } else if (out !== null && !value.startsWith('enc:v2:')) {
-        legacy = true;   // v1：decrypt 会忽略 aad
+        legacy = true;   // v1：decrypt 會忽略 aad
     }
     const r = out === null ? { ok: false, value: null, legacy: false } : { ok: true, value: out, legacy };
     if (r.ok) _cacheSet(ck, r);
     return r;
 }
 
-// 读取后呼叫：是 enc: 就解密，否则原样。解密失败回 null（并记一笔警告）。
+// 讀取後呼叫：是 enc: 就解密，否則原樣。解密失敗回 null（並記一筆警告）。
 function openField(table, col, value) {
     const aad = aadFor(table, col);
     const r = _open(aad, value);
@@ -127,7 +127,7 @@ function openField(table, col, value) {
     return r.value;
 }
 
-// ── 透明解密：包装 db.prepare ──
+// ── 透明解密：包裝 db.prepare ──
 function _planFor(stmt) {
     let cols;
     try { cols = stmt.columns(); } catch (_) { return null; }
@@ -140,8 +140,8 @@ function _planFor(stmt) {
             const aad = `${c.table}:${c.column}`;
             if (AAD_SET.has(aad)) entry = { name: c.name, strict: true, aad };
         } else if (NAME_CANDIDATES.has(c.name)) {
-            // 运算式栏位（COALESCE(...) AS content 之类）：来源不明，只试同名栏位的 AAD，
-            // 解不开就原样放行（可能根本不是记忆栏位，例如 messages 的内容）
+            // 運算式欄位（COALESCE(...) AS content 之類）：來源不明，只試同名欄位的 AAD，
+            // 解不開就原樣放行（可能根本不是記憶欄位，例如 messages 的內容）
             entry = { name: c.name, strict: false, aads: NAME_CANDIDATES.get(c.name) };
         }
         plan.push(entry);
@@ -168,7 +168,7 @@ function wrapStatement(stmt) {
     const plan = _planFor(stmt);
     if (!plan) return stmt;
     const byName = new Map();
-    plan.forEach(e => { if (e) byName.set(e.name, e); });   // 同名栏位：物件模式下后者覆盖前者
+    plan.forEach(e => { if (e) byName.set(e.name, e); });   // 同名欄位：物件模式下後者覆蓋前者
     let mode = 'object';
     const fixRow = (row) => {
         if (row === undefined || row === null) return row;
@@ -236,7 +236,7 @@ function _likeRegex(pattern) {
     return re;
 }
 
-// 与 SQLite 预设 LIKE 相同语义：% 任意长度、_ 单一字元、只对 ASCII 不分大小写、NULL 回 NULL
+// 與 SQLite 預設 LIKE 相同語義：% 任意長度、_ 單一字元、只對 ASCII 不分大小寫、NULL 回 NULL
 function sqlLike(plain, pattern) {
     if (plain === null || plain === undefined || pattern === null || pattern === undefined) return null;
     return _likeRegex(String(pattern)).test(_asciiLower(String(plain))) ? 1 : 0;
@@ -270,10 +270,10 @@ function wrapDatabase(db) {
     return db;
 }
 
-// ── 查询端：MATCH 字串 ──
+// ── 查詢端：MATCH 字串 ──
 const quoteTok = (t) => `"${String(t).replace(/"/g, '""')}"`;
 
-// tokens：toQueryTokens 的输出（librarian 的 tokenizeCJK）
+// tokens：toQueryTokens 的輸出（librarian 的 tokenizeCJK）
 function fragmentsMatchQuery(tokens) {
     if (!tokens || tokens.length === 0) return null;
     if (!isEnabled()) return tokens.map(quoteTok).join(' OR ');
@@ -290,7 +290,7 @@ function memoriesMatchQuery(tokens) {
     return parts.join(' OR ');
 }
 
-// ── 触发器／索引重建／整批加密 ──
+// ── 觸發器／索引重建／整批加密 ──
 const TAGS_EXPR = (c) => `COALESCE(REPLACE(REPLACE(REPLACE(REPLACE(${c}, '["', ''), '"]', ''), '","', ' '), '"', ''), '')`;
 const MF_IDX = (row) => `mem_fts('${DOMAIN_MF_CONTENT}', 'memory_fragments:content', ${row}.content)`;
 const MEM_IDX = (row) => `mem_fts('${DOMAIN_MEM_TITLE}', 'memories:title', COALESCE(${row}.title, ''))`;
@@ -346,7 +346,7 @@ function dropTriggers(db) {
     `);
 }
 
-// 两个 FTS 表整批重建（不用 FTS5 的 'rebuild' 指令：它会拿内容表的原文／密文直接分词）
+// 兩個 FTS 表整批重建（不用 FTS5 的 'rebuild' 指令：它會拿內容表的原文／密文直接分詞）
 function rebuildFts(db) {
     db.exec(`
         INSERT INTO memory_fragments_fts(memory_fragments_fts) VALUES ('delete-all');
@@ -355,15 +355,16 @@ function rebuildFts(db) {
         DELETE FROM memories_fts;
         INSERT INTO memories_fts(rowid, title, tags_text)
             SELECT id, ${MEM_IDX('memories')}, splitCJK(${TAGS_EXPR('tags')}) FROM memories;
-        -- memories_fts 是一般 FTS5 表，DELETE 只写删除标记，旧 segment（含旧 token）要合并才会消失；
-        -- optimize 把所有 segment 合成一个，旧页面释放（搭配 secure_delete 清零）
+        -- memories_fts 是一般 FTS5 表，DELETE 只寫刪除標記，舊 segment（含舊 token）要合併才會消失；
+        -- optimize 把所有 segment 合成一個，舊頁面釋放（搭配 secure_delete 清零）
         INSERT INTO memory_fragments_fts(memory_fragments_fts) VALUES ('optimize');
         INSERT INTO memories_fts(memories_fts) VALUES ('optimize');
     `);
 }
 
 function indexFingerprint() {
-    return isEnabled() ? 'blind:' + blind.blindKeyFingerprint() : 'plain';
+    // 斷詞版本納入指紋：斷詞規則改變（如 v2-t 加入簡繁正規化）時，既有資料庫下次啟動自動重建索引
+    return isEnabled() ? `blind:${blind.blindKeyFingerprint()}:${TOKENIZER_VERSION}` : `plain:${TOKENIZER_VERSION}`;
 }
 
 function ensureMetaTable(db) {
@@ -377,16 +378,16 @@ function setMeta(db, key, value) {
     db.prepare('INSERT INTO memory_crypto_meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, value);
 }
 
-// 不经透明解密的 prepare：整批处理要看原始储存值（明文或 enc: 密文）
+// 不經透明解密的 prepare：整批處理要看原始儲存值（明文或 enc: 密文）
 function _rawPrepare(db, sql) {
     return Object.getPrototypeOf(db).prepare.call(db, sql);
 }
 
-// 整批处理加密栏位：
-//   mode 'seal'   ：on 时把明文加密；旧的无 AAD 密文／v1 改成带 AAD 的 v2（金钥不变）
-//   mode 'rotate' ：所有密文用目前金钥重新加密（旧 kid → 新 kid），明文也加密（on 时）
-// 解不开的值：seal 模式略过并计数（它本来就是密文，不是明文外洩）；rotate 模式整批中止。
-// 回传统计；dryRun 时不写入。
+// 整批處理加密欄位：
+//   mode 'seal'   ：on 時把明文加密；舊的無 AAD 密文／v1 改成帶 AAD 的 v2（金鑰不變）
+//   mode 'rotate' ：所有密文用目前金鑰重新加密（舊 kid → 新 kid），明文也加密（on 時）
+// 解不開的值：seal 模式略過並計數（它本來就是密文，不是明文外洩）；rotate 模式整批中止。
+// 回傳統計；dryRun 時不寫入。
 function processAllFields(db, { mode = 'seal', dryRun = false } = {}) {
     const on = isEnabled();
     const stats = { sealed: 0, resealed: 0, rotated: 0, undecryptable: [], scanned: 0 };
@@ -419,17 +420,17 @@ function processAllFields(db, { mode = 'seal', dryRun = false } = {}) {
     return stats;
 }
 
-// memory_fragments.content_hash 依目前模式／金钥重算（on：带金钥 HMAC；off：原本的 SHA-256）
+// memory_fragments.content_hash 依目前模式／金鑰重算（on：帶金鑰 HMAC；off：原本的 SHA-256）
 function recomputeContentHashes(db, { dryRun = false } = {}) {
     const { normalizedContentHash } = require('./scribeQuality');
     let rows;
     try {
         rows = db.prepare('SELECT id, entity, content, content_hash FROM memory_fragments WHERE content_hash IS NOT NULL').all();
-    } catch (_) { return 0; }   // 老库没有 content_hash 栏
+    } catch (_) { return 0; }   // 老庫沒有 content_hash 欄
     const upd = dryRun ? null : _rawPrepare(db, 'UPDATE memory_fragments SET content_hash = ? WHERE id = ?');
     let n = 0;
     for (const r of rows) {
-        if (r.content === null) continue;   // 解不开：保留原值
+        if (r.content === null) continue;   // 解不開：保留原值
         const h = normalizedContentHash(r.entity, r.content);
         if (h !== r.content_hash) { n++; if (upd) upd.run(h, r.id); }
     }
@@ -444,18 +445,18 @@ function _plaintextExists(db) {
     };
     for (const [t, cols] of Object.entries(conds)) {
         const where = cols.map(c => `(${c} IS NOT NULL AND ${c} != '' AND substr(${c}, 1, 4) != 'enc:')`).join(' OR ');
-        try { if (_rawPrepare(db, `SELECT 1 FROM ${t} WHERE ${where} LIMIT 1`).get()) return true; } catch (_) { /* 栏位不存在（极老的库） */ }
+        try { if (_rawPrepare(db, `SELECT 1 FROM ${t} WHERE ${where} LIMIT 1`).get()) return true; } catch (_) { /* 欄位不存在（極老的庫） */ }
     }
     return false;
 }
 
-// 完整同步：拆触发器 → （on）整批加密 → 重建两个 FTS → 重算 content_hash → 装回触发器 → 记指纹。
-// 必须在交易中呼叫（呼叫端负责），任何一步失败整段回滚。
+// 完整同步：拆觸發器 → （on）整批加密 → 重建兩個 FTS → 重算 content_hash → 裝回觸發器 → 記指紋。
+// 必須在交易中呼叫（呼叫端負責），任何一步失敗整段回滾。
 function fullSync(db, opts = {}) {
     dropTriggers(db);
     const stats = processAllFields(db, { mode: opts.mode || 'seal' });
     if (opts.mode === 'rotate' && stats.undecryptable.length) {
-        throw new Error(`有 ${stats.undecryptable.length} 个值无法解密（${stats.undecryptable.slice(0, 5).join(', ')}…），中止；请把旧金钥放进 SANCTUARY_ENCRYPTION_KEYS_OLD`);
+        throw new Error(`有 ${stats.undecryptable.length} 個值無法解密（${stats.undecryptable.slice(0, 5).join(', ')}…），中止；請把舊金鑰放進 SANCTUARY_ENCRYPTION_KEYS_OLD`);
     }
     clearCache();
     rebuildFts(db);
@@ -467,11 +468,11 @@ function fullSync(db, opts = {}) {
     return stats;
 }
 
-// ── 金钥核对 ──
-// 金钥设错（格式正确但不是这个库的金钥）时，所有记忆读出来都是 null；若照常启动，
-// 背景任务会把 null 当空值「补写」回去（例如近况整段被新的一行覆盖），加上启动同步会用错的金钥
-// 重建索引——等于慢慢毁掉资料。所以资料库里存一个用金钥加密的核对值，启动时先解开它，
-// 解不开（目前金钥与 SANCTUARY_ENCRYPTION_KEYS_OLD 都不对）就拒绝启动（fail-closed）。
+// ── 金鑰核對 ──
+// 金鑰設錯（格式正確但不是這個庫的金鑰）時，所有記憶讀出來都是 null；若照常啟動，
+// 背景任務會把 null 當空值「補寫」回去（例如近況整段被新的一行覆蓋），加上啟動同步會用錯的金鑰
+// 重建索引——等於慢慢毀掉資料。所以資料庫裡存一個用金鑰加密的核對值，啟動時先解開它，
+// 解不開（目前金鑰與 SANCTUARY_ENCRYPTION_KEYS_OLD 都不對）就拒絕啟動（fail-closed）。
 const KEY_CHECK_PLAIN = 'hippocampus-memory key check v1';
 const KEY_CHECK_AAD = 'memory_crypto_meta:key_check';
 
@@ -484,17 +485,17 @@ function verifyKeyCheck(db) {
     if (!v) return 'absent';
     const out = encryption.decrypt(v, { aad: KEY_CHECK_AAD, silent: true });
     if (out !== KEY_CHECK_PLAIN) {
-        throw new MemoryKeyMismatchError('记忆加密金钥与资料库不符：SANCTUARY_ENCRYPTION_KEY（及 SANCTUARY_ENCRYPTION_KEYS_OLD）都解不开核对值。'
-            + '拒绝启动，避免把解不开的记忆当空值覆写。换金钥请用 scripts/rotate_memory_keys.js，并把旧金钥放进 SANCTUARY_ENCRYPTION_KEYS_OLD。');
+        throw new MemoryKeyMismatchError('記憶加密金鑰與資料庫不符：SANCTUARY_ENCRYPTION_KEY（及 SANCTUARY_ENCRYPTION_KEYS_OLD）都解不開核對值。'
+            + '拒絕啟動，避免把解不開的記憶當空值覆寫。換金鑰請用 scripts/rotate_memory_keys.js，並把舊金鑰放進 SANCTUARY_ENCRYPTION_KEYS_OLD。');
     }
     return 'ok';
 }
 
-// 执行 fn 期间开 secure_delete（被覆写的明文页面会清零），结束后把 WAL 截断，
-// 避免旧明文留在 -wal 档或空闲页面里。
+// 執行 fn 期間開 secure_delete（被覆寫的明文頁面會清零），結束後把 WAL 截斷，
+// 避免舊明文留在 -wal 檔或空閒頁面裡。
 function withSecureDelete(db, fn) {
     let prev = 0;
-    try { prev = db.pragma('secure_delete', { simple: true }); db.pragma('secure_delete = ON'); } catch (_) { /* 旧版 SQLite */ }
+    try { prev = db.pragma('secure_delete', { simple: true }); db.pragma('secure_delete = ON'); } catch (_) { /* 舊版 SQLite */ }
     try { return fn(); }
     finally {
         try { db.pragma(`secure_delete = ${prev ? 'ON' : 'OFF'}`); } catch (_) {}
@@ -502,17 +503,17 @@ function withSecureDelete(db, fn) {
     }
 }
 
-// 把明文加密之后：UPDATE 过的列在 B-tree 重新平衡时，旧页面内容不一定会被 secure_delete 清掉
-// （2000 笔实测仍残留明文），所以只要这次真的加密了明文／旧密文，就 VACUUM 整个档案重写一遍，
-// 再把 WAL 截断。VACUUM 失败不影响资料正确性（已加密），只记警告。
+// 把明文加密之後：UPDATE 過的列在 B-tree 重新平衡時，舊頁面內容不一定會被 secure_delete 清掉
+// （2000 筆實測仍殘留明文），所以只要這次真的加密了明文／舊密文，就 VACUUM 整個檔案重寫一遍，
+// 再把 WAL 截斷。VACUUM 失敗不影響資料正確性（已加密），只記警告。
 function scrubFile(db) {
-    try { db.exec('VACUUM'); } catch (e) { console.warn('[memoryCrypto] VACUUM 失败（旧明文可能残留在空闲页面，可稍后手动跑 scripts/vacuum.js）:', e.message); }
+    try { db.exec('VACUUM'); } catch (e) { console.warn('[memoryCrypto] VACUUM 失敗（舊明文可能殘留在空閒頁面，可稍後手動跑 scripts/vacuum.js）:', e.message); }
     try { db.pragma('wal_checkpoint(TRUNCATE)'); } catch (_) {}
 }
 
-// database.js 启动时呼叫（在所有 migration 之后）。
-//   migrationRecorded(107) 为假 → 跑 v107（完整同步 + 记版本，同一个交易）
-//   已跑过 → 每次启动重装触发器（幂等），并在「指纹不符／需要强制重建／on 却还有明文」时做完整同步
+// database.js 啟動時呼叫（在所有 migration 之後）。
+//   migrationRecorded(107) 為假 → 跑 v107（完整同步 + 記版本，同一個交易）
+//   已跑過 → 每次啟動重灌觸發器（冪等），並在「指紋不符／需要強制重建／on 卻還有明文」時做完整同步
 function initMemoryCrypto(db, { versionRecorded, recordVersion, forceReindex = false } = {}) {
     if (!versionRecorded) {
         try {
@@ -521,17 +522,17 @@ function initMemoryCrypto(db, { versionRecorded, recordVersion, forceReindex = f
                 stats = fullSync(db);
                 recordVersion();
             })());
-            console.log(`[DB] v107 记忆本体加密 + FTS 盲索引（模式 ${isEnabled() ? 'on' : 'off'}）✓ 加密 ${stats.sealed}、旧密文改 AAD ${stats.resealed}、无法解密 ${stats.undecryptable.length}`);
+            console.log(`[DB] v107 記憶本體加密 + FTS 盲索引（模式 ${isEnabled() ? 'on' : 'off'}）✓ 加密 ${stats.sealed}、舊密文改 AAD ${stats.resealed}、無法解密 ${stats.undecryptable.length}`);
             if (stats.sealed + stats.resealed > 0) scrubFile(db);
         } catch (e) {
-            console.error('[DB] v107 记忆本体加密失败（已回滚，不记版本）:', e.message);
+            console.error('[DB] v107 記憶本體加密失敗（已回滾，不記版本）:', e.message);
         }
         return;
     }
-    // 金钥核对放在任何同步之前、而且不吞例外：金钥错了就整个 initDatabase 失败
+    // 金鑰核對放在任何同步之前、而且不吞例外：金鑰錯了就整個 initDatabase 失敗
     verifyKeyCheck(db);
     try {
-        // 轮替脚本会自己做完整同步（rotate 模式），启动时先不做，避免重复重建
+        // 輪替指令碼會自己做完整同步（rotate 模式），啟動時先不做，避免重複重建
         const skipAuto = process.env.MEMORY_CRYPTO_SKIP_AUTOSYNC === '1';
         const needSync = !skipAuto && (forceReindex
             || getMeta(db, 'fts_index_fingerprint') !== indexFingerprint()
@@ -539,14 +540,14 @@ function initMemoryCrypto(db, { versionRecorded, recordVersion, forceReindex = f
         if (needSync) {
             let stats;
             withSecureDelete(db, () => db.transaction(() => { stats = fullSync(db); })());
-            console.log(`[memoryCrypto] 索引／加密状态同步完成（模式 ${isEnabled() ? 'on' : 'off'}）：加密 ${stats.sealed}、旧密文改 AAD ${stats.resealed}、无法解密 ${stats.undecryptable.length}`);
-            // off→on 时连同旧的明文两字组索引一起清掉；单纯换金钥／换模式重建索引也顺便清
+            console.log(`[memoryCrypto] 索引／加密狀態同步完成（模式 ${isEnabled() ? 'on' : 'off'}）：加密 ${stats.sealed}、舊密文改 AAD ${stats.resealed}、無法解密 ${stats.undecryptable.length}`);
+            // off→on 時連同舊的明文兩字組索引一起清掉；單純換金鑰／換模式重建索引也順便清
             scrubFile(db);
         } else {
             db.transaction(() => installTriggers(db))();
         }
     } catch (e) {
-        console.error('[memoryCrypto] 启动同步失败（已回滚）:', e.message);
+        console.error('[memoryCrypto] 啟動同步失敗（已回滾）:', e.message);
     }
 }
 

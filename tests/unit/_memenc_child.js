@@ -1,26 +1,26 @@
 'use strict';
-// memory_encryption.test.js 的子程序：需要「不同环境变数／重新开库」的情境（off→on 迁移、
-// 迁移中途失败、金钥轮替后用新金钥读）放在独立程序跑，避免模组单例（initDatabase、encryption）互相污染。
-// 用法：node tests/unit/_memenc_child.js <情境> [JSON 参数]；结果印成一行 @@RESULT@@<json>。
-// 档名以 _ 开头且不含 .test.，node --test 不会把它当测试档。
+// memory_encryption.test.js 的子程式：需要「不同環境變數／重新開庫」的情境（off→on 遷移、
+// 遷移中途失敗、金鑰輪替後用新金鑰讀）放在獨立程式跑，避免模組單例（initDatabase、encryption）互相汙染。
+// 用法：node tests/unit/_memenc_child.js <情境> [JSON 引數]；結果印成一行 @@RESULT@@<json>。
+// 檔名以 _ 開頭且不含 .test.，node --test 不會把它當測試檔。
 const fs = require('fs');
 
 const scenario = process.argv[2];
 const args = process.argv[3] ? JSON.parse(process.argv[3]) : {};
-// 产品码的 console 输出一律静音，只留结果行
+// 產品碼的 console 輸出一律靜音，只留結果行
 console.log = console.warn = console.error = console.info = () => {};
 
 const CORPUS = [
     '使用者住在新北三重',
     '媽媽下週三生日',
-    '喜歡看動畫不喜歡恐怖片',
-    '使用者在台積電上班',
+    '喜歡看動漫不喜歡恐怖片',
+    '使用者在臺積電上班',
     '動物園很好玩',
     '畫畫是興趣',
     '週末喜歡看電影，尤其是恐怖電影',
     '重要的事情要記得',
 ];
-const QUERIES = ['動畫', '三重', '媽媽生日', '恐怖電影', '我在哪上班'];
+const QUERIES = ['動漫', '三重', '媽媽生日', '恐怖電影', '我在哪上班'];
 
 function out(obj) { process.stdout.write('@@RESULT@@' + JSON.stringify(obj) + '\n'); }
 const rawPrepare = (db, sql) => Object.getPrototypeOf(db).prepare.call(db, sql);
@@ -36,8 +36,8 @@ function rawValues(db) {
     return o;
 }
 
-// 以「产品写入点的方式」写入一组资料：memory_fragments（content+quote）、memories（title+content）、
-// entity_profiles（四个加密栏位），全部经 sealField（off 时就是明文）
+// 以「產品寫入點的方式」寫入一組資料：memory_fragments（content+quote）、memories（title+content）、
+// entity_profiles（四個加密欄位），全部經 sealField（off 時就是明文）
 function seedAll(db) {
     const { sealField } = require('../../services/memoryCrypto');
     const s = sealField;
@@ -46,10 +46,10 @@ function seedAll(db) {
     const { normalizedContentHash } = require('../../services/scribeQuality');
     for (const t of CORPUS) insF.run(s('memory_fragments', 'content', t), s('memory_fragments', 'quote', '原話：' + t), normalizedContentHash('E', t));
     db.prepare(`INSERT INTO memories (title, content, tags, layer, status, weight, created_at)
-        VALUES (?, ?, '[]', 'episode', 'permanent', 5, datetime('now'))`).run(s('memories', 'title', '喜歡看動畫'), s('memories', 'content', '使用者從小就喜歡看動畫'));
+        VALUES (?, ?, '[]', 'episode', 'permanent', 5, datetime('now'))`).run(s('memories', 'title', '喜歡看動漫'), s('memories', 'content', '使用者從小就喜歡看動漫'));
     db.prepare(`INSERT INTO entity_profiles (name, category, facts, current_status, judgment, overview)
         VALUES ('E', 'person', ?, ?, ?, ?)`).run(s('entity_profiles', 'facts', '媽媽生日在三月'), s('entity_profiles', 'current_status', '最近在看恐怖電影'),
-        s('entity_profiles', 'judgment', '對動畫很有熱情'), s('entity_profiles', 'overview', '住在新北三重的上班族'));
+        s('entity_profiles', 'judgment', '對動漫很有熱情'), s('entity_profiles', 'overview', '住在新北三重的上班族'));
 }
 
 function topLists() {
@@ -82,11 +82,11 @@ function fileHas(path, words) {
 (async () => {
     const { initDatabase } = require('../../database');
     switch (scenario) {
-        // 在目前模式开库、写入语料，回传检索结果与原始值（给 on/off 排名比对、迁移前置用）
+        // 在目前模式開庫、寫入語料，回傳檢索結果與原始值（給 on/off 排名比對、遷移前置用）
         case 'seed': {
             const db = initDatabase();
             seedAll(db);
-            if (args.extra) {   // 大量资料：验证迁移后空闲页面／WAL 也不留明文
+            if (args.extra) {   // 大量資料：驗證遷移後空閒頁面／WAL 也不留明文
                 const { sealField } = require('../../services/memoryCrypto');
                 const ins = db.prepare(`INSERT INTO memory_fragments (type, entity, content, quote, source, status) VALUES ('fact','X',?,?,'chat','active')`);
                 db.transaction(() => {
@@ -99,14 +99,14 @@ function fileHas(path, words) {
             out({ top: topLists(), raw: rawValues(db), counts: counts(db) });
             break;
         }
-        // 只开库（跑 migration／启动同步），回传状态
+        // 只開庫（跑 migration／啟動同步），回傳狀態
         case 'open': {
             if (args.failEncryptAfter !== undefined) {
-                // 模拟迁移中途加密失败：第 N+1 次 encrypt 起抛 EncryptionError
+                // 模擬遷移中途加密失敗：第 N+1 次 encrypt 起拋 EncryptionError
                 const enc = require('../../encryption');
                 const orig = enc.encryption.encrypt.bind(enc.encryption);
                 let n = 0;
-                enc.encryption.encrypt = (...a) => { if (++n > args.failEncryptAfter) throw new enc.EncryptionError('模拟失败'); return orig(...a); };
+                enc.encryption.encrypt = (...a) => { if (++n > args.failEncryptAfter) throw new enc.EncryptionError('模擬失敗'); return orig(...a); };
             }
             const db = initDatabase();
             const res = {
@@ -124,7 +124,7 @@ function fileHas(path, words) {
                     .run(sealField('memory_fragments', 'content', args.write)).lastInsertRowid;
                 res.written = rawPrepare(db, 'SELECT content FROM memory_fragments WHERE id = ?').get(id).content;
             }
-            if (args.putRaw) {   // 把指定的原始密文写回某列（验证旧金钥密文还读得到）
+            if (args.putRaw) {   // 把指定的原始密文寫回某列（驗證舊金鑰密文還讀得到）
                 rawPrepare(db, 'UPDATE memory_fragments SET content = ? WHERE id = ?').run(args.putRaw.value, args.putRaw.id);
                 res.putRead = db.prepare('SELECT content FROM memory_fragments WHERE id = ?').get(args.putRaw.id).content;
             }

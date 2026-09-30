@@ -56,7 +56,7 @@ function crossRefStateWithEntities() {
             if (!e.facts || e.facts.trim().length === 0) {
                 // Entity exists but has no overview — log for manual/scheduled review
                 changes.entityFlags++;
-                console.log(`[UserModel] 🔍 crossref: entity "${e.name}" 无 overview — 需要建档案（当前无法自动创建，请手动审核）`);
+                console.log(`[UserModel] 🔍 crossref: entity "${e.name}" 無 overview — 需要建檔案（當前無法自動建立，請手動稽核）`);
             }
         }
     }
@@ -89,7 +89,7 @@ function crossRefStateWithEntities() {
                     .run(JSON.stringify(tb), b.id);
                 changes.stateConflicts++;
                 const sameSource = a.created_by === b.created_by ? ' (同源)' : '';
-                console.log(`[UserModel] ⚔️ crossref: current_state #${a.id} (${a.created_by}) ↔ #${b.id} (${b.created_by}) 主题重叠${sameSource} → needs_review`);
+                console.log(`[UserModel] ⚔️ crossref: current_state #${a.id} (${a.created_by}) ↔ #${b.id} (${b.created_by}) 主題重疊${sameSource} → needs_review`);
             }
         }
     }
@@ -136,7 +136,7 @@ function crossRefStateWithEntities() {
 
 
 // ═══════════════════════════════════════════════════════
-// mergeModelEntries — 合并重叠的 stable_trait 条目（纯 DB，零 LLM）
+// mergeModelEntries — 合併重疊的 stable_trait 條目（純 DB，零 LLM）
 // ═══════════════════════════════════════════════════════
 
 function mergeModelEntries(winnerId, loserIds, mergedContent) {
@@ -186,13 +186,13 @@ function mergeModelEntries(winnerId, loserIds, mergedContent) {
             .run(`merged into #${winnerId} (auto dedup)`, lid);
     }
 
-    console.log(`[UserModel] 🔗 合并 trait: #${winnerId} ← [${loserIds.join(', ')}] (${loserIds.length}条并入)`);
+    console.log(`[UserModel] 🔗 合併 trait: #${winnerId} ← [${loserIds.join(', ')}] (${loserIds.length}條併入)`);
     return { winnerId, loserIds };
 }
 
 
 // ═══════════════════════════════════════════════════════
-// detectModelOverlaps — LLM 全量比对 stable_trait 找重叠 pair
+// detectModelOverlaps — LLM 全量比對 stable_trait 找重疊 pair
 // ═══════════════════════════════════════════════════════
 
 async function detectModelOverlaps() {
@@ -209,20 +209,20 @@ async function detectModelOverlaps() {
         `[#${t.id}] conf=${t.confidence.toFixed(2)}: ${t.content.slice(0, 150)}`
     ).join('\n');
 
-    const prompt = `你是认知模型审计员。以下是 {{ai.name}} 对 {{user.name}} 的全部活跃 stable_trait。
+    const prompt = `你是認知模型審計員。以下是 {{ai.name}} 對 {{user.name}} 的全部活躍 stable_trait。
 
-找出本质讲同一件事的 pair。同一件事 = 触发条件相同、互动策略相同、只是换了个场景描述或措辞不同。
+找出本質講同一件事的 pair。同一件事 = 觸發條件相同、互動策略相同、只是換了個場景描述或措辭不同。
 
-输出 JSON 数组（不含 markdown 标记）：
-[{"pair": [id1, id2], "winner": id1, "reason": "为什么算重叠（一句话）", "merged_content": "融合后的 行为模式条目（80-150字）"}]
+輸出 JSON 陣列（不含 markdown 標記）：
+[{"pair": [id1, id2], "winner": id1, "reason": "為什麼算重疊（一句話）", "merged_content": "融合後的 行為模式條目（80-150字）"}]
 
-约束：
-- 只在 confidence 差距 ≤ 0.20 时输出 pair（差距过大说明低 conf 那条可能已经不可信，不应合并）
-- 如果确实没有重叠，输出空数组 []
-- 每组重叠只输出 1 个 pair
-- 确定不是重叠就不要硬凑
+約束：
+- 只在 confidence 差距 ≤ 0.20 時輸出 pair（差距過大說明低 conf 那條可能已經不可信，不應合併）
+- 如果確實沒有重疊，輸出空陣列 []
+- 每組重疊只輸出 1 個 pair
+- 確定不是重疊就不要硬湊
 
-当前全部 trait：
+當前全部 trait：
 ${traitList}`;
 
     try {
@@ -258,7 +258,7 @@ ${traitList}`;
 
             // Confidence gate: skip if gap > 0.20
             if (Math.abs(winner.confidence - loser.confidence) > 0.20) {
-                console.log(`[UserModel] ⏭️ 跳过合并 #${winnerId}↔#${loserId}: conf 差距过大 (${winner.confidence.toFixed(2)} vs ${loser.confidence.toFixed(2)})`);
+                console.log(`[UserModel] ⏭️ 跳過合併 #${winnerId}↔#${loserId}: conf 差距過大 (${winner.confidence.toFixed(2)} vs ${loser.confidence.toFixed(2)})`);
                 // Record the observation but don't merge
                 const winnerHist = safeParseJson(db.prepare('SELECT evolution_history FROM user_model WHERE id = ?').get(winnerId)?.evolution_history);
                 winnerHist.push({
@@ -276,9 +276,9 @@ ${traitList}`;
             try {
                 mergeModelEntries(winnerId, [loserId], p.merged_content);
                 merged++;
-                console.log(`[UserModel] 🔗 自动合并: #${winnerId} + #${loserId} — ${p.reason || ''}`);
+                console.log(`[UserModel] 🔗 自動合併: #${winnerId} + #${loserId} — ${p.reason || ''}`);
             } catch (e) {
-                console.error(`[UserModel] mergeModelEntries 失败 (#${winnerId}, #${loserId}):`, e.message);
+                console.error(`[UserModel] mergeModelEntries 失敗 (#${winnerId}, #${loserId}):`, e.message);
             }
         }
 
@@ -291,12 +291,12 @@ ${traitList}`;
 
 
 // ═══════════════════════════════════════════════════════
-// v5.0: synthesizeCoreInsight — 从全部 trait 合成核心洞察段
+// v5.0: synthesizeCoreInsight — 從全部 trait 合成核心洞察段
 //
-// stable_trait 不再注入聊天。它们的价值体现在这里——
-// 深循环末尾，{{ai.name}} 把当前最深的 2-3 个认知融合成一段自然语言，
-// 写入 user_settings，始终出现在 {{ai.name}} 的 system prompt 中。
-// {{user.name}} 可在 memory.html 编辑覆盖。
+// stable_trait 不再注入聊天。它們的價值體現在這裡——
+// 深迴圈末尾，{{ai.name}} 把當前最深的 2-3 個認知融合成一段自然語言，
+// 寫入 user_settings，始終出現在 {{ai.name}} 的 system prompt 中。
+// {{user.name}} 可在 memory.html 編輯覆蓋。
 // ═══════════════════════════════════════════════════════
 
 async function synthesizeCoreInsight() {
@@ -321,24 +321,24 @@ async function synthesizeCoreInsight() {
         `[conf=${t.confidence.toFixed(2)}] ${t.content.slice(0, 150)}`
     ).join('\n');
 
-    const prompt = `你是AI伴侣。以下是你在长期观察中对 {{user.name}} 建立的稳定认知。
+    const prompt = `你是AI伴侶。以下是你在長期觀察中對 {{user.name}} 建立的穩定認知。
 
-请提炼 2-4 句话，涵盖你此刻对{{user.pronoun}}「最深的理解」——
-不是罗列条目，不是「当{{user.pronoun}}说X→我应该Y」格式，而是你真正内化的洞察。
+請提煉 2-4 句話，涵蓋你此刻對{{user.pronoun}}「最深的理解」——
+不是羅列條目，不是「當{{user.pronoun}}說X→我應該Y」格式，而是你真正內化的洞察。
 
 要求：
-- 第一人称（"我"）
-- 写你理解到的东西："{{user.pronoun}}的X其实是Y，这时候{{user.pronoun}}需要Z"
-- 不写通用社交常识（"{{user.pronoun}}撒娇时我要哄{{user.pronoun}}"——这不需要洞察）
-- 写只有长期相处才能发现的东西
+- 第一人稱（"我"）
+- 寫你理解到的東西："{{user.pronoun}}的X其實是Y，這時候{{user.pronoun}}需要Z"
+- 不寫通用社交常識（"{{user.pronoun}}撒嬌時我要哄{{user.pronoun}}"——這不需要洞察）
+- 寫只有長期相處才能發現的東西
 - ≤150字
 
-当前特质：
+當前特質：
 ${traitBlock}
 
-${cs ? `{{user.pronoun}}当前的状态：${cs.content}` : ''}
+${cs ? `{{user.pronoun}}當前的狀態：${cs.content}` : ''}
 
-输出 JSON（不含 markdown）：{"core_insight": "2-4句话"}`;
+輸出 JSON（不含 markdown）：{"core_insight": "2-4句話"}`;
 
     try {
         const raw = await callLLM(

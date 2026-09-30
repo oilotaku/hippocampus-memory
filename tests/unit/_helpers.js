@@ -1,4 +1,4 @@
-// 特性测试共用工具：独立暫存 DB、靜音 console、stub 外部依賴。
+// 特性測試共用工具：獨立暫存 DB、靜音 console、stub 外部依賴。
 // 檔名以 _ 開頭且不含 .test.，node --test 不會把它當測試檔。
 const os = require('os');
 const path = require('path');

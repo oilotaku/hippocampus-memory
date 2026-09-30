@@ -1,5 +1,5 @@
 // =================================================================
-// 时间工具函数（某城市时区 UTC+8）
+// 時間工具函式（某城市時區 UTC+8）
 // =================================================================
 
 const getShanghaiTime = () => {
@@ -46,24 +46,24 @@ const getTimeOfDay = () => {
     }
 };
 
-// ── 写库用的时间：必须和 SQLite 的 datetime('now') 同格式 ──
-// datetime('now') 是 UTC 的 "YYYY-MM-DD HH:MM:SS"（空格分隔、不带 Z）。
-// 别用 new Date().toISOString()——那是 "2026-09-15T13:00:00.000Z"，
-// 跟 datetime('now') 做字符串比较时，会在第 11 个字符上按 'T'(0x54) vs ' '(0x20) 分出胜负，
-// 同一天的时间于是被静默地当成"更晚"，误差最多一天，而且一句报错都没有。
-// 一列里混进两种格式之后，就再也没法回答"这列到底是什么单位"——所以写入口统一放这里。
+// ── 寫庫用的時間：必須和 SQLite 的 datetime('now') 同格式 ──
+// datetime('now') 是 UTC 的 "YYYY-MM-DD HH:MM:SS"（空格分隔、不帶 Z）。
+// 別用 new Date().toISOString()——那是 "2026-09-15T13:00:00.000Z"，
+// 跟 datetime('now') 做字串比較時，會在第 11 個字元上按 'T'(0x54) vs ' '(0x20) 分出勝負，
+// 同一天的時間於是被靜默地當成"更晚"，誤差最多一天，而且一句報錯都沒有。
+// 一列裡混進兩種格式之後，就再也沒法回答"這列到底是什麼單位"——所以寫入口統一放這裡。
 const DAY_MS = 24 * 3600 * 1000;
 
 /** N 毫秒前，SQLite datetime('now') 同格式（UTC） */
 const sqlTimeAgo = (ms) => new Date(Date.now() - ms).toISOString().replace('T', ' ').slice(0, 19);
 
-/** 当前时间，同上格式 */
+/** 當前時間，同上格式 */
 const sqlNow = () => sqlTimeAgo(0);
 
-/** N 天前，同上格式——用来跟 datetime('now', '-N days') 对齐 */
+/** N 天前，同上格式——用來跟 datetime('now', '-N days') 對齊 */
 const sqlDaysAgo = (days) => sqlTimeAgo(days * DAY_MS);
 
-/** N 毫秒后，同上格式（有效期上限之类的未来时间点） */
+/** N 毫秒後，同上格式（有效期上限之類的未來時間點） */
 const sqlTimeAhead = (ms) => sqlTimeAgo(-ms);
 
 module.exports = { getShanghaiTime, getTimeOfDay, sqlNow, sqlTimeAgo, sqlDaysAgo, sqlTimeAhead, DAY_MS };

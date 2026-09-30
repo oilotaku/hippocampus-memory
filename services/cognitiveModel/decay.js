@@ -56,7 +56,7 @@ function processModelDecay() {
                 resolve_reason = 'auto-resolved: hard cap (12 active limit)', updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?`).run(s.id);
             changes.resolved++;
-            console.log(`[UserModel] 🧹 current_state #${s.id} 自动过期 (硬上限12条, created_by=${s.created_by})`);
+            console.log(`[UserModel] 🧹 current_state #${s.id} 自動過期 (硬上限12條, created_by=${s.created_by})`);
         }
     }
 
@@ -96,7 +96,7 @@ function processModelDecay() {
                 resolve_reason = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
                 .run(`auto-resolved: TTL ${category}/${ttlCat} (${ttlHours}h) exceeded after ${hoursSince.toFixed(1)}h`, s.id);
             changes.resolved++;
-            console.log(`[UserModel] ⏰ current_state #${s.id} 自动过期 (${category}/${ttlCat}, ${hoursSince.toFixed(0)}h/${ttlHours}h)`);
+            console.log(`[UserModel] ⏰ current_state #${s.id} 自動過期 (${category}/${ttlCat}, ${hoursSince.toFixed(0)}h/${ttlHours}h)`);
         }
     }
 
@@ -164,18 +164,18 @@ function processModelDecay() {
             db.prepare(`UPDATE user_model SET tags = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
                 .run(JSON.stringify(tags), t.id);
             changes.dormant++;
-            console.log(`[UserModel] 💤 trait #${t.id} 标记 dormant (${daysSince.toFixed(0)}天无证据)`);
+            console.log(`[UserModel] 💤 trait #${t.id} 標記 dormant (${daysSince.toFixed(0)}天無證據)`);
         } else if (daysSince <= 14 && tags.includes('dormant')) {
             const revived = tags.filter(tag => tag !== 'dormant');
             db.prepare(`UPDATE user_model SET tags = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
                 .run(JSON.stringify(revived), t.id);
             changes.revived++;
-            console.log(`[UserModel] 🌱 trait #${t.id} 复活 (${daysSince.toFixed(0)}天前有新证据)`);
+            console.log(`[UserModel] 🌱 trait #${t.id} 復活 (${daysSince.toFixed(0)}天前有新證據)`);
         }
     }
 
     if (changes.decayed + changes.resolved + changes.abandoned + changes.flagged + changes.dormant + changes.revived > 0) {
-        console.log(`[UserModel] 衰减处理: decayed=${changes.decayed} resolved=${changes.resolved} abandoned=${changes.abandoned} flagged=${changes.flagged} dormant=${changes.dormant} revived=${changes.revived}`);
+        console.log(`[UserModel] 衰減處理: decayed=${changes.decayed} resolved=${changes.resolved} abandoned=${changes.abandoned} flagged=${changes.flagged} dormant=${changes.dormant} revived=${changes.revived}`);
     }
 
     return changes;
@@ -198,7 +198,7 @@ function resolveExpiredStates() {
                OR last_evidence_at < datetime('now', '-14 days'))
     `).run();
     if (result.changes > 0) {
-        console.log(`[UserModel] 过期状态自动 resolved: ${result.changes}`);
+        console.log(`[UserModel] 過期狀態自動 resolved: ${result.changes}`);
     }
     return result.changes;
 }

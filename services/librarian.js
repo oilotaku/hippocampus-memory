@@ -3,8 +3,9 @@ const { encryption } = require('../encryption');
 const { fragmentsMatchQuery, memoriesMatchQuery } = require('./memoryCrypto');
 const { AI } = require('./nameResolver');
 const { toQueryTokens } = require('../utils/cjkTokenize');
+const { toTraditionalChars } = require('../utils/zhNormalize');
 
-// ── 检索排除源（从 memory_config.json 读取）──
+// ── 檢索排除源（從 memory_config.json 讀取）──
 const EXCLUDED_SOURCES = (() => {
     try {
         const cfg = require('../memory_config.json');
@@ -19,11 +20,11 @@ const EXCLUDE_SOURCE_SQL = EXCLUDED_SOURCES.length > 0
     : '';
 const EXCLUDE_SOURCE_PARAMS = EXCLUDED_SOURCES;
 
-// 时间衰减：半衰期由 emotional_weight 决定
-// ew ≥ 0.8 → λ=0.005 (140天半衰期)  重要记忆持久
-// ew ≥ 0.6 → λ=0.01  (70天半衰期)   标准
-// ew ≥ 0.4 → λ=0.02  (35天半衰期)   轻度记忆较快消退
-// ew  < 0.4 → λ=0.04  (17天半衰期)   琐碎信息快速沉底
+// 時間衰減：半衰期由 emotional_weight 決定
+// ew ≥ 0.8 → λ=0.005 (140天半衰期)  重要記憶持久
+// ew ≥ 0.6 → λ=0.01  (70天半衰期)   標準
+// ew ≥ 0.4 → λ=0.02  (35天半衰期)   輕度記憶較快消退
+// ew  < 0.4 → λ=0.04  (17天半衰期)   瑣碎資訊快速沉底
 function getDecayLambda(emotionalWeight) {
   const ew = emotionalWeight || 0.5;
   if (ew >= 0.8) return 0.005;
@@ -32,39 +33,39 @@ function getDecayLambda(emotionalWeight) {
   return 0.04;
 }
 
-// 分段衰减（Ombre Brain 启发）：前3天新鲜度主导，3天后情绪强度主导
-// 短线：timeWeight=0.7 emotionWeight=0.3 → 新鲜事优先浮现
-// 长线：timeWeight=0.3 emotionWeight=0.7 → 高ew记忆顽强存活，低ew琐碎快速沉底
-const STM_TIME_WEIGHT = 0.7;     // ≤3天：时间新鲜度权重
-const LTM_EMOTION_WEIGHT = 0.7;  // >3天：情绪强度权重
-const SEGMENT_DAYS = 3;          // 分段切换天数
+// 分段衰減（Ombre Brain 啟發）：前3天新鮮度主導，3天後情緒強度主導
+// 短線：timeWeight=0.7 emotionWeight=0.3 → 新鮮事優先浮現
+// 長線：timeWeight=0.3 emotionWeight=0.7 → 高ew記憶頑強存活，低ew瑣碎快速沉底
+const STM_TIME_WEIGHT = 0.7;     // ≤3天：時間新鮮度權重
+const LTM_EMOTION_WEIGHT = 0.7;  // >3天：情緒強度權重
+const SEGMENT_DAYS = 3;          // 分段切換天數
 
 function segmentedDecay(days, emotionalWeight) {
   const ew = emotionalWeight || 0.5;
   const lambda = getDecayLambda(ew);
-  // 纯时间衰减
+  // 純時間衰減
   const timeDecay = Math.exp(-lambda * days);
-  // 情绪保留：越高ew记忆越不容易被时间冲淡
+  // 情緒保留：越高ew記憶越不容易被時間沖淡
   const emotionRetention = 0.3 + ew * 0.7;
 
   if (days <= SEGMENT_DAYS) {
-    // 短期：新鲜度为王。近期发生的事即使分量轻也值得浮现
+    // 短期：新鮮度為王。近期發生的事即使分量輕也值得浮現
     return STM_TIME_WEIGHT * timeDecay + (1 - STM_TIME_WEIGHT) * emotionRetention;
   }
-  // 长期：情绪接管。3天后时间不再是最重要的——ew=0.8的记忆可能比ew=0.3的存活长4倍
+  // 長期：情緒接管。3天後時間不再是最重要的——ew=0.8的記憶可能比ew=0.3的存活長4倍
   return (1 - LTM_EMOTION_WEIGHT) * timeDecay + LTM_EMOTION_WEIGHT * emotionRetention;
 }
 
-// 召回分数底线：低于此值的碎片不返回（被衰减+低权重自然淘汰）
-// YantrikDB 思路：召回端多道关卡，信号弱时宁可空返回也不塞噪音
-const MIN_COMBINED_SCORE = 0.005;   // 综合分底线（0.002→0.005，过滤弱关联）
-const VEC_SIMILARITY_FLOOR = 0.22;  // 向量结果相似度地板，低于此值不进RRF
-const EPISODE_BOOST = 1.5;          // EbbingFlow思路：整合过的episode权重高于原始碎片
-const FTS5_ONLY_PENALTY = 0.7;      // FTS5单字匹配无向量交叉验证 → 降权（CJK单字索引太松）
+// 召回分數底線：低於此值的碎片不返回（被衰減+低權重自然淘汰）
+// YantrikDB 思路：召回端多道關卡，訊號弱時寧可空返回也不塞噪音
+const MIN_COMBINED_SCORE = 0.005;   // 綜合分底線（0.002→0.005，過濾弱關聯）
+const VEC_SIMILARITY_FLOOR = 0.22;  // 向量結果相似度地板，低於此值不進RRF
+const EPISODE_BOOST = 1.5;          // EbbingFlow思路：整合過的episode權重高於原始碎片
+const FTS5_ONLY_PENALTY = 0.7;      // FTS5單字匹配無向量交叉驗證 → 降權（CJK單字索引太鬆）
 
-// 新颖度惩罚：被访问越多次的碎片越往后让，防止通用碎片污染所有查询
+// 新穎度懲罰：被訪問越多次的碎片越往後讓，防止通用碎片汙染所有查詢
 // read_count=0→1.0, 35→0.46, 100→0.33, 500→0.27, 1000→0.25
-// 真正的通用碎片(500+)受影响较大，一般热门(100-)不误伤
+// 真正的通用碎片(500+)受影響較大，一般熱門(100-)不誤傷
 function noveltyPenalty(readCount) {
   if (!readCount || readCount <= 1) return 1.0;
   return 1 / (1 + Math.log10(readCount + 1));
@@ -79,15 +80,15 @@ function daysAgo(dateLabel) {
   } catch { return 365; }
 }
 
-// ── 实体聚合辅助：从用户消息中识别已知实体 → 按 entity_id 全量捞碎片 ──
-// 活动词 → 聚合实体（活动桶）映射。
-// 聚合实体（观影/音乐/共读）不是真人/地点/作品，而是按「活动类型」归堆的桶。
-// 它们的日常说法（看电影/听歌/看书）是闭集，放代码里做版本控制——
-// 不放 DB 别名，否则别名漏配或被迁移冲掉就会静默失效。
+// ── 實體聚合輔助：從使用者訊息中識別已知實體 → 按 entity_id 全量撈碎片 ──
+// 活動詞 → 聚合實體（活動桶）對映。
+// 聚合實體（觀影/音樂/共讀）不是真人/地點/作品，而是按「活動型別」歸堆的桶。
+// 它們的日常說法（看電影/聽歌/看書）是閉集，放程式碼裡做版本控制——
+// 不放 DB 別名，否則別名漏配或被遷移沖掉就會靜默失效。
 const ACTIVITY_ENTITY_KEYWORDS = [
-    { entityName: '观影', keywords: ['看电影', '电影', '影片', '看片', '观影'] },
-    { entityName: '音乐', keywords: ['听歌', '歌曲', '歌单', '听音乐', '音乐'] },
-    { entityName: '共读', keywords: ['看书', '读书', '阅读', '一起读', '共读'] },
+    { entityName: '觀影', keywords: ['看電影', '電影', '影片', '看片', '觀影', '观影', '看电影', '电影'] },
+    { entityName: '音樂', keywords: ['聽歌', '歌曲', '歌單', '聽音樂', '音樂', '音乐', '听歌', '歌单', '听音乐'] },
+    { entityName: '共讀', keywords: ['看書', '讀書', '閱讀', '一起讀', '共讀', '共读', '看书', '读书', '阅读', '一起读'] },
 ];
 
 async function lookupEntityIds(userMessage) {
@@ -98,47 +99,49 @@ async function lookupEntityIds(userMessage) {
     `).all();
 
     const ids = [];
-    const msgLower = userMessage.toLowerCase();
+    // 簡繁正規化只用於比對：實體名／別名可能是簡體（舊資料）或繁體，使用者訊息亦然
+    const msgLower = toTraditionalChars(userMessage).toLowerCase();
+    const normName = (v) => toTraditionalChars(v).toLowerCase();
 
-    // 1. 活动词 → 聚合实体（代码级词表，先于名称/别名匹配）
+    // 1. 活動詞 → 聚合實體（程式碼級詞表，先於名稱/別名匹配）
     for (const act of ACTIVITY_ENTITY_KEYWORDS) {
-        if (act.keywords.some(k => k.length >= 2 && msgLower.includes(k.toLowerCase()))) {
-            const entity = entities.find(e => e.name === act.entityName);
+        if (act.keywords.some(k => k.length >= 2 && msgLower.includes(normName(k)))) {
+            const entity = entities.find(e => normName(e.name) === normName(act.entityName));
             if (entity) ids.push(entity.id);
         }
     }
 
-    // 2. 标准名匹配 + 别名匹配（真实人/地点/作品）
+    // 2. 標準名匹配 + 別名匹配（真實人/地點/作品）
     for (const e of entities) {
-        if (msgLower.includes(e.name.toLowerCase())) {
+        if (msgLower.includes(normName(e.name))) {
             ids.push(e.id);
             continue;
         }
         let aliasList = [];
         try { aliasList = JSON.parse(e.aliases || '[]'); } catch (_) {}
-        if (aliasList.some(a => a && a.length >= 2 && msgLower.includes(a.toLowerCase()))) {
+        if (aliasList.some(a => a && a.length >= 2 && msgLower.includes(normName(a)))) {
             ids.push(e.id);
         }
     }
 
-    // 3. 语义降级：关键词零命中时，用向量匹配实体名称（处理变体/别称）
+    // 3. 語義降級：關鍵詞零命中時，用向量匹配實體名稱（處理變體/別稱）
     if (ids.length === 0 && userMessage.trim().length >= 2) {
         try {
             const { queryEntityByText } = require('./entityEmbedding');
             const semMatches = await queryEntityByText(userMessage, 3);
             for (const m of semMatches) {
                 ids.push(m.entity_id);
-                console.log(`Librarian: 语义实体匹配 "${m.entity_name}" sim=${m.similarity} ← "${userMessage.slice(0, 40)}"`);
+                console.log(`Librarian: 語義實體匹配 "${m.entity_name}" sim=${m.similarity} ← "${userMessage.slice(0, 40)}"`);
             }
         } catch (e) {
-            // entityEmbedding 尚未随本仓库提供时（MODULE_NOT_FOUND）静默降级，其他错误才打印
+            // entityEmbedding 尚未隨本倉庫提供時（MODULE_NOT_FOUND）靜默降級，其他錯誤才打印
             if (e.code !== 'MODULE_NOT_FOUND') {
-                console.error('Librarian: 语义实体匹配失败:', e.message);
+                console.error('Librarian: 語義實體匹配失敗:', e.message);
             }
         }
     }
 
-    // 去重（活动词可能同时命中名称匹配）
+    // 去重（活動詞可能同時命中名稱匹配）
     return [...new Set(ids)];
 }
 
@@ -162,32 +165,32 @@ function getEntityFragments(entityIds, limit = 10) {
 }
 
 // =================================================================
-// 意图路由：规则分类查询意图（ebbingflow 同款方案）
-// 优先级：fact > long_term > summary → 默认 semantic
+// 意圖路由：規則分類查詢意圖（ebbingflow 同款方案）
+// 優先順序：fact > long_term > summary → 預設 semantic
 // =================================================================
 
 function classifyIntent(userMessage) {
   const q = (userMessage || '').trim();
   if (!q) return 'semantic';
 
-  // Long-term: 跨会话、长期记忆回溯（优先于fact——"以前看过什么书"是记忆回溯而非事实查询）
-  const longTermMarkers = ['之前', '以前', '上次', '那次', '曾经', '长期', '一直', '还记得', '主线', '脉络'];
+  // Long-term: 跨會話、長期記憶回溯（優先於fact——"以前看過什麼書"是記憶回溯而非事實查詢）
+  const longTermMarkers = ['之前', '以前', '上次', '那次', '曾經', '長期', '一直', '還記得', '主線', '脈絡', '曾经', '长期', '还记得', '主线', '脉络'];
   if (longTermMarkers.some(m => q.includes(m))) {
     return 'long_term';
   }
 
-  // Summary: 近期总结、状态回顾
-  const summaryMarkers = ['最近', '这段时间', '这阵子', '近来', '进展', '总结', '回顾', '我们聊了什么'];
+  // Summary: 近期總結、狀態回顧
+  const summaryMarkers = ['最近', '這段時間', '這陣子', '近來', '進展', '總結', '回顧', '我們聊了什麼', '这段时间', '这阵子', '近来', '进展', '总结', '回顾', '我们聊了什么'];
   if (summaryMarkers.some(m => q.includes(m))) {
     return 'summary';
   }
 
-  // Fact: 精确事实查询（数字、时间、地点、价格等）——排在long_term/summary之后，避免误吞记忆回溯类查询
+  // Fact: 精確事實查詢（數字、時間、地點、價格等）——排在long_term/summary之後，避免誤吞記憶回溯類查詢
   const factMarkers = [
-    '多少', '哪里', '什么时候', '谁', '有没有', '电话', '地址', '日期',
-    '几点', '哪个', '多少钱', '为什么', '怎么', '什么'
+    '多少', '哪裡', '什麼時候', '誰', '有沒有', '電話', '地址', '日期',
+    '幾點', '哪個', '多少錢', '為什麼', '怎麼', '什麼', '哪里', '什么时候', '谁', '有没有', '电话', '几点', '哪个', '多少钱', '为什么', '怎么', '什么'
   ];
-  const numericFactRe = /\d+\s*(元|块|万|亿|%|岁|年|月|日|号|点|分钟|小时|天|个)/;
+  const numericFactRe = /\d+\s*(元|塊|萬|億|%|歲|年|月|日|號|點|分鐘|小時|天|個)|\d+\s*(元|块|万|亿|%|岁|年|月|日|号|点|分钟|小时|天|个)/;
   if (factMarkers.some(m => q.includes(m)) || numericFactRe.test(q)) {
     return 'fact';
   }
@@ -195,20 +198,20 @@ function classifyIntent(userMessage) {
   return 'semantic';
 }
 
-// 按空格/标点分词，过滤虚词和单字
+// 按空格/標點分詞，過濾虛詞和單字
 function tokenize(userMessage) {
   if (!userMessage) return [];
-  const stopWords = new Set(['的', '了', '在', '是', '我', '你', '他', '她', '它', '们', '和', '与', '或', '但', '而', '也', '都', '就', '把', '被', '让', '给', '从', '到', '对', '为', '以', '及', '等', '这', '那', '有', '没', '不', '很', '太', '更', '最', '会', '能', '要', '想', '说', '去', '来', '看', '做', '用', '中', '上', '下', '里', '外']);
+  const stopWords = new Set(['的', '了', '在', '是', '我', '你', '他', '她', '它', '們', '和', '與', '或', '但', '而', '也', '都', '就', '把', '被', '讓', '給', '從', '到', '對', '為', '以', '及', '等', '這', '那', '有', '沒', '不', '很', '太', '更', '最', '會', '能', '要', '想', '說', '去', '來', '看', '做', '用', '中', '上', '下', '裡', '外', '们', '与', '让', '给', '从', '对', '为', '这', '没', '会', '说', '来', '里']);
   return userMessage.trim()
     .split(/[\s,，。.！!？?、；;：:\n\r]+/)
     .filter(t => t.length >= 2 && !stopWords.has(t));
 }
 
-// CJK 两字组切分（memory_fragments_fts / memories_fts 的索引是重叠两字组，见 utils/cjkTokenize.js）
-// 停用字：整个 token 全由停用字组成（单字，或两字都是）时丢弃，避免「在哪」「什么」之类噪声
-const CJK_STOP_CHARS = new Set(['的','了','在','是','我','你','他','她','它','们','和','与','或','但','而','也','都','就','把','被','让','给','从','到','对','为','以','及','等','这','那','有','没','不','很','太','更','最','会','能','要','想','说','去','来','看','做','用','中','上','下','里','外','吗','呢','吧','啊','哦','嗯','啦','嘛','哈','呀','哇','呵','嗨','哟','嘿','噢',
-  // 繁体对应
-  '們','與','為','對','沒','會','說','來','裡','裏','過','著','嗎','喔','哪','麼','么','什']);
+// CJK 兩字組切分（memory_fragments_fts / memories_fts 的索引是重疊兩字組，見 utils/cjkTokenize.js）
+// 停用字：整個 token 全由停用字組成（單字，或兩字都是）時丟棄，避免「在哪」「什麼」之類噪聲
+const CJK_STOP_CHARS = new Set(['的','了','在','是','我','你','他','她','它','們','和','與','或','但','而','也','都','就','把','被','讓','給','從','到','對','為','以','及','等','這','那','有','沒','不','很','太','更','最','會','能','要','想','說','去','來','看','做','用','中','上','下','裡','外','嗎','呢','吧','啊','哦','嗯','啦','嘛','哈','呀','哇','呵','嗨','喲','嘿','噢',
+  // 繁體對應
+  '們','與','為','對','沒','會','說','來','裡','裡','過','著','嗎','喔','哪','麼','麼','什', '们', '与', '让', '给', '从', '对', '为', '这', '没', '会', '说', '来', '里', '吗', '哟', '裏', '么']);
 function tokenizeCJK(userMessage) {
   return toQueryTokens(userMessage, { stopChars: CJK_STOP_CHARS, minWordLen: 2 });
 }
@@ -220,11 +223,11 @@ function searchFragments(userMessage, limit = 8) {
     const db = getDb();
     const results = [];
 
-    // 查 memory_fragments — CJK单字粒度索引
+    // 查 memory_fragments — CJK單字粒度索引
     const cjkTokens = tokenizeCJK(userMessage);
     if (cjkTokens.length > 0) {
       try {
-        // W3：on → 内容栏用盲 token（HMAC）查、entity 栏用明文两字组；off → 与原本相同
+        // W3：on → 內容欄用盲 token（HMAC）查、entity 欄用明文兩字組；off → 與原本相同
         const matchStr = fragmentsMatchQuery(cjkTokens);
         const rows = db.prepare(`
           SELECT mf.id, mf.content, mf.emotional_weight AS weight,
@@ -242,14 +245,14 @@ function searchFragments(userMessage, limit = 8) {
         `).all(matchStr, ...EXCLUDE_SOURCE_PARAMS, limit);
         results.push(...rows);
       } catch(e) {
-        console.error('Librarian memory_fragments查询失败:', e.message);
+        console.error('Librarian memory_fragments查詢失敗:', e.message);
       }
     }
 
-    // v5.3: 重新启用 episode（memories 表）FTS5 检索
-    // v5.0 退役旧冥想盆是因为 episode 来源（旧知识树）已废弃
-    // v5.3 consolidateCategory 改为从 entity_profiles 星座产出，episode 质量可靠
-    // memories_fts 同样是两字组索引（v104），与碎片通道共用 token
+    // v5.3: 重新啟用 episode（memories 表）FTS5 檢索
+    // v5.0 退役舊冥想盆是因為 episode 來源（舊知識樹）已廢棄
+    // v5.3 consolidateCategory 改為從 entity_profiles 星座產出，episode 質量可靠
+    // memories_fts 同樣是兩字組索引（v104），與碎片通道共用 token
     if (cjkTokens.length > 0) {
       try {
         const matchStr = memoriesMatchQuery(cjkTokens);
@@ -269,11 +272,11 @@ function searchFragments(userMessage, limit = 8) {
         `).all(matchStr, limit);
         results.push(...rows);
       } catch(e) {
-        console.error('Librarian memories查询失败:', e.message);
+        console.error('Librarian memories查詢失敗:', e.message);
       }
     }
 
-    // 合并去重，按 FTS5 rank（相关性）为主、weight 为次，取前limit条
+    // 合併去重，按 FTS5 rank（相關性）為主、weight 為次，取前limit條
     const seen = new Set();
     return results
       .filter(r => {
@@ -282,17 +285,17 @@ function searchFragments(userMessage, limit = 8) {
         seen.add(key);
         return true;
       })
-      .sort((a, b) => (a.rank || 0) - (b.rank || 0))   // FTS5 rank: 越小越相关
+      .sort((a, b) => (a.rank || 0) - (b.rank || 0))   // FTS5 rank: 越小越相關
       .slice(0, limit);
 
   } catch(e) {
-    console.error('Librarian查询失败:', e.message);
+    console.error('Librarian查詢失敗:', e.message);
     return [];
   }
 }
 
 function formatForContext(fragments) {
-  // W3：解密失败的碎片 content 为 null——略过，不把 null／密文送进 prompt
+  // W3：解密失敗的碎片 content 為 null——略過，不把 null／密文送進 prompt
   if (fragments) fragments = fragments.filter(f => f && f.content !== null && f.content !== undefined);
   if (!fragments || fragments.length === 0) return null;
 
@@ -306,26 +309,26 @@ function formatForContext(fragments) {
     console.log(`Librarian命中: [#${f.id}/${f.source_table}] ${preview}...`);
 
     if (f.source_table === 'fragment') {
-      try { incRead.run(f.id); } catch (e) { console.error(`Librarian: read_count更新失败 #${f.id}:`, e.message); }
+      try { incRead.run(f.id); } catch (e) { console.error(`Librarian: read_count更新失敗 #${f.id}:`, e.message); }
     } else if (f.source_table === 'memory') {
-      try { touchMemory.run(f.id); } catch (e) { console.error(`Librarian: last_accessed更新失败 #${f.id}:`, e.message); }
+      try { touchMemory.run(f.id); } catch (e) { console.error(`Librarian: last_accessed更新失敗 #${f.id}:`, e.message); }
       try { f.content = encryption.decryptForDisplay(f.content); } catch (_) {}
     }
 
     return `- ${f.content} ${date}`.trim();
   });
 
-  return `※ ${AI.name}的记忆碎片\n${lines.join('\n')}`;
+  return `※ ${AI.name}的記憶碎片\n${lines.join('\n')}`;
 }
 
 // =================================================================
-// 混合检索：FTS5（关键词）+ 向量（语义），RRF 融合
+// 混合檢索：FTS5（關鍵詞）+ 向量（語義），RRF 融合
 // =================================================================
 
 async function searchHybrid(userMessage, limit = 6) {
   if (!userMessage || userMessage.trim().length === 0) return [];
 
-  // 话题工作记忆 Boost
+  // 話題工作記憶 Boost
   let boostMap = new Map();
   try {
     const { getBoostMap } = require('./workingMemory');
@@ -334,23 +337,23 @@ async function searchHybrid(userMessage, limit = 6) {
     console.error('Hybrid: workingMemory boost failed:', e.message);
   }
 
-  // 意图路由：分类查询意图，调整后续检索权重
+  // 意圖路由：分類查詢意圖，調整後續檢索權重
   const intent = classifyIntent(userMessage);
   if (intent !== 'semantic') {
-    console.log(`Hybrid: 意图路由 → ${intent} (query: "${userMessage.slice(0, 50)}")`);
+    console.log(`Hybrid: 意圖路由 → ${intent} (query: "${userMessage.slice(0, 50)}")`);
   }
 
-  // 1. FTS5 关键词检索（同步）
+  // 1. FTS5 關鍵詞檢索（同步）
   const ftsResults = searchFragments(userMessage, limit);
 
-  // 1.5 实体聚合：识别消息中的已知实体 → 按 entity_id 全量捞碎片（实体时间线）
+  // 1.5 實體聚合：識別訊息中的已知實體 → 按 entity_id 全量撈碎片（實體時間線）
   const entityIds = await lookupEntityIds(userMessage);
   const entityResults = entityIds.length > 0 ? getEntityFragments(entityIds, limit) : [];
   if (entityResults.length > 0) {
-    console.log(`Hybrid: 实体聚合命中 ${entityResults.length} 条 (entity_ids=${entityIds.join(',')}) → "${userMessage.slice(0, 40)}"`);
+    console.log(`Hybrid: 實體聚合命中 ${entityResults.length} 條 (entity_ids=${entityIds.join(',')}) → "${userMessage.slice(0, 40)}"`);
   }
 
-  // 2. 向量语义检索（异步）—— 多取 3x 补偿 ChromaDB stale 碎片
+  // 2. 向量語義檢索（非同步）—— 多取 3x 補償 ChromaDB stale 碎片
   const VEC_OVERFETCH = 3;
   let vecResults = [];
   try {
@@ -360,10 +363,10 @@ async function searchHybrid(userMessage, limit = 6) {
     console.error('Hybrid: vector search failed:', e.message);
   }
 
-  // 向量相似度地板：弱关联不进RRF（YantrikDB思路——信号弱则不参与融合）
+  // 向量相似度地板：弱關聯不進RRF（YantrikDB思路——訊號弱則不參與融合）
   const filteredVec = vecResults.filter(v => (v._similarity || 0) >= VEC_SIMILARITY_FLOOR);
   if (filteredVec.length < vecResults.length) {
-    console.log(`Hybrid: 向量地板过滤 ${vecResults.length - filteredVec.length}/${vecResults.length} 条弱结果 (sim<${VEC_SIMILARITY_FLOOR})`);
+    console.log(`Hybrid: 向量地板過濾 ${vecResults.length - filteredVec.length}/${vecResults.length} 條弱結果 (sim<${VEC_SIMILARITY_FLOOR})`);
   }
 
   // 3. RRF 融合
@@ -371,7 +374,7 @@ async function searchHybrid(userMessage, limit = 6) {
   const rrfScores = new Map();
   const itemMap = new Map();
 
-  // 添加 FTS5 排名（意图权重调整）
+  // 新增 FTS5 排名（意圖權重調整）
   const ftsWeight = intent === 'fact' ? 1.5 : intent === 'summary' ? 0.6 : intent === 'long_term' ? 0.7 : 1.0;
   ftsResults.forEach((item, rank) => {
     const key = `${item.source_table}-${item.id}`;
@@ -387,9 +390,9 @@ async function searchHybrid(userMessage, limit = 6) {
     }
   });
 
-  // 添加实体聚合排名（固定中位 RRF，约等于 FTS5 rank 3-5）
-  // 实体时间线是"关于这个人的所有碎片"，不是语义匹配——给中等权重，不冲淡主检索
-  const ENTITY_RRF_RANK = 4;  // 虚拟排名，rrf = 1/(60+4+1) ≈ 0.015
+  // 新增實體聚合排名（固定中位 RRF，約等於 FTS5 rank 3-5）
+  // 實體時間線是"關於這個人的所有碎片"，不是語義匹配——給中等權重，不沖淡主檢索
+  const ENTITY_RRF_RANK = 4;  // 虛擬排名，rrf = 1/(60+4+1) ≈ 0.015
   entityResults.forEach((item, i) => {
     const key = `${item.source_table}-${item.id}`;
     const rrf = 1 / (kRRF + ENTITY_RRF_RANK + i);
@@ -410,14 +413,14 @@ async function searchHybrid(userMessage, limit = 6) {
     }
   });
 
-  // 添加向量排名（意图权重调整 + episode加权）
+  // 新增向量排名（意圖權重調整 + episode加權）
   const episodeBoost = intent === 'summary' || intent === 'long_term' ? 2.0 : intent === 'fact' ? 1.0 : EPISODE_BOOST;
   const vecWeight = intent === 'summary' ? 1.4 : intent === 'long_term' ? 1.3 : intent === 'fact' ? 0.5 : 1.0;
   filteredVec.forEach((item, rank) => {
     const sourceTable = item._table === 'fragments' ? 'fragment' : 'memory';
     const key = `${sourceTable}-${item.id || item.memory_id}`;
     let rrf = 1 / (kRRF + rank + 1);
-    if (sourceTable === 'memory') rrf *= episodeBoost;  // episode 加权
+    if (sourceTable === 'memory') rrf *= episodeBoost;  // episode 加權
     rrfScores.set(key, (rrfScores.get(key) || 0) + rrf * vecWeight);
     if (!itemMap.has(key)) {
       itemMap.set(key, {
@@ -446,13 +449,13 @@ async function searchHybrid(userMessage, limit = 6) {
     }
   });
 
-  // 如果没有任何结果通过质量关卡，返回空（YantrikDB思路——宁可空返回）
+  // 如果沒有任何結果通過質量關卡，返回空（YantrikDB思路——寧可空返回）
   if (rrfScores.size === 0) {
-    console.log('Hybrid: 无结果通过质量关卡，返回空');
+    console.log('Hybrid: 無結果通過質量關卡，返回空');
     return [];
   }
 
-  // 按 RRF 分数降序排列
+  // 按 RRF 分數降序排列
   const ranked = Array.from(rrfScores.entries())
     .sort((a, b) => b[1] - a[1])
     .map(([key, rrf]) => {
@@ -469,7 +472,7 @@ async function searchHybrid(userMessage, limit = 6) {
       if (ftsRank >= 0 && vecRank >= 0) confidence = 'high';
       else if (item._similarity > 0.35) confidence = 'high';
       else if (rrf > 0.015 || item._similarity > 0.2) confidence = 'medium';
-      else if (isEntity) confidence = 'medium';  // 实体聚合——确定性高但不是语义匹配
+      else if (isEntity) confidence = 'medium';  // 實體聚合——確定性高但不是語義匹配
       else confidence = 'low';
 
       let source = ftsRank >= 0 && vecRank >= 0 ? 'BOTH'
@@ -477,7 +480,7 @@ async function searchHybrid(userMessage, limit = 6) {
         : isEntity && vecRank >= 0 ? 'ENTITY+VEC'
         : isEntity ? 'ENTITY'
         : ftsRank >= 0 ? 'FTS5' : 'VEC';
-      // FTS5单字索引太松散，无向量交叉验证 → 降权（fact意图不需要交叉验证）
+      // FTS5單字索引太鬆散，無向量交叉驗證 → 降權（fact意圖不需要交叉驗證）
       if (source === 'FTS5' && intent !== 'fact') {
         rrf *= FTS5_ONLY_PENALTY;
         source = 'FTS5*';
@@ -485,17 +488,17 @@ async function searchHybrid(userMessage, limit = 6) {
       return { ...item, _rrf: rrf, _confidence: confidence, _source: source };
     });
 
-  // 时间衰减（分段：前3天新鲜度主导，3天后情绪主导）+ 重要性 + 新颖度
+  // 時間衰減（分段：前3天新鮮度主導，3天後情緒主導）+ 重要性 + 新穎度
   const decayed = ranked.map(item => {
     const dateForDecay = item._created_at || item.date_label;
     const days = daysAgo(dateForDecay);
     const ew = item.emotional_weight || 0.5;
-    const actualDays = intent === 'long_term' ? days * 0.4 : days;  // long_term 意图下时间走得慢
+    const actualDays = intent === 'long_term' ? days * 0.4 : days;  // long_term 意圖下時間走得慢
     const decay = segmentedDecay(actualDays, ew);
     const importance = 0.4 + ew * 0.6;
     const novelty = noveltyPenalty(item._read_count || 0);
     const wmBoost = boostMap.get(`${item.source_table}-${item.id}`) || 1.0;
-    // 时效加权：语义相近时，新记忆优先。≤1天的×1.3，≤3天×1.15，≤7天×1.05，之后无加成
+    // 時效加權：語義相近時，新記憶優先。≤1天的×1.3，≤3天×1.15，≤7天×1.05，之後無加成
     const recencyBoost = days <= 1 ? 1.3 : days <= 3 ? 1.15 : days <= 7 ? 1.05 : 1.0;
     const combinedScore = item._rrf * decay * importance * novelty * wmBoost * recencyBoost;
     return { ...item, _rrf: combinedScore, _decay: decay, _importance: importance, _novelty: novelty, _daysAgo: Math.round(days), _wmBoost: wmBoost, _recencyBoost: recencyBoost };
@@ -503,11 +506,11 @@ async function searchHybrid(userMessage, limit = 6) {
   .filter(item => item._rrf >= MIN_COMBINED_SCORE)
   .sort((a, b) => b._rrf - a._rrf);
 
-  // 直接取 top-N，不强制保留向量结果（让质量说话，不做多样性配额）
+  // 直接取 top-N，不強制保留向量結果（讓質量說話，不做多樣性配額）
   const finalResults = decayed.slice(0, limit);
 
-  // 随机浮现（Ombre Brain 启发）：检索结果太少时，偶尔「突然想起」无关的旧事
-  // 让从未被召回过的记忆也有机会浮出水面，模拟真人没来由的联想
+  // 隨機浮現（Ombre Brain 啟發）：檢索結果太少時，偶爾「突然想起」無關的舊事
+  // 讓從未被召回過的記憶也有機會浮出水面，模擬真人沒來由的聯想
   if (finalResults.length < 3 && Math.random() < 0.4) {
     try {
       const db = getDb();
@@ -529,7 +532,7 @@ async function searchHybrid(userMessage, limit = 6) {
         finalResults.push({
           ...f,
           weight: ew,
-          _rrf: 0.002,  // 极低分，排在最后但不触发MIN_COMBINED_SCORE过滤
+          _rrf: 0.002,  // 極低分，排在最後但不觸發MIN_COMBINED_SCORE過濾
           _confidence: 'low',
           _source: 'FLOAT',
           _isFloated: true,
@@ -539,10 +542,10 @@ async function searchHybrid(userMessage, limit = 6) {
 
       if (floatFrags.length > 0) {
         const previews = floatFrags.map(f => f.content.slice(0, 30)).join(' | ');
-        console.log(`Hybrid: 随机浮现 ${floatFrags.length} 条旧碎片 (${previews})`);
+        console.log(`Hybrid: 隨機浮現 ${floatFrags.length} 條舊碎片 (${previews})`);
       }
     } catch (e) {
-      console.error('Hybrid: 随机浮现查询失败:', e.message);
+      console.error('Hybrid: 隨機浮現查詢失敗:', e.message);
     }
   }
 
@@ -560,7 +563,7 @@ async function searchHybrid(userMessage, limit = 6) {
       const before = finalResults.length;
       const filtered = finalResults.filter(r => r.source_table !== 'fragment' || !excludedFragIds.has(r.id));
       if (filtered.length < before) {
-        console.log(`Hybrid: 排除源过滤 ${before - filtered.length} 条 (${EXCLUDED_SOURCES.join(',')})`);
+        console.log(`Hybrid: 排除源過濾 ${before - filtered.length} 條 (${EXCLUDED_SOURCES.join(',')})`);
       }
       return filtered;
     }
@@ -569,18 +572,18 @@ async function searchHybrid(userMessage, limit = 6) {
   return finalResults;
 }
 
-// 计算引用权限（确定性规则，不依赖 LLM）
+// 計算引用許可權（確定性規則，不依賴 LLM）
 function computePermission(f) {
   const days = f._daysAgo ?? f._daysOld ?? 999;
   const conf = f._confidence || 'low';
   const src = f._source || '?';
 
-  if (f._isFloated) return '仅联想';
-  if (days >= 90) return '仅联想';
-  if (conf === 'low') return '仅联想';
+  if (f._isFloated) return '僅聯想';
+  if (days >= 90) return '僅聯想';
+  if (conf === 'low') return '僅聯想';
   if (conf === 'high' && days < 30 && src === 'BOTH') return '可引用';
   // medium confidence, or 30-90 days, or single-source
-  return '需谨慎';
+  return '需謹慎';
 }
 
 function formatHybridContext(fragments) {
@@ -590,7 +593,7 @@ function formatHybridContext(fragments) {
   const incRead = db.prepare("UPDATE memory_fragments SET read_count = COALESCE(read_count, 0) + 1, last_accessed_at = datetime('now') WHERE id = ?");
   const touchMemory = db.prepare("UPDATE memories SET last_accessed_at = datetime('now') WHERE id = ?");
 
-  // v5.5: 先处理全部碎片（日志+解密+read_count），同时收集 entity 归属
+  // v5.5: 先處理全部碎片（日誌+解密+read_count），同時收集 entity 歸屬
   const processed = [];
   for (const f of fragments) {
     const permission = computePermission(f);
@@ -610,9 +613,9 @@ function formatHybridContext(fragments) {
     console.log(`Hybrid命中: [#${f.id}/${f.source_table}] ${srcTag} ew=${ew} ${daysStr} [${permission}] ${preview}...`);
 
     if (f.source_table === 'fragment') {
-      try { incRead.run(f.id); } catch (e) { console.error(`Librarian: read_count更新失败 #${f.id}:`, e.message); }
+      try { incRead.run(f.id); } catch (e) { console.error(`Librarian: read_count更新失敗 #${f.id}:`, e.message); }
     } else if (f.source_table === 'memory') {
-      try { touchMemory.run(f.id); } catch (e) { console.error(`Librarian: last_accessed更新失败 #${f.id}:`, e.message); }
+      try { touchMemory.run(f.id); } catch (e) { console.error(`Librarian: last_accessed更新失敗 #${f.id}:`, e.message); }
       try { f.content = encryption.decryptForDisplay(f.content); } catch (_) {}
     }
 
@@ -623,10 +626,10 @@ function formatHybridContext(fragments) {
     });
   }
 
-  // v5.5: 按实体分组碎片，防止不同人的记忆平铺在一起导致 LLM 交叉污染
+  // v5.5: 按實體分組碎片，防止不同人的記憶平鋪在一起導致 LLM 交叉汙染
   if (processed.length <= 1) return processed.map(p => p.line).join('\n');
 
-  // 查每条碎片的 entity 归属
+  // 查每條碎片的 entity 歸屬
   const fragIds = processed.filter(p => p.sourceTable === 'fragment').map(p => p.id);
   const memIds = processed.filter(p => p.sourceTable === 'memory').map(p => p.id);
 
@@ -656,7 +659,7 @@ function formatHybridContext(fragments) {
     }
   }
 
-  // 按 entity 分组
+  // 按 entity 分組
   const groups = new Map(); // entity name → [lines]
   const ungrouped = [];
   for (const p of processed) {
@@ -670,20 +673,20 @@ function formatHybridContext(fragments) {
     }
   }
 
-  // 组装输出：分组头 + 碎片，ungrouped 放最后
+  // 組裝輸出：分組頭 + 碎片，ungrouped 放最後
   const output = [];
   const personEntities = [];
 
   for (const [entityName, entityLines] of groups) {
-    // 判定该 entity 的 category（用于跨人物告警）
+    // 判定該 entity 的 category（用於跨人物告警）
     const cat = db.prepare('SELECT category FROM entity_profiles WHERE name = ?').get(entityName);
     if (cat && cat.category === 'person') personEntities.push(entityName);
 
     if (groups.size === 1 && ungrouped.length === 0) {
-      // 单一实体，不加分组头（避免无意义的噪音）
+      // 單一實體，不加分組頭（避免無意義的噪音）
       output.push(...entityLines);
     } else {
-      output.push(`【关于 ${entityName}】`);
+      output.push(`【關於 ${entityName}】`);
       output.push(...entityLines);
     }
   }
@@ -692,9 +695,9 @@ function formatHybridContext(fragments) {
     output.push(...ungrouped);
   }
 
-  // v5.5: 跨人物告警——同一轮注入涉及 >=2 个 person 实体时提醒模型不要混为一谈
+  // v5.5: 跨人物告警——同一輪注入涉及 >=2 個 person 實體時提醒模型不要混為一談
   if (personEntities.length >= 2) {
-    output.push(`\n⚠️ 以上记忆涉及不同的人（${personEntities.join('、')}），不要混为一谈。`);
+    output.push(`\n⚠️ 以上記憶涉及不同的人（${personEntities.join('、')}），不要混為一談。`);
   }
 
   return output.join('\n');

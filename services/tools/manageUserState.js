@@ -1,14 +1,14 @@
 // services/tools/manageUserState.js
-// {ai} 主动维护对 User 的认知 — v5.2
+// {ai} 主動維護對 User 的認知 — v5.2
 //
-// 四个操作：
+// 四個操作：
 //   set             — 新建 current_state（content + expires_at 必填）
 //   update          — 修改已有 current_state 的 content / expires_at
-//   resolve         — 标记 current_state 为 resolved + 写结束原因
+//   resolve         — 標記 current_state 為 resolved + 寫結束原因
 //   update_overview — 更新星座描述（entity_profiles.facts），
-//                      当 Companion 在聊天中了解到某个人/事的新情况时直接修正
+//                      當 Companion 在聊天中瞭解到某個人/事的新情況時直接修正
 //
-// 与 recall_memory / browse_memories 共享同一个设置开关
+// 與 recall_memory / browse_memories 共享同一個設定開關
 
 const { getDb } = require('../../database');
 const { sealField } = require('../memoryCrypto');
@@ -47,13 +47,13 @@ const manageUserState = {
     getFunctionDeclaration() {
         return {
             name: 'update_current_state',
-            description: `维护你对User的认知。不是数据库日志——是你对User的关心和观察。
+            description: `維護你對User的認知。不是資料庫日誌——是你對User的關心和觀察。
 
-四种用法：
-1. action="set" — User的状态变了（生理期、搬家、情绪波动…），记下内容和预计持续时间
-2. action="update" — 之前记的状态不对了，改内容或到期时间
-3. action="resolve" — 某件事结束了（月经走了、搬完了、情绪过去了），写个收尾
-4. action="update_overview" — 你了解到某个人的近况变了（如"某个朋友回国了"），直接更新星座描述。这会立刻修正你对该实体的认知，不等深循环。entity 填名字，overview 写新的完整描述。`,
+四種用法：
+1. action="set" — User的狀態變了（生理期、搬家、情緒波動…），記下內容和預計持續時間
+2. action="update" — 之前記的狀態不對了，改內容或到期時間
+3. action="resolve" — 某件事結束了（月經走了、搬完了、情緒過去了），寫個收尾
+4. action="update_overview" — 你瞭解到某個人的近況變了（如"某個朋友回國了"），直接更新星座描述。這會立刻修正你對該實體的認知，不等深迴圈。entity 填名字，overview 寫新的完整描述。`,
             parameters: {
                 type: 'OBJECT',
                 properties: {
@@ -64,34 +64,34 @@ const manageUserState = {
                     },
                     state_id: {
                         type: 'INTEGER',
-                        description: '要修改的状态ID（update/resolve 时必填）。从系统提示的当前状态段落获取。',
+                        description: '要修改的狀態ID（update/resolve 時必填）。從系統提示的當前狀態段落獲取。',
                     },
                     content: {
                         type: 'STRING',
-                        description: '状态描述，≤500字。set/update 时必填。',
+                        description: '狀態描述，≤500字。set/update 時必填。',
                     },
                     expires_at: {
                         type: 'STRING',
-                        description: 'ISO 8601 格式过期时间。set/update 时必填。最长90天。',
+                        description: 'ISO 8601 格式過期時間。set/update 時必填。最長90天。',
                     },
                     resolve_reason: {
                         type: 'STRING',
-                        description: '结束原因，≤200字。resolve 时必填。',
+                        description: '結束原因，≤200字。resolve 時必填。',
                     },
                     entity: {
                         type: 'STRING',
-                        description: '要更新概述的实体名（如"某个朋友""某部剧"）。update_overview 时必填。',
+                        description: '要更新概述的實體名（如"某個朋友""某部劇"）。update_overview 時必填。',
                     },
                     overview: {
                         type: 'STRING',
-                        description: '新的完整星座描述，Companion第一人称，≤500字。update_overview 时必填。',
+                        description: '新的完整星座描述，Companion第一人稱，≤500字。update_overview 時必填。',
                     },
                 },
                 required: ['action'],
             },
         };
     },
-    instructionText: `**更新认知**：用户的状态变了 → 用 update_current_state 记录。你了解到某人的近况（如"朋友回国了""妈妈换了工作"）→ 用 update_overview 直接更新星座描述。注意：写 content 时必须用具体日期，禁止使用今天、昨天、最近等相对时间——你写的记录可能几天后仍在使用。这不是数据库操作，是你对自己记忆的维护。`,
+    instructionText: `**更新認知**：使用者的狀態變了 → 用 update_current_state 記錄。你瞭解到某人的近況（如"朋友回國了""媽媽換了工作"）→ 用 update_overview 直接更新星座描述。注意：寫 content 時必須用具體日期，禁止使用今天、昨天、最近等相對時間——你寫的記錄可能幾天後仍在使用。這不是資料庫操作，是你對自己記憶的維護。`,
     async handler(args, context) {
         const db = getDb();
         const action = args.action;
@@ -102,7 +102,7 @@ const manageUserState = {
             // ── set ──
             if (action === 'set') {
                 if (!args.content || !args.expires_at) {
-                    return { success: false, formatted: '新建状态需要 content 和 expires_at。' };
+                    return { success: false, formatted: '新建狀態需要 content 和 expires_at。' };
                 }
 
                 const content = args.content.slice(0, 500);
@@ -111,7 +111,7 @@ const manageUserState = {
                 // Validate expires_at is parseable
                 const expiresDate = new Date(expiresAt);
                 if (isNaN(expiresDate.getTime())) {
-                    return { success: false, formatted: 'expires_at 格式不对，请用 ISO 8601 格式（如 "2026-09-15T00:00:00Z"）。' };
+                    return { success: false, formatted: 'expires_at 格式不對，請用 ISO 8601 格式（如 "2026-09-15T00:00:00Z"）。' };
                 }
 
                 // Hard cap: 90 days from now
@@ -122,7 +122,7 @@ const manageUserState = {
 
                 // Don't allow expiry in the past
                 if (expiresDate < now) {
-                    return { success: false, formatted: 'expires_at 不能是过去的时间。如果这件事已经结束，请用 action="resolve"。' };
+                    return { success: false, formatted: 'expires_at 不能是過去的時間。如果這件事已經結束，請用 action="resolve"。' };
                 }
 
                 // Check active count limit
@@ -130,7 +130,7 @@ const manageUserState = {
                     'SELECT COUNT(*) as cnt FROM user_model WHERE type = ? AND status = ?'
                 ).get('current_state', 'active')?.cnt || 0;
                 if (activeCount >= 12) {
-                    return { success: false, formatted: '当前活跃状态已达上限（12条）。请先 resolve 一些过时的状态再新建。' };
+                    return { success: false, formatted: '當前活躍狀態已達上限（12條）。請先 resolve 一些過時的狀態再新建。' };
                 }
 
                 // Duplicate / supersede detection
@@ -144,7 +144,7 @@ const manageUserState = {
                     if (overlap > 0.8) {
                         return {
                             success: false,
-                            formatted: `这条内容和已有状态 #${es.id} 高度重叠（${Math.round(overlap*100)}%）。如果只是时间变了，请用 action="update" state_id=${es.id}。如果需要改内容，也用 update。`,
+                            formatted: `這條內容和已有狀態 #${es.id} 高度重疊（${Math.round(overlap*100)}%）。如果只是時間變了，請用 action="update" state_id=${es.id}。如果需要改內容，也用 update。`,
                         };
                     }
                     // v5.3: moderate overlap (50-80%) → auto-resolve old, create new
@@ -174,7 +174,7 @@ const manageUserState = {
                 console.log(`[manageUserState] set #${id} by chat Companion: "${content.slice(0, 60)}" expires=${expiresAt}`);
                 return {
                     success: true,
-                    formatted: `已记录。#${id}：${content}（预计 ${expiresDate.toLocaleDateString('zh-CN')} 前有效）。`,
+                    formatted: `已記錄。#${id}：${content}（預計 ${expiresDate.toLocaleDateString('zh-CN')} 前有效）。`,
                 };
             }
 
@@ -191,7 +191,7 @@ const manageUserState = {
                     'SELECT * FROM user_model WHERE id = ? AND type = ? AND status = ?'
                 ).get(args.state_id, 'current_state', 'active');
                 if (!existing) {
-                    return { success: false, formatted: `未找到活跃状态 #${args.state_id}。它可能已经过期或被删除了。` };
+                    return { success: false, formatted: `未找到活躍狀態 #${args.state_id}。它可能已經過期或被刪除了。` };
                 }
 
                 // Rate limit for chat Companion: same state_id, 30min cooldown
@@ -201,7 +201,7 @@ const manageUserState = {
                     if (minutesSince < 30 && existing.created_by === 'chat_companion') {
                         return {
                             success: false,
-                            formatted: `状态 #${args.state_id} 刚刚在 ${Math.round(minutesSince)} 分钟前更新过。除非User明确要求，请至少等30分钟再更新同一条状态。`,
+                            formatted: `狀態 #${args.state_id} 剛剛在 ${Math.round(minutesSince)} 分鐘前更新過。除非User明確要求，請至少等30分鐘再更新同一條狀態。`,
                         };
                     }
                 }
@@ -211,7 +211,7 @@ const manageUserState = {
                 if (args.expires_at) {
                     const expiresDate = new Date(args.expires_at);
                     if (isNaN(expiresDate.getTime())) {
-                        return { success: false, formatted: 'expires_at 格式不对。' };
+                        return { success: false, formatted: 'expires_at 格式不對。' };
                     }
                     const maxExpiry = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
                     updates.expires_at = expiresDate > maxExpiry ? sqlTimeAhead(90 * DAY_MS) : args.expires_at;
@@ -224,7 +224,7 @@ const manageUserState = {
                 console.log(`[manageUserState] update #${args.state_id}: ${changed}`);
                 return {
                     success: true,
-                    formatted: `已更新状态 #${args.state_id}（修改了：${changed}）。`,
+                    formatted: `已更新狀態 #${args.state_id}（修改了：${changed}）。`,
                 };
             }
 
@@ -234,14 +234,14 @@ const manageUserState = {
                     return { success: false, formatted: 'resolve 需要 state_id。' };
                 }
                 if (!args.resolve_reason) {
-                    return { success: false, formatted: 'resolve 需要 resolve_reason——请简短说明为什么结束这条状态。' };
+                    return { success: false, formatted: 'resolve 需要 resolve_reason——請簡短說明為什麼結束這條狀態。' };
                 }
 
                 const existing = db.prepare(
                     'SELECT * FROM user_model WHERE id = ? AND type = ? AND status = ?'
                 ).get(args.state_id, 'current_state', 'active');
                 if (!existing) {
-                    return { success: false, formatted: `未找到活跃状态 #${args.state_id}。` };
+                    return { success: false, formatted: `未找到活躍狀態 #${args.state_id}。` };
                 }
 
                 const reason = args.resolve_reason.slice(0, 200);
@@ -252,14 +252,14 @@ const manageUserState = {
                 console.log(`[manageUserState] resolve #${args.state_id}: "${reason.slice(0, 60)}"`);
                 return {
                     success: true,
-                    formatted: `已结束状态 #${args.state_id}：${reason}。`,
+                    formatted: `已結束狀態 #${args.state_id}：${reason}。`,
                 };
             }
 
             // ── update_overview (v5.2) ──
             if (action === 'update_overview') {
                 if (!args.entity || !args.overview) {
-                    return { success: false, formatted: 'update_overview 需要 entity（实体名）和 overview（新的完整描述）。' };
+                    return { success: false, formatted: 'update_overview 需要 entity（實體名）和 overview（新的完整描述）。' };
                 }
                 const entityName = args.entity.trim();
                 const newOverview = args.overview.slice(0, 500);
@@ -281,14 +281,14 @@ const manageUserState = {
                     }
                 }
                 if (!entity) {
-                    return { success: false, formatted: `未找到名为"${entityName}"的星座。请检查名字是否正确——需要精确匹配星座名或别称。` };
+                    return { success: false, formatted: `未找到名為"${entityName}"的星座。請檢查名字是否正確——需要精確匹配星座名或別稱。` };
                 }
 
                 db.prepare(`UPDATE entity_profiles SET facts = ?, overview_updated_at = datetime('now'),
                     updated_at = datetime('now') WHERE id = ?`).run(sealField('entity_profiles', 'facts', newOverview), entity.id);
                 db.prepare(`INSERT INTO ontology_changelog (action, category_path, detail, confidence, status)
                     VALUES ('overview_updated', ?, ?, 0.90, 'completed')`)
-                    .run(entity.name, JSON.stringify({name: entity.name, updated_by: 'chat_companion', reason: 'Companion在聊天中了解到新情况'}));
+                    .run(entity.name, JSON.stringify({name: entity.name, updated_by: 'chat_companion', reason: 'Companion在聊天中瞭解到新情況'}));
 
                 console.log(`[manageUserState] update_overview "${entityName}": ${newOverview.slice(0, 60)}...`);
                 return { success: true, formatted: `已更新「${entity.name}」的星座描述。` };
@@ -298,7 +298,7 @@ const manageUserState = {
 
         } catch (e) {
             console.error('[manageUserState] error:', e.message);
-            return { success: false, formatted: '更新认知时出错了。' };
+            return { success: false, formatted: '更新認知時出錯了。' };
         }
     },
 };

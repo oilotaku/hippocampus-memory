@@ -1,10 +1,10 @@
 // =================================================================
-// memoryConfig — 记忆子系统配置加载器
+// memoryConfig — 記憶子系統配置載入器
 //
-// 读取 memory_config.json，提供 {{user.name}} 等模板变量替换。
-// 所有硬编码的人名引用应通过此模块获取，而不是直接写字符串。
+// 讀取 memory_config.json，提供 {{user.name}} 等模板變數替換。
+// 所有硬編碼的人名引用應通過此模組獲取，而不是直接寫字串。
 //
-// 消费端用法:
+// 消費端用法:
 //   const { USER, AI, REL, PROJ, fillTemplate } = require('./memoryConfig');
 //   const prompt = fillTemplate(`你是${AI.name}，${USER.name}的${REL.type}`);
 // =================================================================

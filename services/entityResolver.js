@@ -1,17 +1,17 @@
 // =================================================================
-// Entity Resolver（实体解析器）：自动绑定 fragment → entity
+// Entity Resolver（實體解析器）：自動繫結 fragment → entity
 //
-// 在 Scribe 写入碎片后调用，四层管线：
-//   1. 关键词匹配：fragment 的 entity/content 含已知人名/别名 → 直接关联
-//   2. ★ 向量联想：embed fragment → ChromaDB 查相似碎片 → 聚合已有 entity 关联 →
-//                候选实体投票
-//   3. LLM 指代消解：结合候选实体列表 + 描述，做单选判断（一条碎片一个直接归属）
-//   4. ★ 派生关联：从直接实体出发，沿 related_entity_ids 自动派生二级链接，
-//                标记为 derived_from，供 Librarian/overview 做辅助参考
+// 在 Scribe 寫入碎片後呼叫，四層管線：
+//   1. 關鍵詞匹配：fragment 的 entity/content 含已知人名/別名 → 直接關聯
+//   2. ★ 向量聯想：embed fragment → ChromaDB 查相似碎片 → 聚合已有 entity 關聯 →
+//                候選實體投票
+//   3. LLM 指代消解：結合候選實體列表 + 描述，做單選判斷（一條碎片一個直接歸屬）
+//   4. ★ 派生關聯：從直接實體出發，沿 related_entity_ids 自動派生二級連結，
+//                標記為 derived_from，供 Librarian/overview 做輔助參考
 //
-// 写入目标：fragment_entities 多对多表（+ 兼容 memory_fragments.entity_id 旧字段）
-// 设计原则：同步执行，Scribe 返回前 entity 链接已填充完毕。
-// LLM 只做单选（准确性最高），多维度关联走确定性的关系图谱派生。
+// 寫入目標：fragment_entities 多對多表（+ 相容 memory_fragments.entity_id 舊欄位）
+// 設計原則：同步執行，Scribe 返回前 entity 連結已填充完畢。
+// LLM 只做單選（準確性最高），多維度關聯走確定性的關係圖譜派生。
 // =================================================================
 
 const { getDb } = require('../database');
@@ -19,15 +19,15 @@ const { callLLM } = require('./llm');
 const { USER, AI, SKIP_NAMES, fillPrompt } = require('./nameResolver');
 const { chromaDBOperation, getLocalEmbedding } = require('./memory');
 
-// 向量联想配置
+// 向量聯想配置
 const VECTOR_HINT_TOP_K = 5;
 const VECTOR_HINT_MIN_SIMILARITY = 0.55;
 const VECTOR_HINT_MAX_CANDIDATES = 5;
 
-// 派生关联置信度（低于直接关联，供下游区分权重）
+// 派生關聯置信度（低於直接關聯，供下游區分權重）
 const DERIVED_CONFIDENCE = 0.45;
 
-// 内存缓存，5分钟刷新
+// 記憶體快取，5分鐘重新整理
 let _aliasCache = null;
 let _cacheAge = 0;
 
@@ -44,7 +44,7 @@ function getAliasData() {
     const aliasMap = new Map();
     const knownEntities = [];
     const entityDescriptors = new Map();
-    // ★ 关系图谱：entity_id → [related_entity_id, ...]  供派生关联用
+    // ★ 關係圖譜：entity_id → [related_entity_id, ...]  供派生關聯用
     const relationGraph = new Map();
 
     for (const row of rows) {
@@ -82,7 +82,7 @@ function getAliasData() {
     return _aliasCache;
 }
 
-// ── 内部：写入 fragment_entities（替换旧 entity_id UPDATE）──
+// ── 內部：寫入 fragment_entities（替換舊 entity_id UPDATE）──
 function linkFragmentToEntity(fragmentId, entityId, relation, confidence, classifiedBy) {
     const db = getDb();
     db.prepare(`
@@ -97,18 +97,18 @@ function linkFragmentToEntity(fragmentId, entityId, relation, confidence, classi
         ) WHERE id = ?
     `).run(entityId, entityId);
 
-    // 兼容旧字段
+    // 相容舊欄位
     db.prepare('UPDATE memory_fragments SET entity_id = ? WHERE id = ? AND entity_id IS NULL')
         .run(entityId, fragmentId);
 }
 
-// ── 内部：从直接实体派生二级关联 ──
-// 读取 entity 的 related_entity_ids，写入 fragment_entities（标记 derived_from）
+// ── 內部：從直接實體派生二級關聯 ──
+// 讀取 entity 的 related_entity_ids，寫入 fragment_entities（標記 derived_from）
 function deriveEntityLinks(fragmentId, directEntityId) {
     const db = getDb();
-    const { relationGraph, entityDescriptors } = _aliasCache;  // 可能在当前 tick 内已过期，fallback 到实查
+    const { relationGraph, entityDescriptors } = _aliasCache;  // 可能在當前 tick 內已過期，fallback 到實查
 
-    // 先查缓存，缓存没有则查 DB
+    // 先查快取，快取沒有則查 DB
     let relatedIds = relationGraph?.get(directEntityId);
     if (!relatedIds) {
         const row = db.prepare('SELECT related_entity_ids FROM entity_profiles WHERE id = ?').get(directEntityId);
@@ -119,7 +119,7 @@ function deriveEntityLinks(fragmentId, directEntityId) {
 
     let derived = 0;
     for (const rid of relatedIds) {
-        // 跳过不存在的 entity
+        // 跳過不存在的 entity
         const exists = db.prepare('SELECT 1 FROM entity_profiles WHERE id = ? AND status = ?').get(rid, 'active');
         if (!exists) continue;
 
@@ -141,13 +141,13 @@ function deriveEntityLinks(fragmentId, directEntityId) {
 
     if (derived > 0) {
         const entName = entityDescriptors?.get(directEntityId)?.name || `#${directEntityId}`;
-        console.log(`[EntityResolver] 🔗 派生关联: frag #${fragmentId} → ${derived} 个实体 (from ${entName})`);
+        console.log(`[EntityResolver] 🔗 派生關聯: frag #${fragmentId} → ${derived} 個實體 (from ${entName})`);
     }
 
     return derived;
 }
 
-// ── 内部：关键词匹配 ──
+// ── 內部：關鍵詞匹配 ──
 function matchByKeyword(fragment, aliasMap) {
     if (fragment.entity && fragment.entity.trim()) {
         const key = fragment.entity.trim().toLowerCase();
@@ -164,7 +164,7 @@ function matchByKeyword(fragment, aliasMap) {
     return null;
 }
 
-// ── 内部：向量联想 ──
+// ── 內部：向量聯想 ──
 async function matchByVectorHint(unmatchedFragments) {
     if (unmatchedFragments.length === 0) return {};
 
@@ -240,19 +240,19 @@ async function matchByVectorHint(unmatchedFragments) {
 
             if (ranked.length > 0) candidates[frag.id] = ranked;
         } catch (e) {
-            console.error(`[EntityResolver] 向量联想失败 frag #${frag.id}:`, e.message);
+            console.error(`[EntityResolver] 向量聯想失敗 frag #${frag.id}:`, e.message);
         }
     }
 
     if (Object.keys(candidates).length > 0) {
         const totalHints = Object.values(candidates).reduce((s, c) => s + c.length, 0);
-        console.log(`[EntityResolver] 🔗 向量联想: ${Object.keys(candidates).length}/${unmatchedFragments.length} 条碎片获得候选 (共 ${totalHints} 个候选实体)`);
+        console.log(`[EntityResolver] 🔗 向量聯想: ${Object.keys(candidates).length}/${unmatchedFragments.length} 條碎片獲得候選 (共 ${totalHints} 個候選實體)`);
     }
 
     return candidates;
 }
 
-// ── 内部：LLM 指代消解（单选）──
+// ── 內部：LLM 指代消解（單選）──
 async function resolveByLLM(unmatchedFragments, conversationText, knownEntities, entityCandidates) {
     if (unmatchedFragments.length === 0) return {};
 
@@ -260,49 +260,49 @@ async function resolveByLLM(unmatchedFragments, conversationText, knownEntities,
         const desc = entityCandidates?.[e.id] || null;
         const catTag = desc?.category ? ` | ${desc.category}` : '';
         const overviewHint = desc?.shortDesc ? ` — ${desc.shortDesc}` : '';
-        return `- [ID:${e.id}] ${e.name}${catTag}${overviewHint}${e.aliases.length ? '（别名：' + e.aliases.join('、') + '）' : ''}`;
+        return `- [ID:${e.id}] ${e.name}${catTag}${overviewHint}${e.aliases.length ? '（別名：' + e.aliases.join('、') + '）' : ''}`;
     });
 
     const fragmentLines = unmatchedFragments.map(f => {
         const hints = entityCandidates[f.id];
         let hintText = '';
         if (hints && hints.length > 0) {
-            hintText = '\n  ★ 向量关联候选（按相似度排序）：' + hints.map(h =>
-                `[ID:${h.entity_id}] ${h.entity_name}${h.category ? ' (' + h.category + ')' : ''} — 邻居碎片投票 ${h.votes} 票, 最高相似度 ${h.max_sim.toFixed(2)}${h.shortDesc ? ' | ' + h.shortDesc : ''}`
+            hintText = '\n  ★ 向量關聯候選（按相似度排序）：' + hints.map(h =>
+                `[ID:${h.entity_id}] ${h.entity_name}${h.category ? ' (' + h.category + ')' : ''} — 鄰居碎片投票 ${h.votes} 票, 最高相似度 ${h.max_sim.toFixed(2)}${h.shortDesc ? ' | ' + h.shortDesc : ''}`
             ).join('；');
         }
         return `[frag_${f.id}] entity="${f.entity_label}" content="${f.content}"${hintText}`;
     });
 
-    const prompt = `你是实体指代消解器。给定对话上下文、已知实体列表和记忆碎片，判断每条碎片提及的人物/事物指向哪个已知实体。
+    const prompt = `你是實體指代消解器。給定對話上下文、已知實體列表和記憶碎片，判斷每條碎片提及的人物/事物指向哪個已知實體。
 
-已知实体：
+已知實體：
 ${entityLines.join('\n')}
 
-规则：
-- 每条碎片最多分配一个实体——选最直接的那一个
-- ★ 向量关联候选的使用方法：
-  · 信号强（同一实体 ≥2 票 或 最高相似度 ≥0.75）→ 候选很可能是对的，结合描述判断后确认
-  · 信号弱（各实体各1票且相似度 <0.70）→ 候选只是"听起来有点像"，不要强行关联
-  · 候选实体描述与碎片内容明显不是一回事 → 即使票数高也输出 null
-- ★ 使用已知实体的描述（category + 概述）来判断语义关联
-- 代词（他/她/它/这个人/那人）在上下文中指向谁，就输出谁的 ID
-- 如果是 {{user.name}} 或 {{ai.name}} 自己，输出 entity_id: null
-- 如果无法确定指向谁，输出 entity_id: null
-- 不要因为"好像有点关系"就分配 ID——只在确定时分配
+規則：
+- 每條碎片最多分配一個實體——選最直接的那一個
+- ★ 向量關聯候選的使用方法：
+  · 訊號強（同一實體 ≥2 票 或 最高相似度 ≥0.75）→ 候選很可能是對的，結合描述判斷後確認
+  · 訊號弱（各實體各1票且相似度 <0.70）→ 候選只是"聽起來有點像"，不要強行關聯
+  · 候選實體描述與碎片內容明顯不是一回事 → 即使票數高也輸出 null
+- ★ 使用已知實體的描述（category + 概述）來判斷語義關聯
+- 代詞（他/她/它/這個人/那人）在上下文中指向誰，就輸出誰的 ID
+- 如果是 {{user.name}} 或 {{ai.name}} 自己，輸出 entity_id: null
+- 如果無法確定指向誰，輸出 entity_id: null
+- 不要因為"好像有點關係"就分配 ID——只在確定時分配
 
-输出严格JSON：
+輸出嚴格JSON：
 {
   "resolutions": [
-    {"fragment_id": 123, "entity_id": 1, "entity_name": "某个朋友"},
+    {"fragment_id": 123, "entity_id": 1, "entity_name": "某個朋友"},
     {"fragment_id": 124, "entity_id": null, "reason": "指代不明"}
   ]
 }`;
 
-    const userContent = `对话上下文：
+    const userContent = `對話上下文：
 ${conversationText.slice(0, 4000)}
 
-待消解的记忆碎片：
+待消解的記憶碎片：
 ${fragmentLines.join('\n')}`;
 
     try {
@@ -327,20 +327,20 @@ ${fragmentLines.join('\n')}`;
         }
         return resolutions;
     } catch (e) {
-        console.error('[EntityResolver] LLM指代消解失败:', e.message);
+        console.error('[EntityResolver] LLM指代消解失敗:', e.message);
         return {};
     }
 }
 
 // =================================================================
-// 公开 API
+// 公開 API
 // =================================================================
 
 /**
- * 解析新写入 fragments 的 entity 关联
- * @param {number[]} fragmentIds - 刚写入的 fragment IDs
- * @param {string} conversationText - Scribe 已解密的格式化对话文本
- * @returns {number} 成功解析的数量（含直接+派生）
+ * 解析新寫入 fragments 的 entity 關聯
+ * @param {number[]} fragmentIds - 剛寫入的 fragment IDs
+ * @param {string} conversationText - Scribe 已解密的格式化對話文本
+ * @returns {number} 成功解析的數量（含直接+派生）
  */
 async function resolveEntityIds(fragmentIds, conversationText) {
     if (!fragmentIds || fragmentIds.length === 0) return 0;
@@ -357,7 +357,7 @@ async function resolveEntityIds(fragmentIds, conversationText) {
     const unmatched = [];
     let totalDirect = 0, totalDerived = 0;
 
-    // —— 第一层：关键词匹配 ——
+    // —— 第一層：關鍵詞匹配 ——
     for (const frag of fragments) {
         const match = matchByKeyword(frag, aliasMap);
         if (match) {
@@ -370,16 +370,16 @@ async function resolveEntityIds(fragmentIds, conversationText) {
     }
 
     if (totalDirect > 0) {
-        console.log(`[EntityResolver] 关键词匹配: ${totalDirect}/${fragments.length} 条 (+${totalDerived} 派生)`);
+        console.log(`[EntityResolver] 關鍵詞匹配: ${totalDirect}/${fragments.length} 條 (+${totalDerived} 派生)`);
     }
 
-    // —— 第二层：向量联想 ——
+    // —— 第二層：向量聯想 ——
     let entityCandidates = {};
     if (unmatched.length > 0) {
         entityCandidates = await matchByVectorHint(unmatched);
     }
 
-    // —— 第三层：LLM 指代消解 ——
+    // —— 第三層：LLM 指代消解 ——
     if (unmatched.length > 0 && conversationText) {
         const llmResolutions = await resolveByLLM(unmatched, conversationText, knownEntities, entityCandidates);
         let llmDirect = 0, llmDerived = 0;
@@ -391,18 +391,18 @@ async function resolveEntityIds(fragmentIds, conversationText) {
         totalDirect += llmDirect;
         totalDerived += llmDerived;
         if (llmDirect > 0) {
-            console.log(`[EntityResolver] LLM指代消解: ${llmDirect}/${unmatched.length} 条 (+${llmDerived} 派生)`);
+            console.log(`[EntityResolver] LLM指代消解: ${llmDirect}/${unmatched.length} 條 (+${llmDerived} 派生)`);
         }
 
         const hintedUnresolved = unmatched.filter(
             f => entityCandidates[f.id]?.length > 0 && !llmResolutions[f.id]
         );
         if (hintedUnresolved.length > 0) {
-            console.log(`[EntityResolver] ⚠️ 向量有候选但LLM判定不关联: ${hintedUnresolved.length} 条 (frag #${hintedUnresolved.map(f => f.id).join(',')})`);
+            console.log(`[EntityResolver] ⚠️ 向量有候選但LLM判定不關聯: ${hintedUnresolved.length} 條 (frag #${hintedUnresolved.map(f => f.id).join(',')})`);
         }
     }
 
-    // —— 第四层（fire-and-forget）：实体关系发现 ——
+    // —— 第四層（fire-and-forget）：實體關係發現 ——
     try {
         const { discoverEntityRelationships } = require('./archivist');
         const db = getDb();
@@ -428,7 +428,7 @@ async function resolveEntityIds(fragmentIds, conversationText) {
 
         if (missingRels?.c > 0 || lowConfRels?.c > 0) {
             discoverEntityRelationships({ includeReEval: true }).catch(e =>
-                console.error('[EntityResolver] 关系发现失败（非致命）:', e.message));
+                console.error('[EntityResolver] 關係發現失敗（非致命）:', e.message));
         }
     } catch (e) {
         // 不阻塞

@@ -12,8 +12,8 @@ const { USER, AI, SKIP_NAMES, resolveTemplate } = require('./memoryConfig');
  * Replace name placeholders with configured names in prompt strings.
  * Aligns with the existing fillPrompt pattern used across the codebase.
  *
- * 先解析 {{user.name}}/{{user.pronoun}}/{{ai.name}} 等双花括号模板，
- * 再处理 {user}/{ai} 单花括号写法。
+ * 先解析 {{user.name}}/{{user.pronoun}}/{{ai.name}} 等雙花括號模板，
+ * 再處理 {user}/{ai} 單花括號寫法。
  */
 function fillPrompt(str) {
     if (typeof str !== 'string') return str;

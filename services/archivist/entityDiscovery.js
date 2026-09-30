@@ -16,7 +16,7 @@ const { ARCHIVIST_LLM_CONFIG_ID, ENTITY_DISCOVERY_MIN_FRAGS } = require('./const
 // Scans fragment content text for potential person names
 // that aren't already in entity_profiles. This catches
 // entities that Scribe didn't extract into mf.entity but
-// that appear in the content body (e.g. 某昵称 mentioned in
+// that appear in the content body (e.g. 某暱稱 mentioned in
 // a fragment where entity='User').
 // ═══════════════════════════════════════════════════════
 
@@ -28,34 +28,34 @@ const CONTENT_SCAN_FRAG_LIMIT = 500;
 
 
 const COMMON_WORD_STOPLIST = new Set([
-    '自己','我们','他们','你们','她们','它们','什么','怎么','为什么',
-    '不知道','没有','可以','不可以','一个','这个','那个','哪个','这些','那些',
-    '就是','因为','所以','虽然','但是','如果','已经','还是','或者','不过',
-    '而且','然后','现在','以前','以后','可能','应该','觉得','知道','看见',
-    '听到','以为','开始','继续','终于','最后','之后','之前','这样','那样',
-    '一点','一些','这种','那种','另外','所有','大概','当然','突然','一起',
-    '一个人','每个人','没办法','无所谓','有时候','越来越','是不是','能不能',
-    '会不会','第一次','大部分','大家好','还可以','差不多','最重要','所有人',
+    '自己','我們','他們','你們','她們','它們','什麼','怎麼','為什麼',
+    '不知道','沒有','可以','不可以','一個','這個','那個','哪個','這些','那些',
+    '就是','因為','所以','雖然','但是','如果','已經','還是','或者','不過',
+    '而且','然後','現在','以前','以後','可能','應該','覺得','知道','看見',
+    '聽到','以為','開始','繼續','終於','最後','之後','之前','這樣','那樣',
+    '一點','一些','這種','那種','另外','所有','大概','當然','突然','一起',
+    '一個人','每個人','沒辦法','無所謂','有時候','越來越','是不是','能不能',
+    '會不會','第一次','大部分','大家好','還可以','差不多','最重要','所有人',
     '很多人','每一天','今天','明天','昨天','今年','去年','上午','下午','晚上',
-    '早上','中午','周末','有人','没人','别人','某人','任何人','对方','双方',
-    '本人','当事人','告诉你','对不起','亲爱的','请问你','你好吗',
+    '早上','中午','週末','有人','沒人','別人','某人','任何人','對方','雙方',
+    '本人','當事人','告訴你','對不起','親愛的','請問你','你好嗎',
     // Common false positives from fragment content (book/music context)
-    '在读','的回应','喜欢了','专辑','的批注','的聊天','在微信','发了一',
-    '他对','她说','我对','我说','你说','他说','她说','你说',
-    '回复了','收到了','看到了','听到了','想到了','感觉到',
-    '这首歌','那首歌','这首歌','那本书','这本书','这篇文章',
-    '很喜欢','不喜欢','非常好','还不错','差不多','有意思',
-    '没什么','有什么','没什么','是什么','为什么','怎么办',
-    '对不起','谢谢你','没关系','不好意思','不客气',
-    '我觉得','我认为','我发现','我意识到','我注意到',
-    '这件事','那件事','这种事','那种事','什么时候',
-    '在哪里','在哪里','怎么办','怎么样','为什么',
+    '在讀','的回應','喜歡了','專輯','的批註','的聊天','在微信','發了一',
+    '他對','她說','我對','我說','你說','他說','她說','你說',
+    '回覆了','收到了','看到了','聽到了','想到了','感覺到',
+    '這首歌','那首歌','這首歌','那本書','這本書','這篇文章',
+    '很喜歡','不喜歡','非常好','還不錯','差不多','有意思',
+    '沒什麼','有什麼','沒什麼','是什麼','為什麼','怎麼辦',
+    '對不起','謝謝你','沒關係','不好意思','不客氣',
+    '我覺得','我認為','我發現','我意識到','我注意到',
+    '這件事','那件事','這種事','那種事','什麼時候',
+    '在哪裡','在哪裡','怎麼辦','怎麼樣','為什麼',
     // Book/reading context noise
-    '写过一','写了一','翻译了',
-    '阅读了','读了一','这本书','那本书','那一本',
-    '一本关于','一部关于','一个关于','是关于',
+    '寫過一','寫了一','翻譯了',
+    '閱讀了','讀了一','這本書','那本書','那一本',
+    '一本關於','一部關於','一個關於','是關於',
     '第一章','第二章','第三章','第四章','第五章',
-    'http','https','www','com','html',
+    'http','https','www','com','html', '我们', '他们', '你们', '她们', '它们', '什么', '怎么', '为什么', '没有', '一个', '这个', '那个', '哪个', '这些', '因为', '虽然', '已经', '还是', '不过', '然后', '现在', '以后', '应该', '觉得', '看见', '听到', '以为', '开始', '继续', '终于', '最后', '之后', '这样', '那样', '一点', '这种', '那种', '当然', '一个人', '每个人', '没办法', '无所谓', '有时候', '越来越', '会不会', '还可以', '周末', '没人', '别人', '对方', '双方', '当事人', '告诉你', '对不起', '亲爱的', '请问你', '你好吗', '在读', '的回应', '喜欢了', '专辑', '的批注', '发了一', '他对', '她说', '我对', '我说', '你说', '他说', '回复了', '听到了', '感觉到', '这首歌', '那本书', '这本书', '这篇文章', '很喜欢', '不喜欢', '还不错', '没什么', '有什么', '是什么', '怎么办', '谢谢你', '没关系', '不客气', '我觉得', '我认为', '我发现', '我意识到', '这件事', '这种事', '那种事', '什么时候', '在哪里', '怎么样', '写过一', '写了一', '翻译了', '阅读了', '读了一', '一本关于', '一部关于', '一个关于', '是关于',
     // Japanese stopwords (generic particles/words)
     'なん','です','ます','した','いる','こと','それ',
     'この','あの','どの','こう','そう','いう','なる',
@@ -172,24 +172,24 @@ async function scanContentForNewEntities() {
     }
 
     const contextText = candidatesForLLM.map((c, i) =>
-        `[${i + 1}] "${c.name}" (出现 ${c.count} 次)\n${c.contexts.map(ctx => `   - ...${ctx}...`).join('\n')}`
+        `[${i + 1}] "${c.name}" (出現 ${c.count} 次)\n${c.contexts.map(ctx => `   - ...${ctx}...`).join('\n')}`
     ).join('\n\n');
 
-    const prompt = `你是实体识别器。以下是User记忆碎片中出现频率较高的未知词汇。请判断每个属于什么实体类型。
+    const prompt = `你是實體識別器。以下是User記憶碎片中出現頻率較高的未知詞彙。請判斷每個屬於什麼實體型別。
 
 ${contextText}
 
-只输出JSON数组，每个元素：
-{"name":"候选词","category":"person|pet|place|event|project|work|term|organization|none","likely_gender":"male/female/unknown"}
+只輸出JSON陣列，每個元素：
+{"name":"候選詞","category":"person|pet|place|event|project|work|term|organization|none","likely_gender":"male/female/unknown"}
 
-判断标准：
-- **person**: 真实人物——中文名、英文名、日文名、网名、艺名、圈名、游戏ID
-- **place**: 具体地点——城市、景点、场馆、店铺名（不是「家里」「公司」等泛称）
-- **event**: 可命名的事件或经历——旅行、聚会、项目节点（不是单次对话）
-- **project**: User参与创作或开发的作品/项目——代码项目、同人、cos、视频系列
-- **term**: 抽象概念/专有名词——但不属于以上任何一类（如「某作品」「某概念」等）
-- **none**: 普通词汇、公司名、品牌名、文学虚构角色、不确定的
-- 只输出JSON数组，不要markdown包裹`;
+判斷標準：
+- **person**: 真實人物——中文名、英文名、日文名、網名、藝名、圈名、遊戲ID
+- **place**: 具體地點——城市、景點、場館、店鋪名（不是「家裡」「公司」等泛稱）
+- **event**: 可命名的事件或經歷——旅行、聚會、專案節點（不是單次對話）
+- **project**: User參與創作或開發的作品/專案——程式碼專案、同人、cos、影片系列
+- **term**: 抽象概念/專有名詞——但不屬於以上任何一類（如「某作品」「某概念」等）
+- **none**: 普通詞彙、公司名、品牌名、文學虛構角色、不確定的
+- 只輸出JSON陣列，不要markdown包裹`;
 
     try {
         const response = await callLLM(
@@ -202,7 +202,7 @@ ${contextText}
         let text = (response?.reply || '').replace(/```json|```/g, '').trim();
         const match = text.match(/\[[\s\S]*\]/);
         if (!match) {
-            console.log('[Archivist] 内容实体扫描: LLM返回非JSON数组，跳过');
+            console.log('[Archivist] 內容實體掃描: LLM返回非JSON陣列，跳過');
             return [];
         }
 
@@ -221,12 +221,12 @@ ${contextText}
             }));
 
         if (newEntities.length > 0) {
-            console.log(`[Archivist] 内容实体扫描: 发现 ${newEntities.length} 个候选 — ${newEntities.map(e => e.name + '(' + e.fragCount + ')').join(', ')}`);
+            console.log(`[Archivist] 內容實體掃描: 發現 ${newEntities.length} 個候選 — ${newEntities.map(e => e.name + '(' + e.fragCount + ')').join(', ')}`);
         }
 
         return newEntities;
     } catch (e) {
-        console.error('[Archivist] 内容实体扫描失败:', e.message);
+        console.error('[Archivist] 內容實體掃描失敗:', e.message);
         return [];
     }
 }
@@ -338,7 +338,7 @@ async function discoverEntityRelationships(options = {}) {
         }
 
         if (lowConfCandidates.length > 0 || staleCandidates.length > 0) {
-            console.log(`[Archivist] 重评估候选: ${lowConfCandidates.length} 低置信度 + ${staleCandidates.length} 过期`);
+            console.log(`[Archivist] 重評估候選: ${lowConfCandidates.length} 低置信度 + ${staleCandidates.length} 過期`);
         }
     }
 
@@ -346,7 +346,7 @@ async function discoverEntityRelationships(options = {}) {
         return { discovered: 0 };
     }
 
-    console.log(`[Archivist] 实体关系发现: ${candidates.length} 个候选人 (${candidates.map(c => c.name + '(' + c.fragCount + ')' + (c.isReEval ? '[R]' : '')).join(', ')})`);
+    console.log(`[Archivist] 實體關係發現: ${candidates.length} 個候選人 (${candidates.map(c => c.name + '(' + c.fragCount + ')' + (c.isReEval ? '[R]' : '')).join(', ')})`);
 
     let discovered = 0;
 
@@ -385,48 +385,48 @@ async function discoverEntityRelationships(options = {}) {
             const { buildCognitiveContext } = require('../cognitiveEvolution');
             const cogCtx = buildCognitiveContext(cand.entityProfileId || 0, cand.name, null);
             if (cogCtx.correctionCount > 0 || cogCtx.ruleCount > 0) {
-                console.log(`[Archivist] 认知上下文: ${cogCtx.correctionCount} 条纠错 + ${cogCtx.ruleCount} 条规则`);
+                console.log(`[Archivist] 認知上下文: ${cogCtx.correctionCount} 條糾錯 + ${cogCtx.ruleCount} 條規則`);
             }
 
             // Progressive re-eval context
             let priorContext = '';
             if (cand.lastHypothesis) {
                 const newFragCount = fragments.length - (cand.lastEvalFragCount || 0);
-                priorContext = `\n## 上次评估的推断\n上次评估时（${cand.lastEvalFragCount} 条碎片），系统推断「${cand.name}」可能是 **${cand.lastHypothesis}**，但置信度不足以确定。\n此后新增了 ${Math.max(0, newFragCount)} 条碎片。请结合新旧证据重新判断。\n`;
+                priorContext = `\n## 上次評估的推斷\n上次評估時（${cand.lastEvalFragCount} 條碎片），系統推斷「${cand.name}」可能是 **${cand.lastHypothesis}**，但置信度不足以確定。\n此後新增了 ${Math.max(0, newFragCount)} 條碎片。請結合新舊證據重新判斷。\n`;
             }
 
             const prompt = `${WORLD_CONTEXT}
 
-你是人物关系档案员。阅读以下与「${cand.name}」有关的所有记忆碎片，判断这个人和User是什么关系。${priorContext}
-注意：Scribe提取的碎片是第三人称转述。原始对话中的"我妈""妈妈说"可能被转写为"${cand.name}为User做了..."。你需要从碎片描述的**互动模式**来推断关系性质。
+你是人物關係檔案員。閱讀以下與「${cand.name}」有關的所有記憶碎片，判斷這個人和User是什麼關係。${priorContext}
+注意：Scribe提取的碎片是第三人稱轉述。原始對話中的"我媽""媽媽說"可能被轉寫為"${cand.name}為User做了..."。你需要從碎片描述的**互動模式**來推斷關係性質。
 
-## 关系判断的线索（按优先级从高到低）：
-1. **互动频率和内容** — 天天做饭带饭 → 同居亲人/伴侣/室友。偶尔见面评价作品 → 朋友/同行/前辈。涉及金钱/法律纠纷 → 前任/商业伙伴。
-2. **情感色彩** — 关爱照顾 → 长辈/亲人。好感/约会 → 恋爱对象。吐槽/矛盾 → 朋友/前任。
-3. **语言线索** — "分手""前任""在一起""结束与X的关系""BE"→前任恋人或已结束的亲密关系。"官宣"→公开的恋爱关系。
-4. **排除法** — 如果互动完全围绕日常生活起居（做饭、带饭、同住）→ 家人（而非恋人）。如果互动完全围绕创作评价、艺术讨论 → 很可能是创作者同行或前辈（而非家人）。
+## 關係判斷的線索（按優先順序從高到低）：
+1. **互動頻率和內容** — 天天做飯帶飯 → 同居親人/伴侶/室友。偶爾見面評價作品 → 朋友/同行/前輩。涉及金錢/法律糾紛 → 前任/商業夥伴。
+2. **情感色彩** — 關愛照顧 → 長輩/親人。好感/約會 → 戀愛物件。吐槽/矛盾 → 朋友/前任。
+3. **語言線索** — "分手""前任""在一起""結束與X的關係""BE"→前任戀人或已結束的親密關係。"官宣"→公開的戀愛關係。
+4. **排除法** — 如果互動完全圍繞日常生活起居（做飯、帶飯、同住）→ 家人（而非戀人）。如果互動完全圍繞創作評價、藝術討論 → 很可能是創作者同行或前輩（而非家人）。
 
 ${cogCtx.rulesSection}
 ${cogCtx.correctionsSection}
-## 碎片原文（共 ${fragments.length} 条，时间跨度 ${firstDate} ~ ${lastDate}）
+## 碎片原文（共 ${fragments.length} 條，時間跨度 ${firstDate} ~ ${lastDate}）
 
 ${fragmentTexts}
 
-## 任务
+## 任務
 
-输出一个JSON对象，不要markdown包裹：
+輸出一個JSON物件，不要markdown包裹：
 
-{"name":"${cand.name}","relationship":"对User而言这个人是谁","relationship_nature":"close/conflicted/complex/distant/dependent","emotional_significance":"这个人在User生活中的情感意义","time_context":"时间背景和最近联系状态","confidence":"high/medium/low","entity_type":"real_person/public_figure/fictional_character/unknown","suggested_category_path":"推荐的知识树路径"}
+{"name":"${cand.name}","relationship":"對User而言這個人是誰","relationship_nature":"close/conflicted/complex/distant/dependent","emotional_significance":"這個人在User生活中的情感意義","time_context":"時間背景和最近聯絡狀態","confidence":"high/medium/low","entity_type":"real_person/public_figure/fictional_character/unknown","suggested_category_path":"推薦的知識樹路徑"}
 
-字段说明：
-- entity_type: 这个人的类型
-  * "real_person" — User生活中真实认识、有互动的人（朋友/家人/同事/前任等）
-  * "public_figure" — 真实存在但User不认识的名人（歌手/演员/作家/网红等）
-  * "fictional_character" — 书/游戏/影视里的虚构角色
-  * "unknown" — 信息不足以判断
-- suggested_category_path: 推荐一个分类标签路径（扁平标签，如 "重要的人/某个朋友"、"音乐/某歌手"、"虚构角色/某作品角色"）。路径仅作为分类建议，不再创建层级节点。
+欄位說明：
+- entity_type: 這個人的型別
+  * "real_person" — User生活中真實認識、有互動的人（朋友/家人/同事/前任等）
+  * "public_figure" — 真實存在但User不認識的名人（歌手/演員/作家/網紅等）
+  * "fictional_character" — 書/遊戲/影視裡的虛構角色
+  * "unknown" — 資訊不足以判斷
+- suggested_category_path: 推薦一個分類標籤路徑（扁平標籤，如 "重要的人/某個朋友"、"音樂/某歌手"、"虛構角色/某作品角色"）。路徑僅作為分類建議，不再建立層級節點。
 
-如果碎片信息不足以确定关系（比如只知道这个人出现过但互动模式不明显），confidence设low，relationship写"不确定"。不要强行判断。`;
+如果碎片資訊不足以確定關係（比如只知道這個人出現過但互動模式不明顯），confidence設low，relationship寫"不確定"。不要強行判斷。`;
 
             const response = await callLLM(
                 [{ role: 'user', parts: [{ text: prompt }] }],
@@ -438,7 +438,7 @@ ${fragmentTexts}
             let text = (response?.reply || '').replace(/```json|```/g, '').trim();
             const match = text.match(/\{[\s\S]*\}/);
             if (!match) {
-                console.error(`[Archivist] 关系发现 ${cand.name}: LLM返回非JSON`);
+                console.error(`[Archivist] 關係發現 ${cand.name}: LLM返回非JSON`);
                 continue;
             }
 
@@ -460,8 +460,8 @@ ${fragmentTexts}
                     'SELECT COUNT(*) as c FROM cognitive_corrections WHERE entity_id = ?'
                 ).get(cand.entityProfileId);
                 if (changeCount.c >= 3 && existingRel.relationship_to_user !== relText) {
-                    console.warn(`[Archivist] ⚠️ 关系振荡: ${cand.name} 已被修改 ${changeCount.c} 次，跳过本次变更`);
-                    console.warn(`  当前: ${existingRel.relationship_to_user} → 拟变更: ${relText}`);
+                    console.warn(`[Archivist] ⚠️ 關係振盪: ${cand.name} 已被修改 ${changeCount.c} 次，跳過本次變更`);
+                    console.warn(`  當前: ${existingRel.relationship_to_user} → 擬變更: ${relText}`);
                     db.prepare("UPDATE entity_profiles SET last_evaluated_at = datetime('now') WHERE id = ?")
                         .run(cand.entityProfileId);
                     // Set entity_id on fragments (no knowledge tree nodes)
@@ -476,8 +476,8 @@ ${fragmentTexts}
             }
 
             // Low confidence: save hypothesis for progressive re-eval, don't commit relationship yet
-            if (relConf === 'low' || relText === '不确定' || relText === '') {
-                console.log(`[Archivist] 关系发现 ${cand.name}: 信息不足 (confidence=${relConf})，保存假设待重评估`);
+            if (relConf === 'low' || relText === '不確定' || relText === '不确定' || relText === '') {
+                console.log(`[Archivist] 關係發現 ${cand.name}: 資訊不足 (confidence=${relConf})，儲存假設待重評估`);
                 if (cand.isNew) {
                     const info = db.prepare(`
                         INSERT INTO entity_profiles (name, category, entity_type, first_mentioned_date, last_mentioned_date)
@@ -489,7 +489,7 @@ ${fragmentTexts}
                 }
                 if (cand.entityProfileId) {
                     // Save the hypothesis even though we're not confident — enables progressive re-eval
-                    const hypothesis = relText !== '不确定' && relText !== '' ? relText : null;
+                    const hypothesis = relText !== '不確定' && relText !== '不确定' && relText !== '' ? relText : null;
                     db.prepare(`UPDATE entity_profiles
                         SET last_hypothesis = ?,
                             last_eval_frag_count = ?,
@@ -524,7 +524,7 @@ ${fragmentTexts}
                     mispattern, evidence,
                     fragments.length
                 );
-                console.log(`[Archivist] 纠错: ${cand.name} — "${oldLabel}" → "${relText}" (mispattern: ${mispattern})`);
+                console.log(`[Archivist] 糾錯: ${cand.name} — "${oldLabel}" → "${relText}" (mispattern: ${mispattern})`);
             }
 
             if (cand.isNew) {
@@ -535,7 +535,7 @@ ${fragmentTexts}
                 cand.entityProfileId = info.lastInsertRowid;
                 db.prepare('UPDATE memory_fragments SET entity_id = ? WHERE entity = ? AND entity_id IS NULL')
                     .run(cand.entityProfileId, cand.name);
-                console.log(`[Archivist] 创建 entity_profile: ${cand.name} (id=${cand.entityProfileId}) — ${relText} [confidence=${relConf}]`);
+                console.log(`[Archivist] 建立 entity_profile: ${cand.name} (id=${cand.entityProfileId}) — ${relText} [confidence=${relConf}]`);
             } else {
                 db.prepare(`
                     UPDATE entity_profiles
@@ -558,7 +558,7 @@ ${fragmentTexts}
             }
             discovered++;
         } catch (e) {
-            console.error(`[Archivist] 关系发现 ${cand.name} 失败:`, e.message);
+            console.error(`[Archivist] 關係發現 ${cand.name} 失敗:`, e.message);
         }
     }
 

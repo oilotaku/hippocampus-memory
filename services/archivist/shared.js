@@ -69,11 +69,11 @@ let _boostKeywordMap = null;
 
 
 // ═══════════════════════════════════════════════════════
-// Core Persona / Daily Status — 认知审计 prompt 的辅助上下文
+// Core Persona / Daily Status — 認知審計 prompt 的輔助上下文
 // ═══════════════════════════════════════════════════════
 
-// Companion 核心人格上下文。OSS 里人格已由 WORLD_CONTEXT 注入（AI.core_traits），
-// 这里返回空串，保留占位以免 regenerateEntityOverviews 引用报错。
+// Companion 核心人格上下文。OSS 裡人格已由 WORLD_CONTEXT 注入（AI.core_traits），
+// 這裡返回空串，保留佔位以免 regenerateEntityOverviews 引用報錯。
 let _corePersonaCache = null;
 
 function getCorePersonaContext() {
@@ -89,7 +89,7 @@ function getCorePersonaContext() {
 
 function buildLandscapeIndex() {
     const db = getDb();
-    // v5.x: 星图从 entity_profiles 星座读取（替代已退役的 memory_ontology 话题树）
+    // v5.x: 星圖從 entity_profiles 星座讀取（替代已退役的 memory_ontology 話題樹）
     const cats = db.prepare(`
         SELECT id, name AS path, category AS label, facts AS description, fragment_count
         FROM entity_profiles
@@ -98,14 +98,14 @@ function buildLandscapeIndex() {
         LIMIT 40
     `).all();
 
-    if (cats.length === 0) return '（记忆星图为空——还没有任何星座）';
+    if (cats.length === 0) return '（記憶星圖為空——還沒有任何星座）';
 
-    const lines = [`🪐 记忆星图 · 当前共 ${cats.length} 个星座`];
+    const lines = [`🪐 記憶星圖 · 當前共 ${cats.length} 個星座`];
     lines.push('═══════════════════════════════════════');
     for (let i = 0; i < cats.length; i++) {
         const c = cats[i];
         const desc = (c.description || '').substring(0, 50);
-        lines.push(`${String(i + 1).padStart(2)}. ${c.path} (${c.fragment_count}条)${desc ? ' — ' + desc : ''}`);
+        lines.push(`${String(i + 1).padStart(2)}. ${c.path} (${c.fragment_count}條)${desc ? ' — ' + desc : ''}`);
     }
     lines.push('═══════════════════════════════════════');
     return lines.join('\n');

@@ -1,9 +1,9 @@
-# 记忆库 + ChromaDB 服务 — 把这两段加到你的 docker-compose.yml 的 services: 下面
-# （和 astrbot、snowluma 平级）
+# 記憶庫 + ChromaDB 服務 — 把這兩段加到你的 docker-compose.yml 的 services: 下面
+# （和 astrbot、snowluma 平級）
 #
-# 注意：build 的 context 要指到记忆库代码目录（含 deploy/ 里的 Dockerfile）。
+# 注意：build 的 context 要指到記憶庫程式碼目錄（含 deploy/ 裡的 Dockerfile）。
 
-  # ── 记忆库主服务（Node.js）──
+  # ── 記憶庫主服務（Node.js）──
   memory-constellations:
     build:
       context: ./MemoryConstellations
@@ -11,22 +11,22 @@
     container_name: memory-constellations
     restart: always
     ports:
-      - "3000:3000"                      # 记忆库 HTTP（桥接插件通过它访问）
+      - "3000:3000"                      # 記憶庫 HTTP（橋接外掛通過它訪問）
     environment:
       - TZ=Asia/Shanghai
-      # ── 必填：下面两个用 `openssl rand -hex 32` 生成 ──
+      # ── 必填：下面兩個用 `openssl rand -hex 32` 生成 ──
       - SANCTUARY_ENCRYPTION_KEY=改成64位hex
       - SESSION_SECRET=改成64位hex
-      - LOGIN_PASSWORD=改成你的登录密码
-      # ── 必填：至少配一个 LLM API key（记忆管线用）──
+      - LOGIN_PASSWORD=改成你的登入密碼
+      # ── 必填：至少配一個 LLM API key（記憶管線用）──
       - API_KEY=改成你的LLMkey
       # - GEMINI_API_KEY=或填Gemini的key
-      - CHROMA_URL=http://chroma:7707     # 向量检索服务地址（chroma 容器）
-      - DB_PATH=/app/data/sanctuary.db   # 数据库文件落到持久化目录
+      - CHROMA_URL=http://chroma:7707     # 向量檢索服務地址（chroma 容器）
+      - DB_PATH=/app/data/sanctuary.db   # 資料庫檔案落到持久化目錄
     volumes:
-      - ./memory-data:/app/data          # 持久化数据库 + 配置
+      - ./memory-data:/app/data          # 持久化資料庫 + 配置
 
-  # ── ChromaDB + Embedding 服务（向量/语义检索，可选）──
+  # ── ChromaDB + Embedding 服務（向量/語義檢索，可選）──
   chroma:
     build:
       context: ./MemoryConstellations
@@ -34,7 +34,7 @@
     container_name: chroma-service
     restart: always
     ports:
-      - "7707:7707"                      # ChromaDB HTTP（记忆库通过它做向量检索）
+      - "7707:7707"                      # ChromaDB HTTP（記憶庫通過它做向量檢索）
     volumes:
-      - ./chroma-data:/app/chroma_data   # 持久化向量数据
-      - ./chroma-cache:/app/hf_cache     # 持久化 embedding 模型（避免每次重启重新下载）
+      - ./chroma-data:/app/chroma_data   # 持久化向量資料
+      - ./chroma-cache:/app/hf_cache     # 持久化 embedding 模型（避免每次重啟重新下載）

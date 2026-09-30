@@ -1,5 +1,5 @@
 // services/tools/index.js
-// 工具注册表 — OSS: 仅记忆相关工具
+// 工具登錄檔 — OSS: 僅記憶相關工具
 
 const tools = [
   ...require('./memoryTools'),

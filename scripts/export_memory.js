@@ -1,18 +1,18 @@
-// scripts/export_memory.js — 导出记忆库，方便迁移 / 备份
+// scripts/export_memory.js — 匯出記憶庫，方便遷移 / 備份
 //
 // 用法：
-//   node scripts/export_memory.js [输出文件.jsonl]     （默认 memory_export.jsonl）
+//   node scripts/export_memory.js [輸出檔案.jsonl]     （預設 memory_export.jsonl）
 //
-// 导出内容（按依赖顺序）：
-//   entity_profiles    星座（人物/地点/事件实体，三字段模型）
-//   memory_fragments   记忆碎片（Scribe 提取的原始事实）
-//   fragment_entities  碎片 ↔ 实体关联
-//   memories           叙事记忆（episode / saga）
+// 匯出內容（按依賴順序）：
+//   entity_profiles    星座（人物/地點/事件實體，三欄位模型）
+//   memory_fragments   記憶碎片（Scribe 提取的原始事實）
+//   fragment_entities  碎片 ↔ 實體關聯
+//   memories           敘事記憶（episode / saga）
 //
-// 导出为 JSONL，每行一个 JSON 对象：
-//   {"table":"memory_fragments","row":{...全部字段...}}
+// 匯出為 JSONL，每行一個 JSON 物件：
+//   {"table":"memory_fragments","row":{...全部欄位...}}
 //
-// 对应的导入脚本：node scripts/import_memory.js <文件.jsonl>
+// 對應的匯入指令碼：node scripts/import_memory.js <檔案.jsonl>
 
 const fs = require('fs');
 const { initDatabase, getDb } = require('../database');
@@ -38,13 +38,13 @@ function main() {
     }
     stream.end();
 
-    console.log('✅ 记忆库导出完成');
-    console.log(`   输出文件: ${outFile}`);
-    for (const t of TABLES) console.log(`   ${t}: ${counts[t]} 条`);
-    console.log(`   合计: ${total} 条记录`);
-    console.log('⚠️  导出档是**明文**（加密栏位已由透明解密层还原，方便换金钥／换机器导入），请妥善保管，用完删除。');
-    console.log('\n迁移到新机器后，用 `node scripts/import_memory.js ' + outFile + '` 导入。');
+    console.log('✅ 記憶庫匯出完成');
+    console.log(`   輸出檔案: ${outFile}`);
+    for (const t of TABLES) console.log(`   ${t}: ${counts[t]} 條`);
+    console.log(`   合計: ${total} 條記錄`);
+    console.log('⚠️  匯出檔是**明文**（加密欄位已由透明解密層還原，方便換金鑰／換機器匯入），請妥善保管，用完刪除。');
+    console.log('\n遷移到新機器後，用 `node scripts/import_memory.js ' + outFile + '` 匯入。');
     process.exit(0);
 }
 
-main().catch(e => { console.error('❌ 导出失败:', e); process.exit(1); });
+main().catch(e => { console.error('❌ 匯出失敗:', e); process.exit(1); });

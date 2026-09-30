@@ -1,6 +1,6 @@
 // ========================================
-// 记忆星图 v5 — 入口
-// 初始化、交互事件、主 rAF 循环、定时刷新
+// 記憶星圖 v5 — 入口
+// 初始化、互動事件、主 rAF 迴圈、定時重新整理
 // ========================================
 
 import { loadUniverse, universe, conById, bumpAccess, GALAXIES, OWN_GALAXY_ID } from './data.js';
@@ -22,7 +22,7 @@ let lastInteraction = Date.now();
 let frameSkip = false;
 function markInteraction() { lastInteraction = Date.now(); frameSkip = false; }
 
-// ── 视图切换响应 ──
+// ── 檢視切換響應 ──
 onViewChange(v => {
     resetCamera();
     rebuildLayouts();
@@ -30,7 +30,7 @@ onViewChange(v => {
     updateGalaxyPills();
     hovered = null;
     hideTooltip();
-    // 面板联动
+    // 面板聯動
     if (v.level === 'constellation') {
         const con = conById(v.conId);
         if (con) showConPanel(con);
@@ -39,7 +39,7 @@ onViewChange(v => {
     }
 });
 
-// ── 交互：滚轮缩放 / 拖拽平移 ──
+// ── 互動：滾輪縮放 / 拖拽平移 ──
 let isDrag = false, didDrag = false, lmx = 0, lmy = 0;
 
 mc.addEventListener('wheel', e => {
@@ -65,7 +65,7 @@ window.addEventListener('mousemove', e => {
 });
 window.addEventListener('mouseup', () => { isDrag = false; });
 
-// 触屏
+// 觸屏
 let t0d = 0, t0s = 1;
 mc.addEventListener('touchstart', e => {
     markInteraction();
@@ -99,16 +99,16 @@ function onHover(mx, my) {
     mc.style.cursor = hovered ? 'pointer' : 'default';
     if (!hovered) { hideTooltip(); return; }
     switch (hovered.type) {
-        case 'core': showTooltip(mx, my, hovered.name + ' · 双星核心'); break;
+        case 'core': showTooltip(mx, my, hovered.name + ' · 雙星核心'); break;
         case 'galaxy': showTooltip(mx, my, hovered.id + '星系'); break;
-        case 'con': showTooltip(mx, my, `${hovered.con.label} · ${hovered.con.stars.length} 颗记忆`); break;
+        case 'con': showTooltip(mx, my, `${hovered.con.label} · ${hovered.con.stars.length} 顆記憶`); break;
         case 'star': showTooltip(mx, my, `${hovered.star.title || '…'} · ${(hovered.star.mag || 4).toFixed(1)}等`); break;
     }
 }
 
-// ── click：状态机驱动 ──
+// ── click：狀態機驅動 ──
 mc.addEventListener('click', e => {
-    if (didDrag) { didDrag = false; return; } // 拖拽结束不算点击
+    if (didDrag) { didDrag = false; return; } // 拖拽結束不算點選
     markInteraction();
     const hit = hitTest(e.clientX, e.clientY);
     if (!hit) { goUp(); return; }
@@ -130,7 +130,7 @@ mc.addEventListener('click', e => {
     }
 });
 
-// ── 键盘 ──
+// ── 鍵盤 ──
 window.addEventListener('keydown', e => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
     markInteraction();
@@ -145,7 +145,7 @@ window.addEventListener('keydown', e => {
 
 // ── galaxy pills ──
 const GALAXY_COLORS = {
-    '社交': '#ff9966', '地点': '#6699ff', '事件': '#66cc99', '爱好': '#ff6666',
+    '社交': '#ff9966', '地點': '#6699ff', '事件': '#66cc99', '愛好': '#ff6666',
 };
 GALAXY_COLORS[OWN_GALAXY_ID] = '#cc99ff'; // user's galaxy uses configurable name
 
@@ -184,7 +184,7 @@ function updateGalaxyPills() {
     });
 }
 
-// ── 数据加载 ──
+// ── 資料載入 ──
 async function refresh() {
     try {
         await loadUniverse();
@@ -201,19 +201,19 @@ async function refresh() {
     }
 }
 
-// ── 主循环 ──
+// ── 主迴圈 ──
 let T = 0;
-let frameErrors = 0;   // 连续异常计数（只用于降噪，不影响链路）
+let frameErrors = 0;   // 連續異常計數（只用於降噪，不影響鏈路）
 function loop() {
-    // 空闲降帧：>3s 无交互 → 隔帧渲染（~30fps）
+    // 空閒降幀：>3s 無互動 → 隔幀渲染（~30fps）
     if (Date.now() - lastInteraction > 3000) {
         frameSkip = !frameSkip;
         if (frameSkip) { requestAnimationFrame(loop); return; }
     }
     T += 0.012;
-    // 单帧异常不许杀掉 RAF 链：抛出去就再也不会被调度，画面静默冻结在最后一帧，
-    // 从外部看是「页面点了没反应」，极难往渲染循环上想。这里吞掉异常、继续下一帧，
-    // 但连续抛错说明不是偶发，前几次打进控制台留线索。
+    // 單幀異常不許殺掉 RAF 鏈：丟擲去就再也不會被排程，畫面靜默凍結在最後一幀，
+    // 從外部看是「頁面點了沒反應」，極難往渲染迴圈上想。這裡吞掉異常、繼續下一幀，
+    // 但連續拋錯說明不是偶發，前幾次打進控制台留線索。
     try {
         drawFrame(T, hovered);
         frameErrors = 0;
@@ -223,15 +223,15 @@ function loop() {
     requestAnimationFrame(loop);
 }
 
-// ── 启动 ──
-// ── 星尘透镜 ──
+// ── 啟動 ──
+// ── 星塵透鏡 ──
 const TYPE_MAP = {
-    observation: { cls:'obs', label:'观察', emoji:'✦' },
+    observation: { cls:'obs', label:'觀察', emoji:'✦' },
     preference: { cls:'pref', label:'偏好', emoji:'◇' },
     reflection: { cls:'refl', label:'反思', emoji:'◈' },
     event: { cls:'event', label:'事件', emoji:'○' },
-    state: { cls:'state', label:'状态', emoji:'▽' },
-    music: { cls:'music', label:'音乐', emoji:'♪' },
+    state: { cls:'state', label:'狀態', emoji:'▽' },
+    music: { cls:'music', label:'音樂', emoji:'♪' },
 };
 function starStr(ew) {
     if (ew >= 0.8) return '★★★';
@@ -285,7 +285,7 @@ async function loadFragmentConstellations(fragIds) {
 function renderStardustEntries(frags, conMap) {
     const body = document.getElementById('stardust-body');
     if (!frags.length) {
-        body.innerHTML = '<div class="sd-empty">✦<br>没有捕获到任何信号</div>';
+        body.innerHTML = '<div class="sd-empty">✦<br>沒有捕獲到任何訊號</div>';
         return;
     }
     body.innerHTML = frags.map(f => {
@@ -313,7 +313,7 @@ function renderStardustEntries(frags, conMap) {
             + '<div class="sd-detail">'
             + (conStr ? '<div class="sd-constellations">' + conStr + '</div>' : '')
             + '<div class="sd-actions">'
-            + '<button class="sd-act danger" data-act="delete" data-fid="' + f.id + '">删除</button>'
+            + '<button class="sd-act danger" data-act="delete" data-fid="' + f.id + '">刪除</button>'
             + '</div></div></div></div>';
     }).join('');
 
@@ -335,7 +335,7 @@ function renderStardustEntries(frags, conMap) {
         btn.addEventListener('click', async e => {
             e.stopPropagation();
             const fid = parseInt(btn.dataset.fid);
-            if (!confirm('删除碎片 #' + fid + '？')) return;
+            if (!confirm('刪除碎片 #' + fid + '？')) return;
             const token = localStorage.getItem('token');
             try {
                 const res = await fetch('/api/fragment/' + fid, { method: 'DELETE', headers: { Authorization: 'Bearer ' + token } });
@@ -355,7 +355,7 @@ async function refreshStardust() {
 
     // Scanning state
     lens.classList.add('sd-scanning');
-    body.innerHTML = '<div class="sd-scanning-hint"><span class="sd-scan-pulse">✦</span><br>扫描信号中...</div>';
+    body.innerHTML = '<div class="sd-scanning-hint"><span class="sd-scan-pulse">✦</span><br>掃描訊號中...</div>';
     try {
         const frags = await loadStardust(days, query);
         const fragIds = frags.map(f => f.id);

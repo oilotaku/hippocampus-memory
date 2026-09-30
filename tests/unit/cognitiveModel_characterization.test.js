@@ -37,11 +37,11 @@ const frag = (content, ago = '-1 days', msgs = '[]') => Number(db.prepare(
 describe('cognitiveModel 明確規則', () => {
     beforeEach(() => { db.exec('DELETE FROM user_model; DELETE FROM memory_fragments;'); });
 
-    test('createEntry：inferred 上限 0.70、direct_statement +0.15 且依類型封頂、decay_type 推定', () => {
+    test('createEntry：inferred 上限 0.70、direct_statement +0.15 且依型別封頂、decay_type 推定', () => {
         const a = cm.createEntry('stable_trait', '喜歡拉麵', { confidence: 0.9 });
         assert.equal(getE(a).confidence, 0.7);
         assert.equal(getE(a).decay_type, 'evidence_dependent');
-        const b = cm.createEntry('stable_trait', '住在台北', { confidence: 0.8, source_quality: 'direct_statement' });
+        const b = cm.createEntry('stable_trait', '住在臺北', { confidence: 0.8, source_quality: 'direct_statement' });
         assert.equal(getE(b).confidence, 0.85);
         const c = cm.createEntry('immutable_fact', '生日在三月', { confidence: 0.9, source_quality: 'direct_statement' });
         assert.equal(getE(c).confidence, 0.99);
@@ -99,7 +99,7 @@ describe('cognitiveModel 固定情境指紋（拆分前後必須完全相同）'
         ins.run('current_state', '這週在趕報告', 0.7, 'exponential', 1, '-3 days', '[]', '[]', '-3 days', '-3 days', '2020-01-01 00:00:00', '[]', 'chat_companion');
         ins.run('active_hypothesis', '可能在準備考試', 0.5, 'evidence_dependent', 1, '-20 days', '[]', '[]', '-25 days', '-20 days', null, `[${fids[5]}]`, 'deep_cycle');
         ins.run('active_hypothesis', '可能想換工作', 0.4, 'evidence_dependent', 0, '-2 days', '[]', '[]', '-2 days', '-2 days', null, '[]', 'deep_cycle');
-        ins.run('immutable_fact', '住在台北', 0.95, 'none', 5, '-10 days', '[]', '[]', '-90 days', '-10 days', null, '[]', 'deep_cycle');
+        ins.run('immutable_fact', '住在臺北', 0.95, 'none', 5, '-10 days', '[]', '[]', '-90 days', '-10 days', null, '[]', 'deep_cycle');
 
         const fp = {};
         const step = async (name, fn) => {

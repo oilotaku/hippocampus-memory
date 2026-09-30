@@ -9,16 +9,16 @@ const { createEntry } = require('./entries');
 
 
 // ══════════════════════════════════════════════════════════════
-// v5.4: manageCurrentState — 统一 current_state 写入入口
+// v5.4: manageCurrentState — 統一 current_state 寫入入口
 //
 // 被 chat_companion（manageUserState.js）和 deep_cycle（readUserRawMessages）
-// 共同调用。处理去重、自动合并、TTL 调整和演化记录。
+// 共同呼叫。處理去重、自動合併、TTL 調整和演化記錄。
 //
-// 规则：
-//   - 同话题 active 条目 → extend（更新内容 + 延 TTL）
-//   - 旧条目已过时 → resolve 旧 + create 新
-//   - 在消退中 → 缩短 TTL，不新建
-//   - 无匹配 → create 新条目
+// 規則：
+//   - 同話題 active 條目 → extend（更新內容 + 延 TTL）
+//   - 舊條目已過時 → resolve 舊 + create 新
+//   - 在消退中 → 縮短 TTL，不新建
+//   - 無匹配 → create 新條目
 // ══════════════════════════════════════════════════════════════
 
 // ── bigram tokenizer (same as manageUserState.js) ──
@@ -47,13 +47,13 @@ function _bigramOverlap(a, b) {
 
 // ── TTL map by category ──
 const STATE_TTL_MAP = {
-    physical:    { hours: 8,  day: 24,  days: 72  },  // 身体状态 3天
-    emotional:   { hours: 4,  day: 12,  days: 36  },  // 情绪状态 1.5天
-    situational: { hours: 12, day: 24,  days: 72  },  // 境遇状态 3天
-    relational:  { hours: 4,  day: 12,  days: 72  },  // 关系状态
+    physical:    { hours: 8,  day: 24,  days: 72  },  // 身體狀態 3天
+    emotional:   { hours: 4,  day: 12,  days: 36  },  // 情緒狀態 1.5天
+    situational: { hours: 12, day: 24,  days: 72  },  // 境遇狀態 3天
+    relational:  { hours: 4,  day: 12,  days: 72  },  // 關係狀態
 };
 
-const DEFAULT_TTL_HOURS = 48; // 默认 2 天
+const DEFAULT_TTL_HOURS = 48; // 預設 2 天
 
 
 function _computeExpiresAt(category, ttlCategory) {
@@ -65,7 +65,7 @@ function _computeExpiresAt(category, ttlCategory) {
 
 
 /**
- * @param {string} content — 状态内容
+ * @param {string} content — 狀態內容
  * @param {object} opts
  *   created_by: 'chat_companion' | 'deep_cycle'
  *   category: 'physical'|'emotional'|'situational'|'relational'
@@ -156,7 +156,7 @@ function manageCurrentState(content, opts = {}) {
         }
     }
 
-    // Case A: Very high overlap (>80%) — same topic,持续中 → update
+    // Case A: Very high overlap (>80%) — same topic,持續中 → update
     if (bestMatch && bestScore > 0.8) {
         const prevContent = bestMatch.content.slice(0, 120);
         const hist = (() => { try { return JSON.parse(bestMatch.evolution_history || '[]'); } catch(_) { return []; } })();
@@ -183,7 +183,7 @@ function manageCurrentState(content, opts = {}) {
         return { action: 'updated', id: bestMatch.id };
     }
 
-    // Case B: Moderate overlap (50-80%) — topic related but内容变了 → supersede
+    // Case B: Moderate overlap (50-80%) — topic related but內容變了 → supersede
     if (bestMatch && bestScore > 0.5) {
         const prevContent = bestMatch.content.slice(0, 120);
         const oldHist = (() => { try { return JSON.parse(bestMatch.evolution_history || '[]'); } catch(_) { return []; } })();

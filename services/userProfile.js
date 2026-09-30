@@ -1,26 +1,26 @@
 // services/userProfile.js
-// v5.4 Phase 2b: User 画像组装
+// v5.4 Phase 2b: User 畫像組裝
 //
-// 从认知模型中读取活跃条目，按分类组装为可注入 system prompt 的文本块。
-// 替代 core-prompt.txt 中手动维护的 <用户核心信息>。
+// 從認知模型中讀取活躍條目，按分類組裝為可注入 system prompt 的文本塊。
+// 替代 core-prompt.txt 中手動維護的 <使用者核心資訊>。
 
 const { getDb } = require('../database');
 const { fillPrompt, USER, AI } = require('./nameResolver');
 
-// ── 分类标签 → 显示名称 ──
+// ── 分類標籤 → 顯示名稱 ──
 const CATEGORY_ORDER = [
-    { key: 'basic',                label: '基本信息' },
+    { key: 'basic',                label: '基本資訊' },
     { key: 'personality',          label: '性格' },
-    { key: 'career',               label: '职业' },
-    { key: 'social',               label: '社交关系' },
+    { key: 'career',               label: '職業' },
+    { key: 'social',               label: '社交關係' },
     { key: 'preference',           label: '偏好' },
     { key: 'lifestyle',            label: '生活方式' },
     { key: 'health',               label: '健康' },
-    { key: 'creative_work',        label: '创作' },
-    { key: 'personal_history',     label: '过去经历' },
-    { key: 'relationship_with_companion', label: '与伴侣的关系' },
-    { key: 'finance',              label: '经济' },
-    { key: 'communication',        label: '沟通风格' },
+    { key: 'creative_work',        label: '創作' },
+    { key: 'personal_history',     label: '過去經歷' },
+    { key: 'relationship_with_companion', label: '與伴侶的關係' },
+    { key: 'finance',              label: '經濟' },
+    { key: 'communication',        label: '溝通風格' },
 ];
 
 const SUB_TAGS = new Set([
@@ -33,9 +33,9 @@ const SUB_TAGS = new Set([
 // ── Public API ──
 
 /**
- * 组装 User 画像文本（用于注入 system prompt）
- * @param {number} maxTokens — 预算上限（估算）
- * @returns {string} 格式化的画像文本
+ * 組裝 User 畫像文本（用於注入 system prompt）
+ * @param {number} maxTokens — 預算上限（估算）
+ * @returns {string} 格式化的畫像文本
  */
 function assembleProfile(maxTokens = 500) {
     const db = getDb();
@@ -80,10 +80,10 @@ function assembleProfile(maxTokens = 500) {
     const lines = [];
     lines.push(`<User_profile>`);
 
-    // Core traits first (铁证级 — 始终在伴侣视野中)
+    // Core traits first (鐵證級 — 始終在伴侶視野中)
     const coreTraits = entries.filter(e => e.injection_tier === 'core');
     if (coreTraits.length > 0) {
-        lines.push('\n[核心认知 — 以下条目经反复验证，置信度极高]');
+        lines.push('\n[核心認知 — 以下條目經反覆驗證，置信度極高]');
         for (const e of coreTraits) {
             lines.push(`- ${e.content}`);
         }
@@ -101,7 +101,7 @@ function assembleProfile(maxTokens = 500) {
         lines.push(`\n[${label}]`);
         for (const e of nonCore) {
             // Mark stale entries
-            const staleMarker = _isStale(e) ? ' [可能过时]' : '';
+            const staleMarker = _isStale(e) ? ' [可能過時]' : '';
             const tierMarker = e.injection_tier === 'high' ? ' ★' : '';
             lines.push(`- ${e.content}${tierMarker}${staleMarker}`);
         }
@@ -115,7 +115,7 @@ function assembleProfile(maxTokens = 500) {
         if (!items || !items.length) continue;
         lines.push(`\n[${cat}]`);
         for (const e of items) {
-            lines.push(`- ${e.content}${_isStale(e) ? ' [可能过时]' : ''}`);
+            lines.push(`- ${e.content}${_isStale(e) ? ' [可能過時]' : ''}`);
         }
     }
 
@@ -124,7 +124,7 @@ function assembleProfile(maxTokens = 500) {
 }
 
 /**
- * 组装 User 画像 JSON（用于前端编辑器 API）
+ * 組裝 User 畫像 JSON（用於前端編輯器 API）
  * @returns {object} { groups: [{ category, label, entries: [...] }] }
  */
 function assembleProfileJSON() {

@@ -9,35 +9,35 @@ const { USER } = require('../memoryConfig');
 const { ARCHIVIST_LLM_CONFIG_ID } = require('./constants');
 const { _canCallLLM } = require('./runtime');
 
-const MIN_PATTERN_FRAGS = 3;        // 至少3条碎片才能形成一个 pattern
+const MIN_PATTERN_FRAGS = 3;        // 至少3條碎片才能形成一個 pattern
 
-const PATTERN_LLM_BATCH = 30;       // 单次最多喂给 LLM 的碎片数
+const PATTERN_LLM_BATCH = 30;       // 單次最多餵給 LLM 的碎片數
 
-const PATTERN_MATCH_THRESHOLD = 0.35; // bigram 匹配已有 pattern 的阈值
+const PATTERN_MATCH_THRESHOLD = 0.35; // bigram 匹配已有 pattern 的閾值
 
-const PATTERN_SUPERSEDED_THRESHOLD = 0.50; // 被取代的pattern匹配阈值需更高
+const PATTERN_SUPERSEDED_THRESHOLD = 0.50; // 被取代的pattern匹配閾值需更高
 
-const MIN_GAP_PATTERN_CLUSTER = 6 * 60 * 60 * 1000; // 6h 冷却
+const MIN_GAP_PATTERN_CLUSTER = 6 * 60 * 60 * 1000; // 6h 冷卻
 
-const PATTERN_DORMANT_DAYS = 30;    // >30天无新观察 → dormant
+const PATTERN_DORMANT_DAYS = 30;    // >30天無新觀察 → dormant
 
-const PATTERN_ARCHIVE_DAYS = 180;   // >180天无新观察 + conf<0.40 → archived
+const PATTERN_ARCHIVE_DAYS = 180;   // >180天無新觀察 + conf<0.40 → archived
 
-const PATTERN_CONTRADICT_THRESHOLD = 3; // 矛盾 ≥3 → 标记 needs_review
+const PATTERN_CONTRADICT_THRESHOLD = 3; // 矛盾 ≥3 → 標記 needs_review
 
-const PATTERN_MERGE_CANDIDATES = 3; // 攒够3对合并候选 → LLM批量判断
+const PATTERN_MERGE_CANDIDATES = 3; // 攢夠3對合並候選 → LLM批次判斷
 
-const PATTERN_MERGE_BIGRAM_OVERLAP = 0.45; // pattern间bigram重叠阈值 → 合并候选
+const PATTERN_MERGE_BIGRAM_OVERLAP = 0.45; // pattern間bigram重疊閾值 → 合併候選
 
-const NEGATION_WORDS = /不|没|不再|腻了|讨厌|烦|恶心/;
+const NEGATION_WORDS = /不|沒|不再|膩了|討厭|煩|噁心|不|没|不再|腻了|讨厌|烦|恶心/;
 
 
-// 时态信号——检测偏好漂移（"以前X，现在Y"）
-const TEMPORAL_PAST = /以前|曾经|原来|之前|本来|一直|从小|从前的|过去的/;
+// 時態訊號——檢測偏好漂移（"以前X，現在Y"）
+const TEMPORAL_PAST = /以前|曾經|原來|之前|本來|一直|從小|從前的|過去的|以前|曾经|原来|之前|本来|一直|从小|从前的|过去的/;
 
-const TEMPORAL_SHIFT = /现在.*不了|现在.*不|不再|改了|变了|戒了|放弃|不.*以前|不.*原来/;
+const TEMPORAL_SHIFT = /現在.*不了|現在.*不|不再|改了|變了|戒了|放棄|不.*以前|不.*原來|现在.*不了|现在.*不|不再|改了|变了|戒了|放弃|不.*以前|不.*原来/;
 
-const TEMPORAL_COMPLETE = /已经.*不|完全不|再也不/;
+const TEMPORAL_COMPLETE = /已經.*不|完全不|再也不|已经.*不|完全不|再也不/;
 
 
 // ── Confidence 公式（只升不降）──
@@ -46,17 +46,17 @@ function _calcPatternConfidence(evidenceCount, firstSeen, lastSeen) {
     const first = new Date(firstSeen);
     const last = new Date(lastSeen);
     const spanDays = Math.max(1, (last - first) / (1000 * 60 * 60 * 24));
-    // 来源多样性：从 source_fragment_ids 中统计不同日期的碎片数——调用方传入
+    // 來源多樣性：從 source_fragment_ids 中統計不同日期的碎片數——呼叫方傳入
     return Math.min(0.90,
         0.15                                          // base
-        + Math.min(0.40, evidenceCount * 0.04)         // 证据数：10条封顶
-        + Math.min(0.25, spanDays / 365 * 0.25)        // 时间跨度：1年封顶
-        - (evidenceCount >= 8 ? 0 : 0)                 // 预留超长期加成位
+        + Math.min(0.40, evidenceCount * 0.04)         // 證據數：10條封頂
+        + Math.min(0.25, spanDays / 365 * 0.25)        // 時間跨度：1年封頂
+        - (evidenceCount >= 8 ? 0 : 0)                 // 預留超長期加成位
     );
 }
 
 
-// ── Freshness 衰减系数（用于注入排序，不影响 confidence）──
+// ── Freshness 衰減係數（用於注入排序，不影響 confidence）──
 function _freshnessDecay(lastSeen) {
     if (!lastSeen) return 0.10;
     const daysSince = Math.max(0, (Date.now() - new Date(lastSeen).getTime()) / (1000 * 60 * 60 * 24));
@@ -68,7 +68,7 @@ function _freshnessDecay(lastSeen) {
 }
 
 
-// ── 时态漂移检测：碎片是否在"推翻"旧pattern ──
+// ── 時態漂移檢測：碎片是否在"推翻"舊pattern ──
 function _detectDrift(fragContent) {
     const hasPast = TEMPORAL_PAST.test(fragContent);
     const hasShift = TEMPORAL_SHIFT.test(fragContent) || TEMPORAL_COMPLETE.test(fragContent);
@@ -76,7 +76,7 @@ function _detectDrift(fragContent) {
 }
 
 
-// ── Bigram 分词 ──
+// ── Bigram 分詞 ──
 function _tokenize(text) {
     const segments = (text || '').replace(/[，。、！？\n,.\s]+/g, '\n').split('\n').filter(s => s.length >= 2);
     const bigrams = new Set();
@@ -97,7 +97,7 @@ function _bigramOverlap(textA, textB) {
 }
 
 
-// ── Freshness-based状态刷新（每2min）──
+// ── Freshness-based狀態重新整理（每2min）──
 function refreshPatternStates() {
     const db = getDb();
     const allPatterns = db.prepare("SELECT * FROM user_patterns WHERE status IN ('active','dormant','superseded')").all();
@@ -115,12 +115,12 @@ function refreshPatternStates() {
                 newStatus = 'dormant';
                 dormantCount++;
             } else if (p.status === 'dormant' && daysSince <= PATTERN_DORMANT_DAYS) {
-                newStatus = 'active'; // 复活——最近有新匹配
+                newStatus = 'active'; // 復活——最近有新匹配
             } else if (p.status === 'dormant' && daysSince > PATTERN_ARCHIVE_DAYS && conf < 0.40) {
                 newStatus = 'archived';
                 archivedCount++;
             } else if (p.status === 'superseded' && daysSince > PATTERN_DORMANT_DAYS) {
-                // superseded保持本身状态（不转dormant），只等强信号复活
+                // superseded保持本身狀態（不轉dormant），只等強訊號復活
             }
 
             if (newStatus !== p.status) {
@@ -130,16 +130,16 @@ function refreshPatternStates() {
             }
         } catch (_) {}
     }
-    if (changed > 0) console.log(`[Archivist] 📊 模式状态刷新: ${changed}条变化 (dormant:${dormantCount} archived:${archivedCount})`);
+    if (changed > 0) console.log(`[Archivist] 📊 模式狀態重新整理: ${changed}條變化 (dormant:${dormantCount} archived:${archivedCount})`);
     return { changed, dormant: dormantCount, archived: archivedCount };
 }
 
 
-// ── v5.9: maintainPatterns — 每6h，bigram匹配碎片到全部非archived pattern，含复活+漂移检测 ──
+// ── v5.9: maintainPatterns — 每6h，bigram匹配碎片到全部非archived pattern，含復活+漂移檢測 ──
 async function maintainPatterns() {
     const db = getDb();
 
-    // 1. 获取最近 observation + preference 碎片
+    // 1. 獲取最近 observation + preference 碎片
     const userEntityId = db.prepare("SELECT id FROM entity_profiles WHERE name = ?").get(USER.name)?.id;
     if (!userEntityId) return { matched: 0, reason: 'user entity not found' };
 
@@ -184,7 +184,7 @@ async function maintainPatterns() {
         }
 
         if (bestMatch) {
-            // 矛盾检测
+            // 矛盾檢測
             const hasNegation = NEGATION_WORDS.test(frag.content);
             if (hasNegation) {
                 const contrCount = (bestMatch.contradiction_count || 0) + 1;
@@ -196,17 +196,17 @@ async function maintainPatterns() {
                 continue;
             }
 
-            // 漂移检测：碎片有时态信号 → 旧pattern标记superseded
+            // 漂移檢測：碎片有時態訊號 → 舊pattern標記superseded
             const isDrift = _detectDrift(frag.content);
             if (isDrift && bestMatch.status !== 'superseded') {
                 db.prepare(`UPDATE user_patterns SET status='superseded', last_seen=?,
                     updated_at=datetime('now') WHERE id=?`).run(frag.source_date, bestMatch.id);
                 supersededCount++;
-                // 碎片不进旧pattern的证据链——它将是新pattern的种子
+                // 碎片不進舊pattern的證據鏈——它將是新pattern的種子
                 continue;
             }
 
-            // 正常匹配：追加证据（superseded被高阈值匹配也应复活）
+            // 正常匹配：追加證據（superseded被高閾值匹配也應復活）
             const fragIds = JSON.parse(bestMatch.source_fragment_ids || '[]');
             if (!fragIds.includes(frag.id)) {
                 fragIds.push(frag.id);
@@ -222,9 +222,9 @@ async function maintainPatterns() {
                 if (wasDormantOrSuperseded) revivedCount++;
             }
 
-            // 跨pattern去重候选
+            // 跨pattern去重候選
             for (const other of existingPatterns) {
-                if (other.id <= bestMatch.id) continue; // 每对只检一次
+                if (other.id <= bestMatch.id) continue; // 每對只檢一次
                 if (other.status === 'archived') continue;
                 const overlap = _bigramOverlap(bestMatch.content, other.content);
                 if (overlap >= PATTERN_MERGE_BIGRAM_OVERLAP) {
@@ -234,17 +234,17 @@ async function maintainPatterns() {
         }
     }
 
-    // 3. 跨pattern合并（攒够阈值 → LLM批量判断）
+    // 3. 跨pattern合併（攢夠閾值 → LLM批次判斷）
     if (mergeCandidates.length >= PATTERN_MERGE_CANDIDATES && _canCallLLM(1)) {
         await _mergePatterns(db, mergeCandidates);
     }
 
-    if (matchedCount > 0) console.log(`[Archivist] 📊 模式维护: ${matchedCount}条匹配 (复活${revivedCount} 取代${supersededCount})`);
+    if (matchedCount > 0) console.log(`[Archivist] 📊 模式維護: ${matchedCount}條匹配 (復活${revivedCount} 取代${supersededCount})`);
     return { matched: matchedCount, revived: revivedCount, superseded: supersededCount };
 }
 
 
-// ── LLM 批量判断跨pattern合并 ──
+// ── LLM 批次判斷跨pattern合併 ──
 async function _mergePatterns(db, candidates) {
     // 去重取唯一 pair
     const seen = new Set();
@@ -255,20 +255,20 @@ async function _mergePatterns(db, candidates) {
     }
     if (unique.length < 2) return;
 
-    // 加载pattern内容
+    // 載入pattern內容
     const allIds = [...new Set(unique.flatMap(c => [c.patternA_id, c.patternB_id]))];
     const patternMap = new Map();
     db.prepare(`SELECT id, content, evidence_count, first_seen, last_seen, source_fragment_ids FROM user_patterns WHERE id IN (${allIds.map(()=>'?').join(',')})`).all(...allIds)
         .forEach(p => patternMap.set(p.id, p));
 
-    const prompt = `判断每对行为模式是否在描述同一个底层特质。是 → merge=true。不是 → merge=false。
+    const prompt = `判斷每對行為模式是否在描述同一個底層特質。是 → merge=true。不是 → merge=false。
 
 ${unique.map((c, i) => {
     const a = patternMap.get(c.patternA_id), b = patternMap.get(c.patternB_id);
     return `[${i+1}] A:"${a?.content}" B:"${b?.content}"`;
 }).join('\n')}
 
-输出JSON数组：[{"pair":1,"merge":true},{"pair":2,"merge":false}]`;
+輸出JSON陣列：[{"pair":1,"merge":true},{"pair":2,"merge":false}]`;
 
     try {
         const raw = await callLLM(
@@ -286,7 +286,7 @@ ${unique.map((c, i) => {
             if (!pair) continue;
             const winner = patternMap.get(pair.patternA_id), loser = patternMap.get(pair.patternB_id);
             if (!winner || !loser) continue;
-            // 取证据多的为主
+            // 取證據多的為主
             const [main, sub] = winner.evidence_count >= loser.evidence_count ? [winner, loser] : [loser, winner];
             const mergedIds = [...new Set([
                 ...JSON.parse(main.source_fragment_ids || '[]'),
@@ -304,15 +304,15 @@ ${unique.map((c, i) => {
                 .run(mergedIds.length, newFirst, newLast, newConf, JSON.stringify(mergedIds),
                      sub.evidence_count, main.content, main.id);
             db.prepare(`UPDATE user_patterns SET status='merged', updated_at=datetime('now') WHERE id=?`).run(sub.id);
-            console.log(`[Archivist] 🔗 模式合并: #${main.id}←#${sub.id} "${main.content.slice(0,40)}"`);
+            console.log(`[Archivist] 🔗 模式合併: #${main.id}←#${sub.id} "${main.content.slice(0,40)}"`);
         }
     } catch (e) {
-        console.warn('[Archivist] _mergePatterns 失败:', e.message);
+        console.warn('[Archivist] _mergePatterns 失敗:', e.message);
     }
 }
 
 
-// ── 保留旧 clusterObservations 作为 maintainPatterns 的别名，兼容现有 dispatch ──
+// ── 保留舊 clusterObservations 作為 maintainPatterns 的別名，相容現有 dispatch ──
 async function clusterObservations() {
     const result = await maintainPatterns();
     return { matched: result.matched ?? result.clustered ?? 0, newPatterns: 0 };

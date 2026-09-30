@@ -13,96 +13,96 @@ const { _nameBigrams, isTimePhraseName, isPeriodPhraseName } = require('./guards
 
 
 // ═══════════════════════════════════════════════════════
-// v4.8: detectEmergentPlacesAndEvents — 涌现地点/事件检测
+// v4.8: detectEmergentPlacesAndEvents — 湧現地點/事件檢測
 //
-// 分类批次只能看到15条碎片，很容易漏掉地点和事件实体——
-// 50+条同一地点的碎片分散在几十批里，每批看到1-2条不够播种。
+// 分類批次只能看到15條碎片，很容易漏掉地點和事件實體——
+// 50+條同一地點的碎片分散在幾十批裡，每批看到1-2條不夠播種。
 //
-// 本函数做第二遍扫描：取只链接到person/pet实体（没链接到
-// 任何place/event）的碎片，用ChromaDB向量聚类，聚成团的
-// 送LLM问「这是不是同一个地点/事件？该建星座吗？」
+// 本函式做第二遍掃描：取只連結到person/pet實體（沒連結到
+// 任何place/event）的碎片，用ChromaDB向量聚類，聚成團的
+// 送LLM問「這是不是同一個地點/事件？該建星座嗎？」
 //
-// 仅深循环调用（ChromaDB依赖）。每轮≤3个候选团。
+// 僅深迴圈呼叫（ChromaDB依賴）。每輪≤3個候選團。
 // ═══════════════════════════════════════════════════════
 
 // ═══════════════════════════════════════════════════════
-// 涌现判据（2026-09-28 重写）
+// 湧現判據（2026-09-28 重寫）
 //
-// 旧判据是「这些碎片是否指向一个**独立的具体地点或事件**（与已有实体都不同）」。
-// 它有个致命的结构问题：**"与已有实体都不同"这句话是在教模型找理由分裂**——
-// 只要它能说出"我和那个不一样"，就算过关。于是它学会了给一段**反复出现的行为**
-// 起个「XX季」的名字——换个名字，那就不再是"行为模式"，而是"一段事件"了。
+// 舊判據是「這些碎片是否指向一個**獨立的具體地點或事件**（與已有實體都不同）」。
+// 它有個致命的結構問題：**"與已有實體都不同"這句話是在教模型找理由分裂**——
+// 只要它能說出"我和那個不一樣"，就算過關。於是它學會了給一段**反覆出現的行為**
+// 起個「XX季」的名字——換個名字，那就不再是"行為模式"，而是"一段事件"了。
 //
-// 新判据把门槛下在**专有名词**上：判据要硬（有没有出现一个具体的人名/店名/地名/
-// 机构名/作品名，或者是不是某一天真的出了某件事），不要软（像不像事件）——
-// "像不像"正是模型最擅长绕的东西。配套还有两道确定性守卫：
-// `isTimePhraseName`（全是日期时间字）与 `isPeriodPhraseName`（以期间词收尾）。
+// 新判據把門檻下在**專有名詞**上：判據要硬（有沒有出現一個具體的人名/店名/地名/
+// 機構名/作品名，或者是不是某一天真的出了某件事），不要軟（像不像事件）——
+// "像不像"正是模型最擅長繞的東西。配套還有兩道確定性守衛：
+// `isTimePhraseName`（全是日期時間字）與 `isPeriodPhraseName`（以期間詞收尾）。
 //
-// ⚠️ 改这个 prompt 之后**必须双向回归**：既要确认它拒掉该拒的，也要确认它
-//    **没把该建的也拒掉**（过度收紧 = 涌现功能停摆，比原来更糟）。
+// ⚠️ 改這個 prompt 之後**必須雙向迴歸**：既要確認它拒掉該拒的，也要確認它
+//    **沒把該建的也拒掉**（過度收緊 = 湧現功能停擺，比原來更糟）。
 // ═══════════════════════════════════════════════════════
 function buildEmergentJudgePrompt(sampleText, memberCount, existingBlock) {
-    return `下面是一组来自聊天记录的碎片，它们在语义上高度相似，可能指向同一个地点或事件，但尚未被识别为独立的记忆星座。
+    return `下面是一組來自聊天記錄的碎片，它們在語義上高度相似，可能指向同一個地點或事件，但尚未被識別為獨立的記憶星座。
 
-碎片样本（${memberCount}条中的若干条）：
+碎片樣本（${memberCount}條中的若干條）：
 ${sampleText.slice(0, 2500)}
 
-记忆库已有实体（新建前先对照这个列表）：
+記憶庫已有實體（新建前先對照這個列表）：
 ${existingBlock}
 
-判断标准（**按顺序过，前一条不过就不要再往后想**）：
+判斷標準（**按順序過，前一條不過就不要再往後想**）：
 
-1. ⚠️ **先找那样东西——这是硬门槛。** 满足下面**任一条**才继续；两条都不满足 → is_entity=false，到此为止：
+1. ⚠️ **先找那樣東西——這是硬門檻。** 滿足下面**任一條**才繼續；兩條都不滿足 → is_entity=false，到此為止：
 
-   **a. 一个新的专有名词**——具体的人名 / 店名 / 地名 / 机构名 / 作品名。
+   **a. 一個新的專有名詞**——具體的人名 / 店名 / 地名 / 機構名 / 作品名。
 
-   **b. 某一天真的出了某件事**——崩溃、大吵一架、出事、第一次做某事、某个决定。
-   ⚠️ 判 b 的铁律：**它是「那一天发生的」，不是「那段时间在做的」。**
-   拿一句话自检：这件事能用**一个具体日期**说完吗？
-   · 「X月X日${USER.pronoun || 'TA'}崩溃了」✓ 是事件
-   · 「X月${USER.pronoun || 'TA'}在读某本书」「X月${USER.pronoun || 'TA'}一直在买东西」✗ 是持续行为，不是事件
-   · 有的碎片里确实出现了某天的日期，但整簇讲的是**跨了几周几个月的同一类事** → 判 false。
-     出现日期不等于发生在一天。
+   **b. 某一天真的出了某件事**——崩潰、大吵一架、出事、第一次做某事、某個決定。
+   ⚠️ 判 b 的鐵律：**它是「那一天發生的」，不是「那段時間在做的」。**
+   拿一句話自檢：這件事能用**一個具體日期**說完嗎？
+   · 「X月X日${USER.pronoun || 'TA'}崩潰了」✓ 是事件
+   · 「X月${USER.pronoun || 'TA'}在讀某本書」「X月${USER.pronoun || 'TA'}一直在買東西」✗ 是持續行為，不是事件
+   · 有的碎片裡確實出現了某天的日期，但整簇講的是**跨了幾週幾個月的同一類事** → 判 false。
+     出現日期不等於發生在一天。
 
-   下面这些**两条都不满足**，一律判 false：
-   · 行为：怎么做的描述（什么时候去哪、干了什么、买了什么）
-   · 持续过程：跨越一段时间的同一件事（在做什么、一直在做什么）
-   · 习惯/日常：重复发生的程序
-   · 状态/心情：身心状况与感受
-   · 时间段：某段时间、某个周期
-   ⚠️ **把它们包装成「XX季」「XX期」「XX历程」不会让它变成事件**——换个名字还是那件事。
+   下面這些**兩條都不滿足**，一律判 false：
+   · 行為：怎麼做的描述（什麼時候去哪、幹了什麼、買了什麼）
+   · 持續過程：跨越一段時間的同一件事（在做什麼、一直在做什麼）
+   · 習慣/日常：重複發生的程式
+   · 狀態/心情：身心狀況與感受
+   · 時間段：某段時間、某個週期
+   ⚠️ **把它們包裝成「XX季」「XX期」「XX歷程」不會讓它變成事件**——換個名字還是那件事。
 
-2. **它是不是已经被上面某个已有实体占了？**（走 a 的比对名字/别名；走 b 的看那个事件是不是已经有星座了）占了 → is_entity=false，归过去，不要另起炉灶。
+2. **它是不是已經被上面某個已有實體佔了？**（走 a 的比對名字/別名；走 b 的看那個事件是不是已經有星座了）佔了 → is_entity=false，歸過去，不要另起爐灶。
 
-3. **它是不是某个已有实体的子话题/细节？** 碎片如果讲的只是某个已有实体的一个**环节/细节**（大实体已经存在），那就是子话题 → is_entity=false，不独立建星座。
+3. **它是不是某個已有實體的子話題/細節？** 碎片如果講的只是某個已有實體的一個**環節/細節**（大實體已經存在），那就是子話題 → is_entity=false，不獨立建星座。
 
-4. 都过了才建，注明 place 或 event：
-   · 走 a 的：**名字用那个专有名词本身**（2-8 字，可以是它的直接变体）。
-   · 走 b 的：名字**带上日期和那件事**，让人一眼看出是哪天出了什么事；**不要起成「XX期」「XX季」**——那样又变成行为包装了。
+4. 都過了才建，註明 place 或 event：
+   · 走 a 的：**名字用那個專有名詞本身**（2-8 字，可以是它的直接變體）。
+   · 走 b 的：名字**帶上日期和那件事**，讓人一眼看出是哪天出了什麼事；**不要起成「XX期」「XX季」**——那樣又變成行為包裝了。
 
-只输出JSON:
-{"is_entity":true|false,"name":"名称","category":"place|event","reason":"一句话理由（指认那个专有名词 / 指认那个一次性事件 / 归属已有实体 / 既没有专有名词也不是一次性事件）"}`;
+只輸出JSON:
+{"is_entity":true|false,"name":"名稱","category":"place|event","reason":"一句話理由（指認那個專有名詞 / 指認那個一次性事件 / 歸屬已有實體 / 既沒有專有名詞也不是一次性事件）"}`;
 }
 
 
-// 涌现判定的**代码侧闸门**（LLM 判完之后、建实体之前）。
+// 湧現判定的**程式碼側閘門**（LLM 判完之後、建實體之前）。
 //
-// ⚠️ 抽成函数是为了让回归探针量到的是「**生产最终会怎么判**」，而不是裸的模型输出。
-//    分开写的话，探针会把**已经被这几道铁证拦掉**的误判报成"漏判"。
+// ⚠️ 抽成函式是為了讓迴歸探針量到的是「**生產最終會怎麼判**」，而不是裸的模型輸出。
+//    分開寫的話，探針會把**已經被這幾道鐵證攔掉**的誤判報成"漏判"。
 //
-// 三道闸各自拦什么：
-//   · 名字是纯日期/时间短语（`isTimePhraseName`）
-//   · 名字以期间词收尾（`isPeriodPhraseName`）
-//   · **理由自相矛盾**：说了"已被占用/归入已有/不另起炉灶"，flag 却是 true。
-//     名字/别名去重拦不住它（同一个东西换个说法，bigram 重叠到不了
-//     阈值），所以看理由下判断——理由里明说了"有主"，就当 false，别信 flag。
+// 三道閘各自攔什麼：
+//   · 名字是純日期/時間短語（`isTimePhraseName`）
+//   · 名字以期間詞收尾（`isPeriodPhraseName`）
+//   · **理由自相矛盾**：說了"已被佔用/歸入已有/不另起爐灶"，flag 卻是 true。
+//     名字/別名去重攔不住它（同一個東西換個說法，bigram 重疊到不了
+//     閾值），所以看理由下判斷——理由裡明說了"有主"，就當 false，別信 flag。
 function screenEmergentVerdict(verdict) {
     if (!verdict || !verdict.is_entity) return { accept: false, reason: 'not_entity' };
     const name = String(verdict.name || '').trim();
     if (name.length < 2 || /^\d+$/.test(name)) return { accept: false, reason: 'name_invalid' };
     if (isTimePhraseName(name)) return { accept: false, reason: 'time_phrase_name' };
     if (isPeriodPhraseName(name)) return { accept: false, reason: 'period_phrase_name' };
-    if (/已被?.*(占用|覆盖|占据)|归入已有|归过去|不另起炉灶/.test(String(verdict.reason || ''))) {
+    if (/已被?.*(佔用|覆蓋|佔據)|歸入已有|歸過去|不另起爐灶|已被?.*(占用|覆盖|占据)|归入已有|归过去|不另起炉灶/.test(String(verdict.reason || ''))) {
         return { accept: false, reason: 'self_contradictory' };
     }
     return { accept: true, name };
@@ -113,7 +113,7 @@ async function detectEmergentPlacesAndEvents() {
     const db = getDb();
     const { searchMemoriesByVector } = require('../memory');
 
-    // 取没链接到地点/事件的碎片（但已链接到person/pet）
+    // 取沒連結到地點/事件的碎片（但已連結到person/pet）
     const orphanFrags = db.prepare(`
         SELECT DISTINCT mf.id, mf.content, mf.created_at
         FROM memory_fragments mf
@@ -133,8 +133,8 @@ async function detectEmergentPlacesAndEvents() {
 
     if (orphanFrags.length < 10) return { detected: 0 };
 
-    // 用内容长度做粗聚类键：前30字提取关键词做L1分组
-    // 再挑每组里最长的一条做种子，向量检索相似碎片
+    // 用內容長度做粗聚類鍵：前30字提取關鍵詞做L1分組
+    // 再挑每組裡最長的一條做種子，向量檢索相似碎片
     const clusters = [];
     const used = new Set();
 
@@ -142,16 +142,16 @@ async function detectEmergentPlacesAndEvents() {
         if (used.has(f.id)) continue;
         if (!_canCallLLM(1)) break;
 
-        // 用碎片内容做向量检索，找相似碎片
+        // 用碎片內容做向量檢索，找相似碎片
         let similar;
         try {
             similar = await searchMemoriesByVector(f.content.slice(0, 300), 15);
         } catch (e) {
-            console.error(`[Archivist] 涌现检测向量查询失败:`, e.message);
+            console.error(`[Archivist] 湧現檢測向量查詢失敗:`, e.message);
             continue;
         }
 
-        // 过滤：只要未链接place/event的活跃碎片，相似度≥0.55
+        // 過濾：只要未連結place/event的活躍碎片，相似度≥0.55
         const clusterIds = new Set();
         for (const h of (similar || [])) {
             if (h.similarity < 0.55) continue;
@@ -160,17 +160,17 @@ async function detectEmergentPlacesAndEvents() {
                 JOIN entity_profiles ep ON fe.entity_id = ep.id
                 WHERE fe.fragment_id = ? AND ep.category IN ('place', 'event')
             `).get(h.id);
-            if (linked.c > 0) continue; // 已有place/event链接，跳过
+            if (linked.c > 0) continue; // 已有place/event連結，跳過
             clusterIds.add(h.id);
         }
 
-        if (clusterIds.size < 4) continue; // 团太小，构不成一个实体
+        if (clusterIds.size < 4) continue; // 團太小，構不成一個實體
 
-        // 标记已处理
+        // 標記已處理
         for (const cid of clusterIds) used.add(cid);
         clusters.push({ seed_frag_id: f.id, member_ids: [...clusterIds] });
 
-        // 不设硬上限——_canCallLLM 是天然限流器。早期碎片里的地点会被最近的行为碎片挡住
+        // 不設硬上限——_canCallLLM 是天然限流器。早期碎片裡的地點會被最近的行為碎片擋住
     }
 
     if (clusters.length === 0) return { detected: 0 };
@@ -179,7 +179,7 @@ async function detectEmergentPlacesAndEvents() {
     for (const cluster of clusters) {
         if (!_canCallLLM(1)) break;
 
-        // 取团内碎片内容（最多8条做样本）
+        // 取團內碎片內容（最多8條做樣本）
         const placeholders = cluster.member_ids.slice(0, 8).map(() => '?').join(',');
         const samples = db.prepare(`
             SELECT id, content, created_at FROM memory_fragments
@@ -191,7 +191,7 @@ async function detectEmergentPlacesAndEvents() {
             return `[${date}] ${(f.content || '').slice(0, 200)}`;
         }).join('\n');
 
-        // 已有实体索引——让 LLM 判断新话题是否归属已有实体，而非盲目新建
+        // 已有實體索引——讓 LLM 判斷新話題是否歸屬已有實體，而非盲目新建
         const existingEnts = db.prepare(`
             SELECT name, category FROM entity_profiles
             WHERE status IN ('active','seed') AND category IN ('place','event','project','term')
@@ -199,7 +199,7 @@ async function detectEmergentPlacesAndEvents() {
         `).all();
         const existingBlock = existingEnts.length > 0
             ? existingEnts.map(e => `· ${e.name}（${e.category}）`).join('\n')
-            : '（暂无）';
+            : '（暫無）';
 
         const prompt = buildEmergentJudgePrompt(sampleText, cluster.member_ids.length, existingBlock);
 
@@ -216,12 +216,12 @@ async function detectEmergentPlacesAndEvents() {
             if (!jsonMatch) continue;
             const verdict = JSON.parse(jsonMatch[0]);
 
-            // 代码侧闸门（铁证走规则）——闸门定义在 screenEmergentVerdict()，
-            // 生产和回归探针共用同一份，免得探针量到的是裸的模型输出。
+            // 程式碼側閘門（鐵證走規則）——閘門定義在 screenEmergentVerdict()，
+            // 生產和迴歸探針共用同一份，免得探針量到的是裸的模型輸出。
             const screened = screenEmergentVerdict(verdict);
             if (!screened.accept) {
                 if (verdict?.is_entity) {
-                    console.log(`[Archivist] ⏭ 涌现判定被代码闸门拦下(${screened.reason}): "${verdict.name || ''}"`);
+                    console.log(`[Archivist] ⏭ 湧現判定被程式碼閘門攔下(${screened.reason}): "${verdict.name || ''}"`);
                 }
                 continue;
             }
@@ -255,14 +255,14 @@ async function detectEmergentPlacesAndEvents() {
                         if (o / Math.min(aG.size, bG.size) >= 0.6) { existing = c; break; }
                     }
                 }
-                if (existing) { console.log(`[Archivist] ⏭ 涌现种子去重跳过: "${name}" → 已有 "${existing.name}"`); continue; }
+                if (existing) { console.log(`[Archivist] ⏭ 湧現種子去重跳過: "${name}" → 已有 "${existing.name}"`); continue; }
 
                 const category = (verdict.category === 'event' || verdict.category === 'place')
                     ? verdict.category : 'term';
                 const r = db.prepare(`INSERT INTO entity_profiles (name, category, status, aliases)
                     VALUES (?, ?, 'seed', ?)`).run(name, category, JSON.stringify([]));
 
-                // 链接团内碎片到新种子
+                // 連結團內碎片到新種子
                 const insertFe = db.prepare(`INSERT OR IGNORE INTO fragment_entities
                     (fragment_id, entity_id, relation, confidence, classified_by) VALUES (?, ?, NULL, 0.55, 'emergence')`);
                 let linked = 0;
@@ -272,16 +272,16 @@ async function detectEmergentPlacesAndEvents() {
                 }
                 db.prepare('UPDATE entity_profiles SET fragment_count = ? WHERE id = ?').run(linked, r.lastInsertRowid);
 
-                console.log(`[Archivist] 🌟 涌现检测: ${name} (${category}) ← ${linked}碎片 (团${cluster.member_ids.length}条)`);
+                console.log(`[Archivist] 🌟 湧現檢測: ${name} (${category}) ← ${linked}碎片 (團${cluster.member_ids.length}條)`);
                 detected++;
 
-                // 写观星手记
+                // 寫觀星手記
                 db.prepare(`INSERT INTO ontology_changelog (action, category_path, detail, status)
                     VALUES ('emergent_constellation', ?, ?, 'done')`)
                     .run(category, JSON.stringify({ name, reason: verdict.reason, cluster_size: cluster.member_ids.length }));
             }
         } catch (e) {
-            console.error('[Archivist] 涌现检测LLM失败:', e.message);
+            console.error('[Archivist] 湧現檢測LLM失敗:', e.message);
         }
     }
 

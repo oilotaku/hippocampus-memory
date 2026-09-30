@@ -18,7 +18,7 @@ function seedFromExisting() {
     // Check if already seeded
     const existing = db.prepare('SELECT COUNT(*) as c FROM user_model').get();
     if (existing.c > 0) {
-        console.log(`[UserModel] 已有 ${existing.c} 条记录，跳过播种`);
+        console.log(`[UserModel] 已有 ${existing.c} 條記錄，跳過播種`);
         return { skipped: true, existing: existing.c };
     }
 
@@ -84,7 +84,7 @@ function seedFromExisting() {
 
         // Skip fictional characters, public figures without real interaction
         const relText = ent.relationship_to_user;
-        if (/虚构|文学角色|作品中的人物|并无实际人际|而非现实人物|欣赏其.*作品/.test(relText)) continue;
+        if (/虛構|文學角色|作品中的人物|並無實際人際|而非現實人物|欣賞其.*作品|虚构|文学角色|作品中的人物|并无实际人际|而非现实人物|欣赏其.*作品/.test(relText)) continue;
         if (ent.entity_type === 'fictional' || ent.entity_type === 'public_figure') continue;
 
         const content = `${ent.name}: ${relText}`;
@@ -103,7 +103,7 @@ function seedFromExisting() {
         else created.stable_trait++;
     }
 
-    console.log(`[UserModel] 播种完成: immutable_fact=${created.immutable_fact} stable_trait=${created.stable_trait} active_hypothesis=${created.active_hypothesis}`);
+    console.log(`[UserModel] 播種完成: immutable_fact=${created.immutable_fact} stable_trait=${created.stable_trait} active_hypothesis=${created.active_hypothesis}`);
     return { created };
 }
 

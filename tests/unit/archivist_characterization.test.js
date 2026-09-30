@@ -1,6 +1,6 @@
 'use strict';
 // W7 拆分安全網：services/archivist.js 的特性測試。
-// 1) 純函式與註冊表的明確斷言；2) 一段固定情境（播種資料 → 逐一呼叫匯出的任務 →
+// 1) 純函式與登錄檔的明確斷言；2) 一段固定情境（播種資料 → 逐一呼叫匯出的任務 →
 //    跑三個 agent tick）的完整指紋，與 tests/unit/fixtures/archivist_scenario.json 比對。
 // 指紋記錄的是「拆分前的現況」，包含現有的錯誤訊息（例如 aggregateLink 的
 // 「db is not defined」、classify 的 SQL 語法錯）——那些是既有行為，不是這次要修的。
@@ -82,16 +82,16 @@ function seed() {
     return { ent, fr };
 }
 
-describe('archivist 純函式與註冊表', () => {
+describe('archivist 純函式與登錄檔', () => {
     test('守衛規則：時間短語、期間短語、無變化哨兵', () => {
         assert.equal(a.isTimePhraseName('三月'), true);
         assert.equal(a.isTimePhraseName('昨天晚上'), true);
         assert.equal(a.isTimePhraseName('阿明'), false);
         assert.equal(a.isPeriodPhraseName('冬季'), true);
-        assert.equal(a.isPeriodPhraseName('考试期'), true);
+        assert.equal(a.isPeriodPhraseName('考試期'), true);
         assert.equal(a.isPeriodPhraseName('一蘭拉麵'), false);
-        assert.equal(a.isNoChangeSentinel('无明显变化。'), true);
-        assert.equal(a.isNoChangeSentinel('暂无'), true);
+        assert.equal(a.isNoChangeSentinel('無明顯變化。'), true);
+        assert.equal(a.isNoChangeSentinel('暫無'), true);
         assert.equal(a.isNoChangeSentinel('最近在忙專案'), false);
     });
 
@@ -105,7 +105,7 @@ describe('archivist 純函式與註冊表', () => {
         assert.equal(a._aliasAmbiguous(3, '一蘭', owners), false);
     });
 
-    test('涌现判據：prompt 內容與 verdict 篩選', () => {
+    test('湧現判據：prompt 內容與 verdict 篩選', () => {
         const p = a.buildEmergentJudgePrompt('樣本文字', 7, '（無）');
         assert.match(p, /樣本文字/);
         assert.match(p, /7/);
@@ -115,7 +115,7 @@ describe('archivist 純函式與註冊表', () => {
         }
     });
 
-    test('工具註冊表：載入時註冊 8 個工具、冷卻設定、getStatus 形狀', () => {
+    test('工具登錄檔：載入時註冊 8 個工具、冷卻設定、getStatus 形狀', () => {
         const names = a.listTools().map(t => t.name);
         assert.deepEqual(names, ['classify_fragments', 'discover_relationships', 'extract_insights',
             'detect_emergent_places_events', 'regenerate_entity_overviews', 'maintain_patterns',

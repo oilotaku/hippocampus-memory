@@ -1,9 +1,9 @@
 # memory-constellations-bridge
-# 把 AstrBot 收到的消息转发到 Memory Constellations 记忆库的 /api/messages，
-# 让记忆库的 Scribe 自动提取记忆。只负责「喂消息」，不负责回复。
+# 把 AstrBot 收到的訊息轉發到 Memory Constellations 記憶庫的 /api/messages，
+# 讓記憶庫的 Scribe 自動提取記憶。只負責「喂訊息」，不負責回覆。
 #
-# 配置记忆库地址：设置环境变量 MEMORY_API_BASE（默认 http://127.0.0.1:3000）
-# Docker 部署时填 http://<记忆库容器名>:3000
+# 配置記憶庫地址：設定環境變數 MEMORY_API_BASE（預設 http://127.0.0.1:3000）
+# Docker 部署時填 http://<記憶庫容器名>:3000
 
 import os
 import aiohttp
@@ -18,7 +18,7 @@ class MemoryConstellationsBridge(Star):
         super().__init__(context)
 
     async def _send(self, sender: str, content: str):
-        """POST 一条消息到记忆库，失败静默（不阻塞聊天）。"""
+        """POST 一條訊息到記憶庫，失敗靜默（不阻塞聊天）。"""
         content = (content or "").strip()
         if not content:
             return
@@ -30,18 +30,18 @@ class MemoryConstellationsBridge(Star):
                     timeout=aiohttp.ClientTimeout(total=5),
                 )
         except Exception:
-            pass  # 记忆库不可用时静默跳过，不影响 AstrBot 正常聊天
+            pass  # 記憶庫不可用時靜默跳過，不影響 AstrBot 正常聊天
 
     @filter.on_message()
     async def on_user_message(self, event: AstrMessageEvent):
-        """用户发的消息 → 记忆库（sender=user）。"""
+        """使用者發的訊息 → 記憶庫（sender=user）。"""
         await self._send("user", event.message_str)
 
     @filter.on_decorating_result()
     async def on_bot_reply(self, event: AstrMessageEvent):
-        """机器人回复的消息 → 记忆库（sender=bot），让记忆库也记住它说过的话。"""
+        """機器人回覆的訊息 → 記憶庫（sender=bot），讓記憶庫也記住它說過的話。"""
         try:
-            # 机器人最终回复的纯文本
+            # 機器人最終回覆的純文本
             reply = event.message_str or ""
         except Exception:
             reply = ""

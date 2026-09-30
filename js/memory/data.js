@@ -1,26 +1,26 @@
 // ========================================
-// 记忆星图 v5 — 数据层
-// fetch universe API、星系定义、颜色分配（hash hue 偏移）、跨星系桥推导
+// 記憶星圖 v5 — 資料層
+// fetch universe API、星系定義、顏色分配（hash hue 偏移）、跨星系橋推導
 // ========================================
 
 const TOKEN = () => localStorage.getItem('token');
 const AUTH = () => ({ headers: { 'Authorization': `Bearer ${TOKEN()}` } });
 
 // ── 五固定星系（方位角：上/右上/右下/左下/左上） ──
-// 「{{user}}的」星系 ID 由 memory_config.json 动态生成
+// 「{{user}}的」星系 ID 由 memory_config.json 動態生成
 const UI = window.MEMORY_UI_CONFIG || { user: { name: 'User' } };
 export const OWN_GALAXY_ID = UI.user.name + '的';
 
 export const GALAXIES = [
-    { id: '爱好', hue: 0,   azimuth: -90, desc: '游戏、影视、书籍、音乐——喜欢的东西' },
-    { id: '社交', hue: 22,  azimuth: -18, desc: '人际关系网——认识的人、养的宠物' },
-    { id: '创作', hue: 275, azimuth: 54,  desc: '创作——小说、代码、项目、工作' },
-    { id: '事件', hue: 152, azimuth: 126, desc: '有时间跨度的经历' },
-    { id: '地点', hue: 215, azimuth: 198, desc: '走过的物理空间' },
+    { id: '愛好', hue: 0,   azimuth: -90, desc: '遊戲、影視、書籍、音樂——喜歡的東西' },
+    { id: '社交', hue: 22,  azimuth: -18, desc: '人際關係網——認識的人、養的寵物' },
+    { id: '創作', hue: 275, azimuth: 54,  desc: '創作——小說、程式碼、專案、工作' },
+    { id: '事件', hue: 152, azimuth: 126, desc: '有時間跨度的經歷' },
+    { id: '地點', hue: 215, azimuth: 198, desc: '走過的物理空間' },
 ];
 export const GALAXY_BY_ID = Object.fromEntries(GALAXIES.map(g => [g.id, g]));
 
-// ── 确定性 hash / PRNG ──
+// ── 確定性 hash / PRNG ──
 export function strHash(str) {
     let h = 2166136261;
     for (let i = 0; i < str.length; i++) {
@@ -40,7 +40,7 @@ export function mulberry32(seed) {
     };
 }
 
-// ── 星系色相家族：基准 hue + 名字 hash 偏移 ±25° ──
+// ── 星系色相家族：基準 hue + 名字 hash 偏移 ±25° ──
 export function colorFor(galaxyId, name) {
     const g = GALAXY_BY_ID[galaxyId] || GALAXIES[0];
     const h = strHash(name);
@@ -65,27 +65,27 @@ export function hslToRgbStr(hue, sat, lit) {
     return `${Math.round((r + m) * 255)},${Math.round((g + m) * 255)},${Math.round((b + m) * 255)}`;
 }
 
-// ── 宇宙数据（模块内单例） ──
+// ── 宇宙資料（模組內單例） ──
 export const universe = {
-    constellations: [],   // 普通星座（不含双星核心）
-    core: [],             // 双星核心档案
+    constellations: [],   // 普通星座（不含雙星核心）
+    core: [],             // 雙星核心檔案
     userModel: [],
     archlog: [],
-    mergeProposals: [],   // 待用户裁决的合并提案
-    bridges: [],          // 星座桥 [{a, b, weight}]（conId 对）
-    galaxyBridges: [],    // 星系聚合桥 [{a, b, weight}]（galaxyId 对）
+    mergeProposals: [],   // 待使用者裁決的合併提案
+    bridges: [],          // 星座橋 [{a, b, weight}]（conId 對）
+    galaxyBridges: [],    // 星系聚合橋 [{a, b, weight}]（galaxyId 對）
     totalFragments: 0,
     loaded: false,
 };
 
-// 桥推导，两个来源：
-// 1) 后端 related_entities（Archivist 维护，带关系描述）— 优先
-// 2) 共享碎片推导（前端兜底，无语义标签）
+// 橋推導，兩個來源：
+// 1) 後端 related_entities（Archivist 維護，帶關係描述）— 優先
+// 2) 共享碎片推導（前端兜底，無語義標籤）
 function deriveBridges(cons) {
-    const conByEntId = new Map(); // 数字实体id → con
+    const conByEntId = new Map(); // 數字實體id → con
     cons.forEach(c => conByEntId.set(parseInt(c.id.slice(1), 10), c));
 
-    // 来源1：related_entities
+    // 來源1：related_entities
     const labeled = new Map(); // "a|b" → {weight, relation}
     cons.forEach(c => (c.relatedEntities || []).forEach(r => {
         if (!r || !r.id || !conByEntId.has(r.id)) return;
@@ -111,7 +111,7 @@ function deriveBridges(cons) {
         gPair.forEach((weight, k) => { const [a, b] = k.split('|'); galaxyBridges.push({ a, b, weight }); });
         return { bridges, galaxyBridges };
     }
-    // 来源2：兜底推导
+    // 來源2：兜底推導
     return deriveBridgesFromSharedFragments(cons);
 }
 
@@ -133,11 +133,11 @@ function deriveBridgesFromSharedFragments(cons) {
     const conById = Object.fromEntries(cons.map(c => [c.id, c]));
     const bridges = [];
     pairCount.forEach((count, key) => {
-        if (count < 2) return; // 共享碎片 ≥2 才画桥
+        if (count < 2) return; // 共享碎片 ≥2 才畫橋
         const [a, b] = key.split('|');
         bridges.push({ a, b, weight: count });
     });
-    // 星系级聚合
+    // 星系級聚合
     const gPair = new Map();
     bridges.forEach(br => {
         const ga = conById[br.a]?.galaxyLabel, gb = conById[br.b]?.galaxyLabel;
@@ -178,7 +178,7 @@ export async function loadUniverse() {
 
     universe.constellations = cons;
     universe.core = data.core || [];
-    universe.userModel = data.cognitiveModel || [];   // 后端 /universe 返回的键名是 cognitiveModel
+    universe.userModel = data.cognitiveModel || [];   // 後端 /universe 返回的鍵名是 cognitiveModel
     universe.patterns = data.patterns || [];
     universe.archlog = data.archlog || [];
     universe.mergeProposals = data.mergeProposals || [];
@@ -197,14 +197,14 @@ export function conById(id) {
     return universe.constellations.find(c => c.id === id) || null;
 }
 
-// 碎片访问打点（刷新 decay 亮度），fire-and-forget
+// 碎片訪問打點（重新整理 decay 亮度），fire-and-forget
 export function bumpAccess(starId) {
     if (starId && starId.startsWith('f')) {
         fetch('/api/memory/trace/' + starId.slice(1), AUTH()).catch(() => {});
     }
 }
 
-// 合并提案裁决（CSRF 由页面 meta 注入；memory.html 不走 api.js 的 fetch 补丁）
+// 合併提案裁決（CSRF 由頁面 meta 注入；memory.html 不走 api.js 的 fetch 補丁）
 export async function decideMergeProposal(proposalId, decision) {
     const csrfMeta = document.querySelector('meta[name="csrf-token"]');
     const resp = await fetch('/api/memory/merge-proposal/' + proposalId, {

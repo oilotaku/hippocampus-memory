@@ -10,7 +10,7 @@ const { USER } = require('../memoryConfig');
 const { ARCHIVIST_LLM_CONFIG_ID } = require('./constants');
 
 
-// 每日状态案例（可选文件 data/daily_status_examples.txt，私有内容不入库）
+// 每日狀態案例（可選檔案 data/daily_status_examples.txt，私有內容不入庫）
 let _dailyStatusExamples = null;
 
 function getDailyStatusExamples() {
@@ -24,30 +24,30 @@ function getDailyStatusExamples() {
         }
     } catch (_) {}
     if (!_dailyStatusExamples) {
-        _dailyStatusExamples = 'X月X日：无明显变化。';
+        _dailyStatusExamples = 'X月X日：無明顯變化。';
     }
     return _dailyStatusExamples;
 }
 
 
 // ═══════════════════════════════════════════════════════
-// 每日主角状态（v5.13）
+// 每日主角狀態（v5.13）
 // ═══════════════════════════════════════════════════════
-// 主角（USER）不在 regenerateEntityOverviews 的扫描范围里——那条查询带 SKIP_NAMES
-// 过滤，双星被整体排除。她的 current_status 由这个任务独占维护：写「X月X日：…」
-// 形式的日志行，今天条目前置、旧行不可变、最多留 DAILY_STATUS_MAX_LINES 行。
+// 主角（USER）不在 regenerateEntityOverviews 的掃描範圍裡——那條查詢帶 SKIP_NAMES
+// 過濾，雙星被整體排除。她的 current_status 由這個任務獨佔維護：寫「X月X日：…」
+// 形式的日誌行，今天條目前置、舊行不可變、最多留 DAILY_STATUS_MAX_LINES 行。
 //
-// ⚠️ entityProfile.js / lifecycle.js 那边是靠「看到主角就跳过、不写」来避让的
-// （见各自注释「由每日 cron 独占维护」）。所以这个任务不跑，主角星座不是被覆盖，
-// 是根本没人写——点开永远是空的。
+// ⚠️ entityProfile.js / lifecycle.js 那邊是靠「看到主角就跳過、不寫」來避讓的
+// （見各自注釋「由每日 cron 獨佔維護」）。所以這個任務不跑，主角星座不是被覆蓋，
+// 是根本沒人寫——點開永遠是空的。
 //
-// 时区：按运行环境的 TZ 判定「昨天」（容器在 docker-compose 里已设 TZ）。
-// 库里的时间统一存 UTC，所以用 SQLite 的 localtime 换算，两边口径一致。
+// 時區：按執行環境的 TZ 判定「昨天」（容器在 docker-compose 裡已設 TZ）。
+// 庫裡的時間統一存 UTC，所以用 SQLite 的 localtime 換算，兩邊口徑一致。
 
 const DAILY_STATUS_MAX_LINES = 10;
 
 
-// 目标日期（'YYYY-MM-DD'）：不传就是「昨天」（按运行环境时区），传 Date 则用那天。
+// 目標日期（'YYYY-MM-DD'）：不傳就是「昨天」（按執行環境時區），傳 Date 則用那天。
 function resolveDailyStatusDate(targetDate) {
     const explicit = targetDate instanceof Date && !isNaN(targetDate);
     const base = explicit ? targetDate : new Date();
@@ -74,13 +74,13 @@ async function generateDailyEntityStatus(targetDate) {
         "SELECT id, name, category, current_status FROM entity_profiles WHERE name = ? AND status = 'active'"
     ).get(USER.name);
     if (!ent) {
-        console.log(`[DailyStatus] 未找到主角星座「${USER.name}」，跳过`);
+        console.log(`[DailyStatus] 未找到主角星座「${USER.name}」，跳過`);
         return { updated: 0 };
     }
 
-    console.log(`[DailyStatus] 开始每日状态总结 — ${datePrefix.replace('：', '')}`);
+    console.log(`[DailyStatus] 開始每日狀態總結 — ${datePrefix.replace('：', '')}`);
 
-    // 目标日（当地）的碎片；库里的 created_at 是 UTC，用 localtime 折算回当地日期
+    // 目標日（當地）的碎片；庫裡的 created_at 是 UTC，用 localtime 折算回當地日期
     const frags = db.prepare(`
         SELECT mf.content, COALESCE(mf.source_date, DATE(mf.created_at, 'localtime')) AS date,
                mf.emotional_weight
@@ -92,16 +92,16 @@ async function generateDailyEntityStatus(targetDate) {
         LIMIT 20
     `).all(ent.id, t.str);
 
-    // 昨天没碎片 → 写一行「无明显变化」（日志要连续，缺行比空行更难读）
+    // 昨天沒碎片 → 寫一行「無明顯變化」（日誌要連續，缺行比空行更難讀）
     if (frags.length === 0) {
-        const noChangeLine = datePrefix + '无明显变化。';
+        const noChangeLine = datePrefix + '無明顯變化。';
         const existing = ent.current_status || '';
         const lines = existing.split('\n').filter(l => /^\d+月\d+日[：:]/.test(l.trim()));
         const oldLines = lines.filter(l => !l.startsWith(datePrefix));
         const newStatus = [noChangeLine, ...oldLines.slice(0, DAILY_STATUS_MAX_LINES - 1)].join('\n');
         db.prepare(`UPDATE entity_profiles SET current_status = ?, updated_at = datetime('now') WHERE id = ?`)
             .run(sealField('entity_profiles', 'current_status', newStatus), ent.id);
-        console.log('[DailyStatus] 无明显变化');
+        console.log('[DailyStatus] 無明顯變化');
         return { updated: 1 };
     }
 
@@ -112,26 +112,26 @@ async function generateDailyEntityStatus(targetDate) {
     }).join('\n');
 
     const prompt = `<task>
-以下是 ${USER.name}（用户本人）昨天（${datePrefix.replace('：', '')}）的记忆碎片：
+以下是 ${USER.name}（使用者本人）昨天（${datePrefix.replace('：', '')}）的記憶碎片：
 
 ${fragBlock}
 
-请为昨天写一行总结。格式："${datePrefix}xxx。"
+請為昨天寫一行總結。格式："${datePrefix}xxx。"
 
-你是信息提取器，不是日记作家。读者需要看完这一行就知道昨天发生了什么——具体的人名、地名、事件名是你给读者的锚点。没名字的动词（「参加了一个活动」「跟一个人吃了饭」）等于没写。
+你是資訊提取器，不是日記作家。讀者需要看完這一行就知道昨天發生了什麼——具體的人名、地名、事件名是你給讀者的錨點。沒名字的動詞（「參加了一個活動」「跟一個人吃了飯」）等於沒寫。
 
-像写日记一样客观记录昨天发生的事。标准：
-- 外部行为优先：去了哪里、见了谁、做了什么事、做了什么决定。内在情绪不写。
-- 私密互动只写事件类型，不写具体内容/台词。
-- 已经知道的信息不说成"发现"——之前就知道的事写"(此前已...)"，新发生的写"今天..."
-- 不确定的细节直接跳过。模糊信息不如不写。
-- 昨天没值得记的事 → 输出"${datePrefix}无明显变化。"
+像寫日記一樣客觀記錄昨天發生的事。標準：
+- 外部行為優先：去了哪裡、見了誰、做了什麼事、做了什麼決定。內在情緒不寫。
+- 私密互動只寫事件型別，不寫具體內容/臺詞。
+- 已經知道的資訊不說成"發現"——之前就知道的事寫"(此前已...)"，新發生的寫"今天..."
+- 不確定的細節直接跳過。模糊資訊不如不寫。
+- 昨天沒值得記的事 → 輸出"${datePrefix}無明顯變化。"
 - ≤150字，一行。
 
-优秀案例（注意格式、密度、客观性）：
+優秀案例（注意格式、密度、客觀性）：
 ${examplesBlock}
 
-只输出一行文本。不要 JSON、不要解释、不要 Markdown。
+只輸出一行文本。不要 JSON、不要解釋、不要 Markdown。
 </task>`;
 
     try {
@@ -141,8 +141,8 @@ ${examplesBlock}
             null, null, generationConfig, ARCHIVIST_LLM_CONFIG_ID
         );
         let raw = (response?.reply || '').trim();
-        if (!raw || raw.length < 4) {   // 空返回 → 降一档温度重试一次
-            console.warn('[DailyStatus] 空返回，重试中...');
+        if (!raw || raw.length < 4) {   // 空返回 → 降一檔溫度重試一次
+            console.warn('[DailyStatus] 空返回，重試中...');
             try {
                 const retry = await callLLM(
                     [{ role: 'user', parts: [{ text: prompt }] }],
@@ -152,14 +152,14 @@ ${examplesBlock}
             } catch (_) {}
         }
         if (!raw || raw.length < 4) {
-            console.warn('[DailyStatus] 空返回（重试后），跳过');
+            console.warn('[DailyStatus] 空返回（重試後），跳過');
             return { updated: 0 };
         }
 
-        // prompt 原文泄漏 / 残句检测：模型偶尔把任务说明复读回来
-        const GARBAGE_STARTS = ['<task>', '相关碎片', '只输出', '你是信息', '请为昨天', 'Only output', 'Analyze', 'Summary'];
+        // prompt 原文洩漏 / 殘句檢測：模型偶爾把任務說明覆讀回來
+        const GARBAGE_STARTS = ['<task>', '相關碎片', '只輸出', '你是資訊', '請為昨天', 'Only output', 'Analyze', 'Summary', '相关碎片', '只输出', '你是信息', '请为昨天'];
         if (GARBAGE_STARTS.some(s => raw.startsWith(s)) || /^[)\]}>.,;:!?`'"\\]/.test(raw)) {
-            console.warn(`[DailyStatus] 疑似 prompt 泄漏或残句，跳过 — "${raw.slice(0, 40)}"`);
+            console.warn(`[DailyStatus] 疑似 prompt 洩漏或殘句，跳過 — "${raw.slice(0, 40)}"`);
             return { updated: 0 };
         }
 
@@ -169,7 +169,7 @@ ${examplesBlock}
             .trim()
             .slice(0, 200);
 
-        // 补日期前缀 + 确保中文全角冒号
+        // 補日期字首 + 確保中文全形冒號
         if (!statusText.startsWith(datePrefix)) {
             statusText = datePrefix + statusText.replace(/^[：:]\s*/, '');
         }
@@ -177,11 +177,11 @@ ${examplesBlock}
             statusText = statusText.replace(':', '：');
         }
         if (!statusText.slice(datePrefix.length).trim()) {
-            console.warn('[DailyStatus] 只返回了日期前缀，跳过写入');
+            console.warn('[DailyStatus] 只返回了日期字首，跳過寫入');
             return { updated: 0 };
         }
 
-        // 前置今天这一行；旧行不可变，只剔除同一天的历史行和不合格式的残留
+        // 前置今天這一行；舊行不可變，只剔除同一天的歷史行和不合格式的殘留
         const existing = ent.current_status || '';
         const lines = existing.split('\n').filter(l => /^\d+月\d+日[：:]/.test(l.trim()));
         const oldLines = lines.filter(l => !l.startsWith(datePrefix));
@@ -192,7 +192,7 @@ ${examplesBlock}
         console.log(`[DailyStatus] ${statusText.slice(0, 100)}`);
         return { updated: 1 };
     } catch (e) {
-        console.error('[DailyStatus] 失败:', e.message);
+        console.error('[DailyStatus] 失敗:', e.message);
         return { updated: 0 };
     }
 }

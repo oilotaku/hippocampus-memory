@@ -113,19 +113,19 @@ function getModelContext(maxTokens = 500) {
     }
 
     const lines = ['<user_model>',
-        '（以下是你通过长期观察已内化的认知，不需要再从记忆库里翻出来重复确认。）',
+        '（以下是你通過長期觀察已內化的認知，不需要再從記憶庫裡翻出來重複確認。）',
         ''];
 
     if (facts.length > 0) {
-        lines.push('★ 不变事实 — 你确定知道的：');
+        lines.push('★ 不變事實 — 你確定知道的：');
         for (const f of facts) lines.push(`- ${f.content}`);
         lines.push('');
     }
 
     if (traits.length > 0) {
-        lines.push('◆ 稳定特质 — 经反复观察确认：');
+        lines.push('◆ 穩定特質 — 經反覆觀察確認：');
         for (const t of traits) {
-            const inferredMark = t.source_quality === 'inferred' ? '[推断] ' : '';
+            const inferredMark = t.source_quality === 'inferred' ? '[推斷] ' : '';
             // Build time anchor from evidence chain
             const timeAnchor = [];
             if (t.first_observed_at) {
@@ -138,32 +138,32 @@ function getModelContext(maxTokens = 500) {
                 timeAnchor.push(`最近：${daysAgo}天前`);
             }
             const anchor = timeAnchor.length > 0 ? ` — ${timeAnchor.join(' | ')}` : '';
-            lines.push(`- ${inferredMark}${t.content}（置信度${t.confidence.toFixed(2)}，确认${t.evidence_count}次${anchor}）`);
+            lines.push(`- ${inferredMark}${t.content}（置信度${t.confidence.toFixed(2)}，確認${t.evidence_count}次${anchor}）`);
         }
         lines.push('');
     }
 
     if (states.length > 0) {
-        lines.push('● 当前状态 — 近期有效：');
+        lines.push('● 當前狀態 — 近期有效：');
         for (const s of states) {
             const daysAgo = s.last_evidence_at
                 ? Math.round((Date.now() - new Date(s.last_evidence_at)) / (1000 * 60 * 60 * 24))
                 : null;
             const ago = daysAgo !== null ? `${daysAgo}天前` : '近期';
-            const inferredMark = s.source_quality === 'inferred' ? '[推断] ' : '';
-            lines.push(`- ${inferredMark}${s.content}（最后确认：${ago}）`);
+            const inferredMark = s.source_quality === 'inferred' ? '[推斷] ' : '';
+            lines.push(`- ${inferredMark}${s.content}（最後確認：${ago}）`);
         }
         lines.push('');
     }
 
     if (hyps.length > 0) {
-        lines.push('? 活跃假设 — 你在观察但还不确定：');
+        lines.push('? 活躍假設 — 你在觀察但還不確定：');
         for (const h of hyps) {
             const daysAgo = h.last_evidence_at
                 ? Math.round((Date.now() - new Date(h.last_evidence_at)) / (1000 * 60 * 60 * 24))
                 : null;
             const ago = daysAgo !== null ? `${daysAgo}天前` : '近期';
-            lines.push(`- ${h.content}（确认${h.evidence_count}/${HYPOTHESIS_UPGRADE_EVIDENCE}次，${ago}）`);
+            lines.push(`- ${h.content}（確認${h.evidence_count}/${HYPOTHESIS_UPGRADE_EVIDENCE}次，${ago}）`);
         }
         lines.push('');
     }
@@ -205,13 +205,13 @@ function getWhisperRelevant() {
     const lines = [];
     for (const r of recent) {
         if (r.status === 'resolved') {
-            lines.push(`[状态过期] ${r.content}`);
+            lines.push(`[狀態過期] ${r.content}`);
         } else if (r.status === 'abandoned') {
-            lines.push(`[假设放弃] ${r.content} — ${r.resolve_reason || ''}`);
+            lines.push(`[假設放棄] ${r.content} — ${r.resolve_reason || ''}`);
         } else if (r.status === 'superseded') {
             lines.push(`[被替代] ${r.content}`);
         } else if (r.type === 'stable_trait' && r.evidence_count >= 5) {
-            lines.push(`[特质强化] ${r.content}（置信度${r.confidence.toFixed(2)}，${r.evidence_count}次确认）`);
+            lines.push(`[特質強化] ${r.content}（置信度${r.confidence.toFixed(2)}，${r.evidence_count}次確認）`);
         }
     }
 

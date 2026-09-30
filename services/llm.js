@@ -1,5 +1,5 @@
 // =================================================================
-// LLM 调用统一适配器 + Embedding + API使用统计
+// LLM 呼叫統一介面卡 + Embedding + API使用統計
 // =================================================================
 
 const axios = require('axios');
@@ -9,7 +9,7 @@ const path = require('path');
 const { get_encoding } = require('tiktoken');
 const { getDb } = require('../database');
 
-// 共享代理连接池：复用 TCP+TLS 连接，避免每次请求重新握手
+// 共享代理連線池：複用 TCP+TLS 連線，避免每次請求重新握手
 const proxyDispatcher = new ProxyAgent({
     uri: 'http://127.0.0.1:7890',
     connections: 8,
@@ -19,7 +19,7 @@ const proxyDispatcher = new ProxyAgent({
 });
 function getProxyDispatcher() { return proxyDispatcher; }
 
-// 连接超时重试：代理/中转偶尔抽风，给第二次机会
+// 連線超時重試：代理/中轉偶爾抽風，給第二次機會
 async function fetchWithRetry(url, options, maxRetries = 3) {
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
         try {
@@ -33,14 +33,14 @@ async function fetchWithRetry(url, options, maxRetries = 3) {
                               retryableCodes.includes(err.cause?.code);
             if (attempt < maxRetries && isRetryable) {
                 const reasonMap = {
-                    UND_ERR_SOCKET: '连接被重置',
-                    UND_ERR_HEADERS_TIMEOUT: '响应头超时',
-                    UND_ERR_BODY_TIMEOUT: '响应体超时',
-                    ECONNRESET: 'TLS握手被远端重置',
-                    ECONNREFUSED: '远端拒绝连接',
+                    UND_ERR_SOCKET: '連線被重置',
+                    UND_ERR_HEADERS_TIMEOUT: '響應頭超時',
+                    UND_ERR_BODY_TIMEOUT: '響應體超時',
+                    ECONNRESET: 'TLS握手被遠端重置',
+                    ECONNREFUSED: '遠端拒絕連線',
                 };
-                const reason = reasonMap[err.cause?.code] || '连接超时';
-                console.warn(`[fetch] ${reason}，${2 * (attempt + 1)}s后重试 (${attempt + 1}/${maxRetries})…`);
+                const reason = reasonMap[err.cause?.code] || '連線超時';
+                console.warn(`[fetch] ${reason}，${2 * (attempt + 1)}s後重試 (${attempt + 1}/${maxRetries})…`);
                 await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
                 continue;
             }
@@ -54,9 +54,9 @@ const { assertSafeEndpoint, joinEndpointPath } = require('../utils/ssrf-guard');
 
 const enc = get_encoding('cl100k_base');
 
-// 判断是否需要走代理：国内站点直连，海外站点走 127.0.0.1:7890
+// 判斷是否需要走代理：國內站點直連，海外站點走 127.0.0.1:7890
 const DOMESTIC_DOMAINS = ['api.deepseek.com', 'dashscope.aliyuncs.com', 'api.dzzi.ai'];
-const DOMESTIC_IPS = ['162.14.124.108'];  // 国内中转站IP，直连不走代理
+const DOMESTIC_IPS = ['162.14.124.108'];  // 國內中轉站IP，直連不走代理
 function needsProxy(url) {
     if (url.includes('127.0.0.1') || url.includes('localhost') || url.includes('192.168')) return false;
     try {
@@ -69,7 +69,7 @@ function needsProxy(url) {
 }
 
 // =================================================================
-// 本地 Embedding（通过 chroma_helper.py + fastembed，无需 API）
+// 本地 Embedding（通過 chroma_helper.py + fastembed，無需 API）
 // =================================================================
 
 async function getLocalEmbedding(text) {
@@ -97,7 +97,7 @@ async function getLocalEmbedding(text) {
 }
 
 // =================================================================
-// Embedding 配置获取
+// Embedding 配置獲取
 // =================================================================
 
 function getEmbeddingAPIKey() {
@@ -164,7 +164,7 @@ async function getEmbedding(text, embeddingConfig) {
         
         let requestUrl, requestBody, headers;
         
-        // SSRF 防护：端点可由使用者存入 DB，连线前验证（无法钉 IP，见 utils/ssrf-guard.js 残余风险说明）
+        // SSRF 防護：端點可由使用者存入 DB，連線前驗證（無法釘 IP，見 utils/ssrf-guard.js 殘餘風險說明）
         await assertSafeEndpoint(embeddingConfig.endpoint);
         
         if (provider === 'gemini') {
@@ -178,7 +178,7 @@ async function getEmbedding(text, embeddingConfig) {
             requestUrl = joinEndpointPath(embeddingConfig.endpoint, 'embeddings');
             requestBody = { input: text, model: modelName };
             headers = { 'Content-Type': 'application/json' };
-            // 本机 Ollama 等无需认证的端点：api_key 留空（或占位 none）时不送 Authorization
+            // 本機 Ollama 等無需認證的端點：api_key 留空（或佔位 none）時不送 Authorization
             if (apiKey && apiKey !== 'none') headers['Authorization'] = `Bearer ${apiKey}`;
         }
         
@@ -192,7 +192,7 @@ async function getEmbedding(text, embeddingConfig) {
         });
 
         if (response.status >= 300 && response.status < 400) {
-            throw new Error('Embedding API 回应转址（3xx），为防止 SSRF 已阻止');
+            throw new Error('Embedding API 回應轉址（3xx），為防止 SSRF 已阻止');
         }
         if (!response.ok) {
             const errorText = await response.text();
@@ -214,7 +214,7 @@ async function getEmbedding(text, embeddingConfig) {
 }
 
 // =================================================================
-// LLM 统一调用入口
+// LLM 統一呼叫入口
 // =================================================================
 
 async function callLLM(geminiMessages, systemPrompt, tools = null, generationConfig = {}, apiConfigId = null) {
@@ -222,7 +222,7 @@ async function callLLM(geminiMessages, systemPrompt, tools = null, generationCon
     
     let apiConfig;
     if (apiConfigId) {
-        // 支持按名称或ID查找：字符串名称 → 按name查，数字 → 按id查
+        // 支援按名稱或ID查詢：字串名稱 → 按name查，數字 → 按id查
         if (isNaN(apiConfigId)) {
             apiConfig = db.prepare('SELECT * FROM api_configs WHERE name = ?').get(apiConfigId);
         } else {
@@ -232,11 +232,11 @@ async function callLLM(geminiMessages, systemPrompt, tools = null, generationCon
         apiConfig = db.prepare('SELECT * FROM api_configs WHERE is_default = 1').get();
     }
     
-    // 记忆管线各模块写死了专属配置 id（如 52/36/38）；开源部署通常只有一条默认配置
-    //（scripts/setup_llm.js 建立），找不到专属配置时回落到默认，与 OSS_SETUP.md 的说明一致。
+    // 記憶管線各模組寫死了專屬配置 id（如 52/36/38）；開源部署通常只有一條預設配置
+    //（scripts/setup_llm.js 建立），找不到專屬配置時回落到預設，與 OSS_SETUP.md 的說明一致。
     if (!apiConfig && apiConfigId) {
         apiConfig = db.prepare('SELECT * FROM api_configs WHERE is_default = 1').get();
-        if (apiConfig) console.warn(`callLLM: 找不到配置 ${apiConfigId}，回落到默认配置 ${apiConfig.name}`);
+        if (apiConfig) console.warn(`callLLM: 找不到配置 ${apiConfigId}，回落到預設配置 ${apiConfig.name}`);
     }
 
     if (!apiConfig) {
@@ -250,7 +250,7 @@ async function callLLM(geminiMessages, systemPrompt, tools = null, generationCon
             if (decryptedApiKey === null) throw new Error('decrypt returned null');
         } catch (e) {
             console.error('API Key decryption failed:', e);
-            throw new Error('API Key 解密失败，请重新配置连接');
+            throw new Error('API Key 解密失敗，請重新配置連線');
         }
     }
     apiConfig.api_key = decryptedApiKey;
@@ -293,8 +293,8 @@ async function callGeminiAPI(geminiMessages, systemPrompt, tools, generationConf
 
     const modelToUse = apiConfig.model_name_override || apiConfig.model_name;
 
-    // Gemini 2.5 / flash-lite thinking token 会计入 maxOutputTokens 预算导致截断或空返回
-    // flash-lite 小模型长 prompt 下 thinking 可能吃光整笔预算 → 0 输出 token
+    // Gemini 2.5 / flash-lite thinking token 會計入 maxOutputTokens 預算導致截斷或空返回
+    // flash-lite 小模型長 prompt 下 thinking 可能吃光整筆預算 → 0 輸出 token
     if (!requestBody.generationConfig.thinkingConfig) {
         if (modelToUse.includes('2.5') || modelToUse.includes('flash-lite')) {
             requestBody.generationConfig.thinkingConfig = { thinkingBudget: 0 };
@@ -343,9 +343,9 @@ async function callGeminiAPI(geminiMessages, systemPrompt, tools, generationConf
         totalTokens: response.data?.usageMetadata?.totalTokenCount || 0
     };
 
-    // 诊断空返回：文本为空但有 output tokens → thinking 吃掉预算
+    // 診斷空返回：文本為空但有 output tokens → thinking 吃掉預算
     if (!reply && !functionCalls.length && usage.outputTokens > 0) {
-        console.warn(`[Gemini] ⚠️ 空文本但消耗${usage.outputTokens} output tokens → thinking 吃掉预算 | finishReason=${candidate?.finishReason} | safetyRatings=${JSON.stringify(candidate?.safetyRatings)}`);
+        console.warn(`[Gemini] ⚠️ 空文本但消耗${usage.outputTokens} output tokens → thinking 吃掉預算 | finishReason=${candidate?.finishReason} | safetyRatings=${JSON.stringify(candidate?.safetyRatings)}`);
     }
 
     return {
@@ -356,11 +356,11 @@ async function callGeminiAPI(geminiMessages, systemPrompt, tools, generationConf
 }
 
 // =================================================================
-// OpenAI 兼容 API（反向代理）
+// OpenAI 相容 API（反向代理）
 // =================================================================
 
-// 请求超时：环境变量 LLM_REQUEST_TIMEOUT_MS 优先；本机端点（如 Ollama，CPU 推论 + 首次载入模型
-// 很容易超过 30 秒）预设 5 分钟；其余维持 30 秒。
+// 請求超時：環境變數 LLM_REQUEST_TIMEOUT_MS 優先；本機端點（如 Ollama，CPU 推論 + 首次載入模型
+// 很容易超過 30 秒）預設 5 分鐘；其餘維持 30 秒。
 function getRequestTimeoutMs(url) {
     const envMs = parseInt(process.env.LLM_REQUEST_TIMEOUT_MS, 10);
     if (Number.isFinite(envMs) && envMs > 0) return envMs;
@@ -445,14 +445,14 @@ async function callOpenAICompatibleAPI(geminiMessages, systemPrompt, tools, gene
         temperature: generationConfig.temperature || 0.7,
         max_tokens: generationConfig.maxOutputTokens || 4000,
     };
-    // 禁用thinking：DeepSeek/Gemini/Flash模型默认thinking会吃掉输出预算
-    // 尤其低max_tokens场景(如proactive contact 500 token)会导致0输出
+    // 停用thinking：DeepSeek/Gemini/Flash模型預設thinking會吃掉輸出預算
+    // 尤其低max_tokens場景(如proactive contact 500 token)會導致0輸出
     const modelLower = apiConfig.model_name?.toLowerCase() || '';
     if (modelLower.includes('deepseek') || modelLower.includes('gemini') || modelLower.includes('flash')) {
         requestBody.thinking = { type: "disabled" };
     }
 
-    // OpenRouter Flex 模式：便宜但可能排队
+    // OpenRouter Flex 模式：便宜但可能排隊
     if (url.includes('openrouter.ai')) {
         requestBody.service_tier = 'flex';
     }
@@ -470,7 +470,7 @@ async function callOpenAICompatibleAPI(geminiMessages, systemPrompt, tools, gene
     
     const axiosConfig = {
         headers: {
-            // 本机 Ollama 等无需认证的端点：api_key 为空或 'none' 时不送 Authorization
+            // 本機 Ollama 等無需認證的端點：api_key 為空或 'none' 時不送 Authorization
             ...((apiConfig.api_key && apiConfig.api_key !== 'none') ? { 'Authorization': `Bearer ${apiConfig.api_key}` } : {}),
             'Content-Type': 'application/json'
         },
@@ -490,12 +490,12 @@ async function callOpenAICompatibleAPI(geminiMessages, systemPrompt, tools, gene
                             err.message?.includes('aborted') ||
                             err.message?.includes('ConnectTimeout') || err.message?.includes('Timeout');
             if (attempt < maxRetries && isTimeout) {
-                console.warn(`[axios] 连接超时，${2 * (attempt + 1)}s后重试 (${attempt + 1}/${maxRetries})…`);
+                console.warn(`[axios] 連線超時，${2 * (attempt + 1)}s後重試 (${attempt + 1}/${maxRetries})…`);
                 await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
                 continue;
             }
-            const apiErrDetail = err.response?.data ? JSON.stringify(err.response.data).slice(0, 500) : '无响应体';
-            console.error('callOpenAICompatibleAPI error:', err.message, '| 响应:', apiErrDetail);
+            const apiErrDetail = err.response?.data ? JSON.stringify(err.response.data).slice(0, 500) : '無響應體';
+            console.error('callOpenAICompatibleAPI error:', err.message, '| 響應:', apiErrDetail);
             throw err;
         }
     }
@@ -504,12 +504,12 @@ async function callOpenAICompatibleAPI(geminiMessages, systemPrompt, tools, gene
 
     const finishReason = choice?.finish_reason;
     if (finishReason === 'length') {
-        console.warn(`[llm] ⚠️ API返回finish_reason=length（输出被截断），model=${apiConfig.model_name}，max_tokens=${requestBody.max_tokens}`);
+        console.warn(`[llm] ⚠️ API返回finish_reason=length（輸出被截斷），model=${apiConfig.model_name}，max_tokens=${requestBody.max_tokens}`);
     }
 
     let reply = choice?.message?.content || '';
 
-    // DeepSeek thinking模式fallback：content为空时读reasoning_content
+    // DeepSeek thinking模式fallback：content為空時讀reasoning_content
     if (!reply && choice?.message?.reasoning_content) {
         reply = choice.message.reasoning_content;
     }
@@ -535,7 +535,7 @@ async function callOpenAICompatibleAPI(geminiMessages, systemPrompt, tools, gene
 }
 
 // =================================================================
-// API 使用统计记录
+// API 使用統計記錄
 // =================================================================
 
 const recordApiUsage = (chatId, inputTokens, outputTokens, modelName, requestType = 'message') => {
@@ -555,7 +555,7 @@ const recordApiUsage = (chatId, inputTokens, outputTokens, modelName, requestTyp
 };
 
 // =================================================================
-// 导出 tiktoken encoder（供其他模块使用）
+// 匯出 tiktoken encoder（供其他模組使用）
 // =================================================================
 
 function getEncoder() {

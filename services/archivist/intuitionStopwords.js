@@ -7,12 +7,12 @@ const { getDb } = require('../../database');
 
 
 // ═══════════════════════════════════════════════════════
-// v4.8: refreshIntuitionStopwords — 直觉触发词去高频
+// v4.8: refreshIntuitionStopwords — 直覺觸發詞去高頻
 //
-// 统计近30天 User 消息的 top-N 高频词（2-4字滑窗），存
-// user_settings.intuition_stopwords。intuition 匹配时跳过
-// 这些词——否则「代码/界面/开源」这类日常词让直觉永远全量激活。
-// 纯 SQL + 字符统计，零 LLM。
+// 統計近30天 User 訊息的 top-N 高頻詞（2-4字滑窗），存
+// user_settings.intuition_stopwords。intuition 匹配時跳過
+// 這些詞——否則「程式碼/介面/開源」這類日常詞讓直覺永遠全量啟用。
+// 純 SQL + 字元統計，零 LLM。
 // ═══════════════════════════════════════════════════════
 
 async function refreshIntuitionStopwords() {
@@ -27,9 +27,9 @@ async function refreshIntuitionStopwords() {
     `).all();
     if (messages.length < 100) return { stopwords: 0 };
 
-    // 词频统计：2-4 字滑窗（CJK）+ 英文单词
+    // 詞頻統計：2-4 字滑窗（CJK）+ 英文單詞
     const freq = new Map();
-    const msgSeen = new Map(); // 词 → 出现过的消息数（防止单条刷屏制造高频）
+    const msgSeen = new Map(); // 詞 → 出現過的訊息數（防止單條刷屏製造高頻）
     let parsed = 0;
     for (let mi = 0; mi < messages.length; mi++) {
         let text = messages[mi].content || '';
@@ -58,8 +58,8 @@ async function refreshIntuitionStopwords() {
         }
     }
 
-    // 高频判定：出现在 ≥3% 的消息中（按消息数去重，刷屏免疫）。
-    // 实测 2900 条样本：8% 只抓到「什么」；「代码/界面」这类日常词在 3-6% 区间。
+    // 高頻判定：出現在 ≥3% 的訊息中（按訊息數去重，刷屏免疫）。
+    // 實測 2900 條樣本：8% 只抓到「什麼」；「程式碼/介面」這類日常詞在 3-6% 區間。
     const threshold = Math.max(10, Math.floor(parsed * 0.03));
     const stopwords = [...msgSeen.entries()]
         .filter(([w, c]) => c >= threshold)
@@ -70,9 +70,9 @@ async function refreshIntuitionStopwords() {
     try {
         const { setUserSetting } = require('../../utils/settings');
         setUserSetting('intuition_stopwords', JSON.stringify(stopwords));
-        console.log(`[Archivist] 直觉停用词更新: ${stopwords.length} 个（样本${parsed}条消息，阈值${threshold}）— 前10: ${stopwords.slice(0, 10).join(',')}`);
+        console.log(`[Archivist] 直覺停用詞更新: ${stopwords.length} 個（樣本${parsed}條訊息，閾值${threshold}）— 前10: ${stopwords.slice(0, 10).join(',')}`);
     } catch (e) {
-        console.error('[Archivist] 停用词写入失败:', e.message);
+        console.error('[Archivist] 停用詞寫入失敗:', e.message);
     }
     return { stopwords: stopwords.length };
 }

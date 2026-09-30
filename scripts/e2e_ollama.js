@@ -1,13 +1,13 @@
-// scripts/e2e_ollama.js — 用本机 Ollama 真跑一次 Scribe 抽取 + Librarian 检索（端到端）
+// scripts/e2e_ollama.js — 用本機 Ollama 真跑一次 Scribe 抽取 + Librarian 檢索（端到端）
 //
-// 不属于 `npm test`（要真模型、CPU 推论每次约 5~11 秒）。用法（Windows cmd）：
+// 不屬於 `npm test`（要真模型、CPU 推論每次約 5~11 秒）。用法（Windows cmd）：
 //   set LLM_ENDPOINT_ALLOWLIST=http://127.0.0.1:11434&& set SANCTUARY_ENCRYPTION_KEY=<64 hex>&& node scripts/e2e_ollama.js
-// 可选环境变量：OLLAMA_URL（预设 http://127.0.0.1:11434）、OLLAMA_MODEL（预设 qwen3-8b-zh）、
-//   E2E_REUSE_DB=<路径>：沿用上次跑完 Scribe 的暂存 DB，只重跑 Librarian 查询（省下几分钟推论）
+// 可選環境變數：OLLAMA_URL（預設 http://127.0.0.1:11434）、OLLAMA_MODEL（預設 qwen3-8b-zh）、
+//   E2E_REUSE_DB=<路徑>：沿用上次跑完 Scribe 的暫存 DB，只重跑 Librarian 查詢（省下幾分鐘推論）
 //
-// 流程：暂存 DB → 写入一条 Ollama 默认 api_config（与 setup_llm.js 相同做法，
-// Scribe 写死的 config id 会回落到默认）→ 10 则模拟中文对话 → runScribe →
-// Librarian 查「我住哪」「妈妈生日」「我对什么过敏」。ChromaDB 不启动，向量路径降级。
+// 流程：暫存 DB → 寫入一條 Ollama 預設 api_config（與 setup_llm.js 相同做法，
+// Scribe 寫死的 config id 會回落到預設）→ 10 則模擬中文對話 → runScribe →
+// Librarian 查「我住哪」「媽媽生日」「我對什麼過敏」。ChromaDB 不啟動，向量路徑降級。
 
 const os = require('os');
 const path = require('path');
@@ -23,10 +23,10 @@ if (!process.env.LLM_ENDPOINT_ALLOWLIST) process.env.LLM_ENDPOINT_ALLOWLIST = OL
 const llm = require('../services/llm');
 const memory = require('../services/memory');
 
-// Chroma 未启动：让向量路径直接失败并降级（Scribe/Librarian 都有 try/catch 降级）
-memory.chromaDBOperation = async () => { throw new Error('Chroma 未启动（e2e 刻意降级）'); };
+// Chroma 未啟動：讓向量路徑直接失敗並降級（Scribe/Librarian 都有 try/catch 降級）
+memory.chromaDBOperation = async () => { throw new Error('Chroma 未啟動（e2e 刻意降級）'); };
 
-// 包一层 callLLM 记录耗时与模型原始输出
+// 包一層 callLLM 記錄耗時與模型原始輸出
 const realCallLLM = llm.callLLM;
 const llmLog = [];
 llm.callLLM = async (...args) => {
@@ -40,17 +40,17 @@ const { initDatabase, getDb } = require('../database');
 initDatabase();
 const db = getDb();
 
-// 与 scripts/setup_llm.js --provider ollama 等价
+// 與 scripts/setup_llm.js --provider ollama 等價
 if (!REUSE) {
     db.prepare('UPDATE api_configs SET is_default = 0').run();
     db.prepare(`INSERT INTO api_configs (name, provider, endpoint, api_key, model_name, is_default, supports_tools)
                 VALUES (?, 'openai_compatible', ?, 'none', ?, 1, 1)`)
-        .run('本机 Ollama', `${OLLAMA_URL}/v1`, OLLAMA_MODEL);
+        .run('本機 Ollama', `${OLLAMA_URL}/v1`, OLLAMA_MODEL);
 }
-// embedding 通道：名称含 "embedding" 的配置会被 getEmbedding 选用（模型 bge-m3，1024 维）
+// embedding 通道：名稱含 "embedding" 的配置會被 getEmbedding 選用（模型 bge-m3，1024 維）
 if (!db.prepare("SELECT 1 FROM api_configs WHERE name LIKE '%embedding%'").get()) {
     db.prepare(`INSERT INTO api_configs (name, provider, endpoint, api_key, model_name, is_default, supports_tools)
-                VALUES ('本机 Ollama embedding', 'openai_compatible', ?, 'none', 'bge-m3', 0, 0)`)
+                VALUES ('本機 Ollama embedding', 'openai_compatible', ?, 'none', 'bge-m3', 0, 0)`)
         .run(`${OLLAMA_URL}/v1`);
 }
 
@@ -88,35 +88,35 @@ async function main() {
     } catch (_) {}
 
     if (!REUSE) {
-    console.log('\n===== Scribe 结果 =====');
-    console.log(`LLM 调用: ${llmLog.length} 次，耗时 ${llmLog.map(l => (l.ms / 1000).toFixed(1) + 's').join(' + ')}，tokens ${JSON.stringify(llmLog[llmLog.length - 1]?.usage)}`);
-    console.log(`模型提出条目: ${proposed}`);
-    console.log(`写入: ${r?.written}  |  quote 验证丢弃: ${r?.quoteDropped} ${JSON.stringify(r?.quoteDroppedByType || {})}  |  重复: ${r?.duplicates}`);
-    console.log(`Scribe 总耗时: ${(scribeMs / 1000).toFixed(1)}s`);
+    console.log('\n===== Scribe 結果 =====');
+    console.log(`LLM 呼叫: ${llmLog.length} 次，耗時 ${llmLog.map(l => (l.ms / 1000).toFixed(1) + 's').join(' + ')}，tokens ${JSON.stringify(llmLog[llmLog.length - 1]?.usage)}`);
+    console.log(`模型提出條目: ${proposed}`);
+    console.log(`寫入: ${r?.written}  |  quote 驗證丟棄: ${r?.quoteDropped} ${JSON.stringify(r?.quoteDroppedByType || {})}  |  重複: ${r?.duplicates}`);
+    console.log(`Scribe 總耗時: ${(scribeMs / 1000).toFixed(1)}s`);
 
     }
     const rows = db.prepare('SELECT id, type, entity, content, quote, emotional_weight FROM memory_fragments ORDER BY id').all();
-    console.log('\n写入的碎片:');
+    console.log('\n寫入的碎片:');
     for (const f of rows) console.log(`  #${f.id} [${f.type}] ${f.entity}: ${f.content}  （quote: ${f.quote}）`);
 
-    console.log('\n===== Librarian 查询 =====');
-    // 前三个是题目指定的查询；后两个是简体写法对照（模型写入的碎片是简体，见回报解读）
-    for (const q of ['我住哪', '媽媽生日', '我對什麼過敏', '我住在哪里', '我对什么过敏']) {
+    console.log('\n===== Librarian 查詢 =====');
+    // 前三個是題目指定的查詢；後兩個是簡體寫法對照（模型寫入的碎片是簡體，見回報解讀）
+    for (const q of ['我住哪', '媽媽生日', '我對什麼過敏', '我住在哪裡', '我對什麼過敏']) {
         const t1 = Date.now();
         const hits = await searchHybrid(q, 8);
-        console.log(`\n查询「${q}」 (${Date.now() - t1}ms，命中 ${hits.length})`);
+        console.log(`\n查詢「${q}」 (${Date.now() - t1}ms，命中 ${hits.length})`);
         hits.slice(0, 3).forEach((h, i) => console.log(`  Top${i + 1}: #${h.id} ${h.entity ? h.entity + ': ' : ''}${h.content}`));
-        if (hits.length === 0) console.log('  （无命中）');
+        if (hits.length === 0) console.log('  （無命中）');
     }
 }
 
 async function embeddingCheck() {
-    console.log('\n===== Embedding（bge-m3 经 /v1/embeddings）=====');
+    console.log('\n===== Embedding（bge-m3 經 /v1/embeddings）=====');
     try {
         const t = Date.now();
         const v = await llm.getEmbedding('我住在三重');
-        console.log(`维度 ${v.length}，耗时 ${Date.now() - t}ms，前 3 值 ${v.slice(0, 3).map(x => x.toFixed(4)).join(', ')}`);
-    } catch (e) { console.log('embedding 失败:', e.message); }
+        console.log(`維度 ${v.length}，耗時 ${Date.now() - t}ms，前 3 值 ${v.slice(0, 3).map(x => x.toFixed(4)).join(', ')}`);
+    } catch (e) { console.log('embedding 失敗:', e.message); }
 }
 
-main().then(embeddingCheck).then(() => process.exit(0)).catch(e => { console.error('e2e 失败:', e); process.exit(1); });
+main().then(embeddingCheck).then(() => process.exit(0)).catch(e => { console.error('e2e 失敗:', e); process.exit(1); });

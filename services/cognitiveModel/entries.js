@@ -73,7 +73,7 @@ function createEntry(type, content, opts = {}) {
         created_by, expires_at
     );
 
-    console.log(`[UserModel] 创建 ${type}[${source_quality}][${created_by}]: "${content.slice(0, 60)}" (id=${result.lastInsertRowid}, conf=${effectiveConfidence.toFixed(2)})`);
+    console.log(`[UserModel] 建立 ${type}[${source_quality}][${created_by}]: "${content.slice(0, 60)}" (id=${result.lastInsertRowid}, conf=${effectiveConfidence.toFixed(2)})`);
     return result.lastInsertRowid;
 }
 

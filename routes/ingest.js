@@ -1,29 +1,29 @@
-// routes/ingest.js — 聊天记录接入（旁路管线入口）
+// routes/ingest.js — 聊天記錄接入（旁路管線入口）
 //
-// 用途：接收外部聊天机器人的对话，写入 messages 表，供 Scribe 提取记忆。
-// 记忆库不负责回复——回复由外部机器人（如 AstrBot）自己处理。
+// 用途：接收外部聊天機器人的對話，寫入 messages 表，供 Scribe 提取記憶。
+// 記憶庫不負責回覆——回覆由外部機器人（如 AstrBot）自己處理。
 //
-// POST /api/messages  接受三种格式：
-//   1. 简单格式（推荐，AstrBot 插件转发用）：
+// POST /api/messages  接受三種格式：
+//   1. 簡單格式（推薦，AstrBot 外掛轉發用）：
 //      { "sender": "user"|"bot", "content": "...", "timestamp": "2026-08-15 14:30:00", "chat_id": 1 }
 //      或 { "role": "user"|"assistant", "content": "..." }
-//   2. 数组： [ {sender, content, timestamp}, ... ]
-//   3. OneBot v11 message 事件（SnowLuma 直连时用）：
+//   2. 陣列： [ {sender, content, timestamp}, ... ]
+//   3. OneBot v11 message 事件（SnowLuma 直連時用）：
 //      { "post_type":"message", "message_type":"private"|"group", "user_id":123,
 //        "self_id":456, "raw_message":"...", "time":1755234600, "group_id":789 }
 //
-// sender 判定（映射到 messages.sender 的 'user'/'ai'）：
+// sender 判定（對映到 messages.sender 的 'user'/'ai'）：
 //   'user'/'human'/'我' → 'user'
 //   'assistant'/'ai'/'bot'/'它' → 'ai'
-//   OneBot：user_id === self_id → ai（机器人自己），否则 user
+//   OneBot：user_id === self_id → ai（機器人自己），否則 user
 //
-// ⚠️ 本接口无鉴权，仅供内网/localhost 使用，不要暴露到公网。
+// ⚠️ 本介面無鑑權，僅供內網/localhost 使用，不要暴露到公網。
 
 const express = require('express');
 const { getDb } = require('../database');
 const router = express.Router();
 
-// 归一化时间戳 → 'YYYY-MM-DD HH:MM:SS'
+// 歸一化時間戳 → 'YYYY-MM-DD HH:MM:SS'
 function normalizeTime(ts) {
     if (!ts) return null;
     let d = null;
@@ -39,14 +39,14 @@ function normalizeTime(ts) {
     return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
-// 简单格式的 sender → 'user'/'ai'
+// 簡單格式的 sender → 'user'/'ai'
 function mapSender(raw) {
     const s = String(raw || '').trim().toLowerCase();
     if (s === 'user' || s === 'human' || s === '我' || s === 'me') return 'user';
-    return 'ai'; // assistant/ai/bot/它 及其它默认当 AI
+    return 'ai'; // assistant/ai/bot/它 及其它預設當 AI
 }
 
-// 把一条消息（简单格式 或 OneBot 事件）规整成 {sender, content, timestamp}
+// 把一條訊息（簡單格式 或 OneBot 事件）規整成 {sender, content, timestamp}
 function normalizeMessage(obj) {
     if (!obj || typeof obj !== 'object') return null;
 
@@ -58,7 +58,7 @@ function normalizeMessage(obj) {
         return { sender, content: String(content), timestamp: normalizeTime(obj.time) };
     }
 
-    // 简单格式
+    // 簡單格式
     const content = obj.content ?? obj.text ?? obj.message ?? '';
     if (!content) return null;
     const sender = mapSender(obj.sender ?? obj.role);
@@ -69,7 +69,7 @@ router.post('/messages', (req, res) => {
     const db = getDb();
     const body = req.body;
 
-    // 规整成消息数组
+    // 規整成訊息陣列
     const rawList = Array.isArray(body) ? body : [body];
     const msgs = [];
     for (const item of rawList) {
@@ -78,10 +78,10 @@ router.post('/messages', (req, res) => {
     }
 
     if (msgs.length === 0) {
-        return res.status(400).json({ success: false, error: '没有解析出有效消息（需 content + sender/role 或 OneBot message 事件）' });
+        return res.status(400).json({ success: false, error: '沒有解析出有效訊息（需 content + sender/role 或 OneBot message 事件）' });
     }
 
-    // 补缺省时间戳（无时间的按当前时间递增写入）
+    // 補預設時間戳（無時間的按當前時間遞增寫入）
     let cursor = Date.now();
     for (let i = msgs.length - 1; i >= 0; i--) {
         if (!msgs[i].timestamp) {
@@ -92,7 +92,7 @@ router.post('/messages', (req, res) => {
         }
     }
 
-    // 默认 chat_id=1（若没有独立 chat 概念）
+    // 預設 chat_id=1（若沒有獨立 chat 概念）
     const chatId = body.chat_id ?? body.group_id ?? 1;
 
     const insert = db.prepare(`

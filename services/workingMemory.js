@@ -1,5 +1,5 @@
 // =================================================================
-// 话题感知工作记忆池（Ombre Brain / MemGPT 模式）
+// 話題感知工作記憶池（Ombre Brain / MemGPT 模式）
 // =================================================================
 const { getDb } = require('../database');
 const { getLocalEmbedding } = require('./memory');
@@ -7,9 +7,9 @@ const { getLocalEmbedding } = require('./memory');
 const MAX_POOL_SIZE = 5;
 const TTL_MS = 30 * 60 * 1000;
 
-// 内存缓存：fragmentKey → { key, content, emotional_weight, _rrf, topicEmbedding, lastBoostedAt }
+// 記憶體快取：fragmentKey → { key, content, emotional_weight, _rrf, topicEmbedding, lastBoostedAt }
 let pool = new Map();
-let lastQueryEmbedding = null;   // 上一轮的 query embedding
+let lastQueryEmbedding = null;   // 上一輪的 query embedding
 let lastAccessTime = null;
 
 // =================================================================
@@ -28,7 +28,7 @@ function persistPool() {
         JSON.stringify(item.topicEmbedding || []), item.lastBoostedAt || Date.now());
     }
   } catch (e) {
-    console.error('[WorkingMemory] 持久化失败:', e.message);
+    console.error('[WorkingMemory] 持久化失敗:', e.message);
   }
 }
 
@@ -40,7 +40,7 @@ function loadFromDB() {
     for (const r of rows) {
       let emb = [];
       try { emb = JSON.parse(r.topic_embedding_json || '[]'); } catch (_) {}
-      if (emb.length > 0) lastQueryEmbedding = emb;  // 用最近一条的 embedding
+      if (emb.length > 0) lastQueryEmbedding = emb;  // 用最近一條的 embedding
       pool.set(r.fragment_key, {
         key: r.fragment_key,
         content: r.content,
@@ -52,15 +52,15 @@ function loadFromDB() {
     }
     if (rows.length > 0) {
       lastAccessTime = rows[0].boosted_at;
-      console.log(`[WorkingMemory] 从DB恢复 ${rows.length} 条工作记忆`);
+      console.log(`[WorkingMemory] 從DB恢復 ${rows.length} 條工作記憶`);
     }
   } catch (e) {
-    console.error('[WorkingMemory] 从DB加载失败:', e.message);
+    console.error('[WorkingMemory] 從DB載入失敗:', e.message);
   }
 }
 
 // =================================================================
-// 余弦相似度
+// 餘弦相似度
 // =================================================================
 
 function cosineSim(a, b) {
@@ -76,7 +76,7 @@ function cosineSim(a, b) {
 }
 
 // =================================================================
-// 话题连续性
+// 話題連續性
 // =================================================================
 
 function topicContinuity(currentEmbedding) {
@@ -85,16 +85,16 @@ function topicContinuity(currentEmbedding) {
 }
 
 // =================================================================
-// 获取 Boost Map（在 searchHybrid 中调用）
+// 獲取 Boost Map（在 searchHybrid 中呼叫）
 // =================================================================
 
 async function getBoostMap(userMessage) {
-  // 检查 TTL
+  // 檢查 TTL
   if (lastAccessTime && (Date.now() - lastAccessTime) > TTL_MS) {
     pool.clear();
     lastQueryEmbedding = null;
     lastAccessTime = null;
-    console.log('[WorkingMemory] TTL过期，池已清空');
+    console.log('[WorkingMemory] TTL過期，池已清空');
   }
 
   if (pool.size === 0) return new Map();
@@ -103,47 +103,47 @@ async function getBoostMap(userMessage) {
   try {
     currentEmbedding = await getLocalEmbedding(userMessage);
   } catch (e) {
-    console.error('[WorkingMemory] embedding失败，跳过boost:', e.message);
+    console.error('[WorkingMemory] embedding失敗，跳過boost:', e.message);
     return new Map();
   }
 
   const sim = topicContinuity(currentEmbedding);
-  lastQueryEmbedding = currentEmbedding;  // 缓存给 updatePool 用
+  lastQueryEmbedding = currentEmbedding;  // 快取給 updatePool 用
 
-  // 话题切换 → 清空
+  // 話題切換 → 清空
   if (sim < 0.2) {
-    console.log(`[WorkingMemory] 话题切换 (sim=${sim.toFixed(3)} < 0.2)，清空工作记忆池`);
+    console.log(`[WorkingMemory] 話題切換 (sim=${sim.toFixed(3)} < 0.2)，清空工作記憶池`);
     pool.clear();
     persistPool();
     return new Map();
   }
 
-  const boost = sim >= 0.6 ? 1.15 : 1.05;  // 持续话题 vs 部分重叠
+  const boost = sim >= 0.6 ? 1.15 : 1.05;  // 持續話題 vs 部分重疊
   const boostMap = new Map();
   for (const [key] of pool) {
     boostMap.set(key, boost);
   }
-  console.log(`[WorkingMemory] 话题连续性 sim=${sim.toFixed(3)}，boost=${boost}，池内 ${pool.size} 条`);
+  console.log(`[WorkingMemory] 話題連續性 sim=${sim.toFixed(3)}，boost=${boost}，池內 ${pool.size} 條`);
   lastAccessTime = Date.now();
   return boostMap;
 }
 
 // =================================================================
-// 更新工作记忆池（在 buildSmartContext 注入后调用）
+// 更新工作記憶池（在 buildSmartContext 注入後呼叫）
 // =================================================================
 
 function updatePool(fragments) {
   if (!fragments || fragments.length === 0) return;
 
-  const emb = lastQueryEmbedding;  // 使用 getBoostMap 时缓存的 embedding
+  const emb = lastQueryEmbedding;  // 使用 getBoostMap 時快取的 embedding
 
   for (const f of fragments.slice(0, MAX_POOL_SIZE)) {
     const key = `${f.source_table || 'fragment'}-${f.id}`;
-    // LRU：如果已存在，更新；否则添加（超限时淘汰最旧的）
+    // LRU：如果已存在，更新；否則新增（超限時淘汰最舊的）
     if (pool.has(key)) {
       pool.delete(key);  // 移到最前
     } else if (pool.size >= MAX_POOL_SIZE) {
-      // 淘汰最旧条目
+      // 淘汰最舊條目
       const oldest = [...pool.entries()].sort((a, b) => (a[1].lastBoostedAt || 0) - (b[1].lastBoostedAt || 0))[0];
       if (oldest) pool.delete(oldest[0]);
     }
@@ -159,7 +159,7 @@ function updatePool(fragments) {
 
   lastAccessTime = Date.now();
   persistPool();
-  console.log(`[WorkingMemory] 池更新完成，${pool.size} 条 (target query: ${fragments[0]?.content?.slice(0, 40) || '?'})`);
+  console.log(`[WorkingMemory] 池更新完成，${pool.size} 條 (target query: ${fragments[0]?.content?.slice(0, 40) || '?'})`);
 }
 
 // =================================================================
@@ -168,7 +168,7 @@ function updatePool(fragments) {
 
 loadFromDB();
 
-// 暴露最近注入的记忆，供 correct_memory 查询工作记忆池
+// 暴露最近注入的記憶，供 correct_memory 查詢工作記憶池
 function getRecentFragments() {
     const now = Date.now();
     const result = [];

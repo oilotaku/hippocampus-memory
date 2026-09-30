@@ -1,6 +1,6 @@
 // routes/memory-api.js
-// 冥想盆记忆 CRUD + Embedding配置 + LLM配置 + 标签提取
-// 从 index.js 拆出
+// 冥想盆記憶 CRUD + Embedding配置 + LLM配置 + 標籤提取
+// 從 index.js 拆出
 
 const express = require('express');
 const { getDb } = require('../database');
@@ -15,7 +15,7 @@ const { assertSafeEndpoint, joinEndpointPath, safeFetch, SsrfError } = require('
 
 const router = express.Router();
 
-// ── 时区转换：UTC → 某城市时间 HH:MM ──
+// ── 時區轉換：UTC → 某城市時間 HH:MM ──
 function toShanghaiHHMM(utcStr) {
     if (!utcStr) return '';
     try {
@@ -27,20 +27,20 @@ function toShanghaiHHMM(utcStr) {
     }
 }
 
-// ========== 记忆 CRUD ==========
+// ========== 記憶 CRUD ==========
 
-// POST /api/memory - 新增记忆
+// POST /api/memory - 新增記憶
 router.post('/api/memory', requireAuth, async (req, res) => {
     const db = getDb();
     const { title, content, tags, status, valid_from, valid_to } = req.body;
-    console.log('📥 收到的请求数据:', { title, content, tags, status });
+    console.log('📥 收到的請求資料:', { title, content, tags, status });
     
     try {
         if (!title || !content) {
             return res.status(400).json({ error: "Title and content are required" });
         }
         
-        // W3：on → AAD 绑「memories:content」；off → 维持上线前的行为（无 AAD 加密 content、title 明文）
+        // W3：on → AAD 綁「memories:content」；off → 維持上線前的行為（無 AAD 加密 content、title 明文）
         const encryptedContent = memoryCrypto.isEnabled() ? sealField('memories', 'content', content) : encryption.encrypt(content);
         const storedTitle = sealField('memories', 'title', title);
         const tagsJSON = JSON.stringify(tags || []);
@@ -109,7 +109,7 @@ router.post('/api/memory', requireAuth, async (req, res) => {
     }
 });
 
-// PUT /api/memory/:id - 编辑记忆（智能向量更新）
+// PUT /api/memory/:id - 編輯記憶（智慧向量更新）
 router.put('/api/memory/:id', requireAuth, async (req, res) => {
     const db = getDb();
     const memoryId = req.params.id;
@@ -122,7 +122,7 @@ router.put('/api/memory/:id', requireAuth, async (req, res) => {
             return res.status(404).json({ error: "Memory not found" });
         }
         
-        // oldMemory 经透明解密已是明文（解不开时为 null，视为内容已变更）
+        // oldMemory 經透明解密已是明文（解不開時為 null，視為內容已變更）
         const oldContent = oldMemory.content === null ? null : encryption.decrypt(oldMemory.content);
         const oldTitle = oldMemory.title;
         const contentChanged = (oldContent !== content) || (oldTitle !== title);
@@ -193,7 +193,7 @@ router.put('/api/memory/:id', requireAuth, async (req, res) => {
     }
 });
 
-// GET /api/memories - 获取记忆列表（支持TAG和日期筛选）
+// GET /api/memories - 獲取記憶列表（支援TAG和日期篩選）
 router.get('/api/memories', requireAuth, async (req, res) => {
     const db = getDb();
     const { tags, status, created_date } = req.query;
@@ -242,7 +242,7 @@ router.get('/api/memories', requireAuth, async (req, res) => {
     }
 });
 
-// GET /api/memories/months — 获取记忆月份列表
+// GET /api/memories/months — 獲取記憶月份列表
 router.get('/api/memories/months', requireAuth, (req, res) => {
     const db = getDb();
     try {
@@ -254,20 +254,20 @@ router.get('/api/memories/months', requireAuth, (req, res) => {
         `).all();
         res.json({ months });
     } catch (e) {
-        console.error('[memories API] 月份列表失败:', e.message);
+        console.error('[memories API] 月份列表失敗:', e.message);
         res.status(500).json({ error: e.message });
     }
 });
 
 // ═══════════════════════════════════════════════════════
-// GET /api/memory/universe — 星空可视化全量数据
-// 必须在 /api/memory/:id 之前注册，否则 Express 把 "universe" 当作 :id
+// GET /api/memory/universe — 星空視覺化全量資料
+// 必須在 /api/memory/:id 之前註冊，否則 Express 把 "universe" 當作 :id
 // ═══════════════════════════════════════════════════════
 router.get('/api/memory/universe', requireAuth, (req, res) => {
     try {
         const db = getDb();
 
-        // ── v4.7 星座 = 活跃实体档案（按星系分组）──
+        // ── v4.7 星座 = 活躍實體檔案（按星系分組）──
         const GALAXY_COLORS = {
             person: '#ff9966', pet: '#ff9966', organization: '#ff9966',
             place: '#6699ff',
@@ -277,25 +277,25 @@ router.get('/api/memory/universe', requireAuth, (req, res) => {
             music_aggregate: '#ffcc66', book_aggregate: '#ffcc66', movie_aggregate: '#ffcc66'
         };
         const { USER, AI, UI } = require('../services/memoryConfig');
-        // category → 前端星系 id。前端的 GALAXIES 只有 爱好/社交/创作/事件/地点 五个，
-        // 映射到一个不存在的 id，星座就永远不会被画出来（项目/术语类曾因此整批消失）。
-        const GALAXY_LABELS = { person:'社交', pet:'社交', organization:'社交', place:'地点', event:'事件', project:'创作', work:'创作', term:'创作', hobby:'爱好', consumed:'爱好', object:'爱好', music_aggregate:'爱好', book_aggregate:'爱好', movie_aggregate:'爱好' };
+        // category → 前端星系 id。前端的 GALAXIES 只有 愛好/社交/創作/事件/地點 五個，
+        // 對映到一個不存在的 id，星座就永遠不會被畫出來（專案/術語類曾因此整批消失）。
+        const GALAXY_LABELS = { person:'社交', pet:'社交', organization:'社交', place:'地點', event:'事件', project:'創作', work:'創作', term:'創作', hobby:'愛好', consumed:'愛好', object:'愛好', music_aggregate:'愛好', book_aggregate:'愛好', movie_aggregate:'愛好' };
 
-        // 聚合星座（按值标路由的那几颗）的类别/星系是**配置驱动**的：
-        // 定义在 services/tagRouting.js，用户挑哪几颗写在 memory_config.json 的 tag_routing。
-        // 这里动态接进星图的两个映射表——加一个新标不用回来改这个文件。
+        // 聚合星座（按值標路由的那幾顆）的類別/星系是**配置驅動**的：
+        // 定義在 services/tagRouting.js，使用者挑哪幾顆寫在 memory_config.json 的 tag_routing。
+        // 這裡動態接進星圖的兩個對映表——加一個新標不用回來改這個檔案。
         try {
             for (const def of require('../services/tagRouting').getTagRouting()) {
                 GALAXY_COLORS[def.category] = def.color || GALAXY_COLORS[def.category] || '#9aa7c7';
                 GALAXY_LABELS[def.category] = def.galaxy;
             }
         } catch (e) {
-            console.warn('[memory-api] 聚合星座映射注入失败:', e.message);
+            console.warn('[memory-api] 聚合星座對映注入失敗:', e.message);
         }
 
-        // ⚠️ 取 facts/judgment，不取 overview：v5.9 起 overview 列已退役（写入侧只写
-        // facts + current_status + judgment），前端面板读的也是 facts/judgment。
-        // 之前这里只 SELECT overview，前端拿不到内容，所有星座面板正文恒为空。
+        // ⚠️ 取 facts/judgment，不取 overview：v5.9 起 overview 列已退役（寫入側只寫
+        // facts + current_status + judgment），前端面板讀的也是 facts/judgment。
+        // 之前這裡只 SELECT overview，前端拿不到內容，所有星座面板正文恆為空。
         const entities = db.prepare(`
             SELECT ep.id, ep.name, ep.category, ep.subcategory, ep.fragment_count,
                    ep.related_entities, ep.current_status, ep.status as lifecycle_status,
@@ -309,36 +309,36 @@ router.get('/api/memory/universe', requireAuth, (req, res) => {
                 ep.fragment_count DESC
         `).all();
 
-        // 子分类派生：从 entity_type + relationship_to_user 提取，不再靠 LLM 猜
+        // 子分類派生：從 entity_type + relationship_to_user 提取，不再靠 LLM 猜
         function deriveSubcategory(ent) {
             // pet 直接按 category
             if (ent.category === 'pet') return 'pet';
-            // person: 从 entity_type 和 relationship 派生
+            // person: 從 entity_type 和 relationship 派生
             if (ent.category === 'person') {
                 const et = ent.entity_type || '';
                 if (et === 'public_figure') return 'celebrity';
                 if (et === 'fictional_character') return 'fictional';
                 const rel = (ent.relationship_to_user || '').toLowerCase();
-                if (/母亲|父亲|妈妈|爸爸|女儿|儿子|家人|亲戚|家属/.test(rel)) return 'family';
-                if (/朋友|好友|闺蜜|死党|伙伴|老朋友/.test(rel)) return 'friend';
-                if (/网友|线上|群友|小红书.*认识/.test(rel)) return 'online';
-                return null;  // 不确定就不填
+                if (/母親|父親|媽媽|爸爸|女兒|兒子|家人|親戚|家屬|母亲|父亲|妈妈|爸爸|女儿|儿子|家人|亲戚|家属/.test(rel)) return 'family';
+                if (/朋友|好友|閨蜜|死黨|夥伴|老朋友|朋友|好友|闺蜜|死党|伙伴|老朋友/.test(rel)) return 'friend';
+                if (/網友|線上|群友|小紅書.*認識|网友|线上|群友|小红书.*认识/.test(rel)) return 'online';
+                return null;  // 不確定就不填
             }
-            // place/event/project/work/term: entity_type 暂未覆盖，留 NULL
+            // place/event/project/work/term: entity_type 暫未覆蓋，留 NULL
             return null;
         }
-        // 为每个实体计算派生子分类
+        // 為每個實體計算派生子分類
         for (const ent of entities) {
             ent.subcategory = deriveSubcategory(ent);
         }
 
-        // v5 双星核心：不作为普通星座，单独返回档案
+        // v5 雙星核心：不作為普通星座，單獨返回檔案
         const CORE_NAMES = [USER.name, AI.name];
         const coreEntities = entities.filter(e => CORE_NAMES.includes(e.name));
         const normalEntities = entities.filter(e => !CORE_NAMES.includes(e.name));
 
-        // 双星档案走 facts（前端 showCorePanel 读的就是 ent.facts）。
-        // 以前这里给的是 overview（已退役的列），面板永远取不到 → 只显示兜底文案。
+        // 雙星檔案走 facts（前端 showCorePanel 讀的就是 ent.facts）。
+        // 以前這裡給的是 overview（已退役的列），面板永遠取不到 → 只顯示兜底文案。
         const core = coreEntities.map(ent => ({
             id: 'e' + ent.id,
             name: ent.name,
@@ -354,8 +354,8 @@ router.get('/api/memory/universe', requireAuth, (req, res) => {
         // Build constellations: each entity = one constellation with its linked fragments as stars
         const maxFrags = Math.max(1, ...normalEntities.map(e => e.fragment_count || 0));
 
-        // 衰减λ按情绪权重四档（与 Librarian segmentedDecay 同语义）：
-        // 高情绪记忆亮得久，琐事快速变暗
+        // 衰減λ按情緒權重四檔（與 Librarian segmentedDecay 同語義）：
+        // 高情緒記憶亮得久，瑣事快速變暗
         const ewLambda = (ew) => {
             if (ew >= 0.8) return 0.005;   // 半衰期 ~139天
             if (ew >= 0.6) return 0.01;    // ~69天
@@ -385,10 +385,10 @@ router.get('/api/memory/universe', requireAuth, (req, res) => {
                 const daysSince = Math.max(0, f.days_since_access || 0);
                 const λ = ewLambda(f.emotional_weight || 0.3);
                 const decay = Math.exp(-λ * daysSince);
-                // read_count = Librarian 检索命中次数（聊天里被想起 → 星星更亮）
+                // read_count = Librarian 檢索命中次數（聊天裡被想起 → 星星更亮）
                 const recallBonus = Math.min(0.3, Math.log(1 + (f.read_count || 0)) * 0.08);
                 let brightness = Math.min(1.0, decay + recallBonus);
-                // 生命周期硬上限：冷却的星不可能亮，冻结的星接近熄灭
+                // 生命週期硬上限：冷卻的星不可能亮，凍結的星接近熄滅
                 if (f.lifecycle === 'cooling') brightness = Math.min(brightness, 0.30);
                 else if (f.lifecycle === 'frozen') brightness = Math.min(brightness, 0.12);
                 const mag = +(6.5 - brightness * 5.5).toFixed(1);
@@ -406,8 +406,8 @@ router.get('/api/memory/universe', requireAuth, (req, res) => {
             });
             const coolingCount = stars.filter(s => s.lifecycle !== 'active').length;
 
-            // v5.3: 星座的记忆叙事片段（episodes）
-            // 旧 episode 可能是加密的，需解密后再截取
+            // v5.3: 星座的記憶敘事片段（episodes）
+            // 舊 episode 可能是加密的，需解密後再擷取
             const episodes = db.prepare(`
                 SELECT id, title, content, weight, valid_from AS date
                 FROM memories
@@ -457,7 +457,7 @@ router.get('/api/memory/universe', requireAuth, (req, res) => {
             };
         });
 
-        // ── User Model 认知模型 ──
+        // ── User Model 認知模型 ──
         const cognitiveModel = db.prepare(`
             SELECT id, type, content, confidence, evidence_count,
                    decay_type, status, last_evidence_at, created_at, decay_params, tags, priority,
@@ -477,11 +477,11 @@ router.get('/api/memory/universe', requireAuth, (req, res) => {
             tags: safeJsonParse(e.tags) || [],
         }));
 
-        // ── 观星手记 = Archivist 最近活动 ──
+        // ── 觀星手記 = Archivist 最近活動 ──
         const archlog = db.prepare(`
             SELECT created_at AS time, action, category_path, detail, status
             FROM ontology_changelog
-            WHERE action != 'merge_proposal'  -- 提案有独立的「AI的疑问」面板
+            WHERE action != 'merge_proposal'  -- 提案有獨立的「AI的疑問」面板
             ORDER BY created_at DESC LIMIT 15
         `).all().map(r => {
             const detail = safeJsonParse(r.detail);
@@ -489,68 +489,68 @@ router.get('/api/memory/universe', requireAuth, (req, res) => {
             let color = '#8ab4ff';
             switch (r.action) {
                 case 'emergent_constellation':
-                    text = `🌟 新星座诞生：<strong>"${detail?.name || '?'}"</strong> — ${(detail?.reason || '').slice(0, 80)}`;
+                    text = `🌟 新星座誕生：<strong>"${detail?.name || '?'}"</strong> — ${(detail?.reason || '').slice(0, 80)}`;
                     color = '#ffd580';
                     break;
                 case 'seed_merge':
-                    text = `🔗 合并星座：<strong>"${detail?.victim || '?'}"</strong> 并入 "${detail?.survivor || '?'}"`;
+                    text = `🔗 合併星座：<strong>"${detail?.victim || '?'}"</strong> 併入 "${detail?.survivor || '?'}"`;
                     color = '#c4a3f5';
                     break;
                 case 'seed_unmerge':
-                    text = `↩️ 撤销误合并：<strong>"${detail?.restored || '?'}"</strong> 恢复独立`;
+                    text = `↩️ 撤銷誤合併：<strong>"${detail?.restored || '?'}"</strong> 恢復獨立`;
                     color = '#ffd580';
                     break;
                 case 'entity_bridges':
-                    text = `🌉 发现 <strong>${detail?.count || '?'}</strong> 对星座关联`;
+                    text = `🌉 發現 <strong>${detail?.count || '?'}</strong> 對星座關聯`;
                     color = '#8ab4ff';
                     break;
                 case 'episode_audit': {
                     const v = detail?.verdict;
                     const emoji = v === 'fabricated' ? '⚠️' : v === 'confirmed' ? '✅' : '🔍';
-                    text = `${emoji} 记忆审计：${v === 'fabricated' ? '发现编造记忆' : v === 'confirmed' ? '确认记忆真实' : '审计'}`;
+                    text = `${emoji} 記憶審計：${v === 'fabricated' ? '發現編造記憶' : v === 'confirmed' ? '確認記憶真實' : '審計'}`;
                     if (detail?.reason) text += ` — ${detail.reason.slice(0, 60)}`;
                     color = v === 'fabricated' ? '#ff9d8a' : '#5ee8b0';
                     break;
                 }
                 case 'consolidate_category':
-                    text = `📝 整理了 <strong>"${r.category_path || '?'}"</strong> 的记忆碎片`;
+                    text = `📝 整理了 <strong>"${r.category_path || '?'}"</strong> 的記憶碎片`;
                     color = '#5ee8b0';
                     break;
                 case 'auto_merge':
                 case 'merge_executed':
-                    text = `合并重叠类别：<strong>"${detail?.victim || '?'}"</strong> → "${detail?.survivor || '?'}"`;
+                    text = `合併重疊類別：<strong>"${detail?.victim || '?'}"</strong> → "${detail?.survivor || '?'}"`;
                     color = '#c4a3f5';
                     break;
                 case 'category_created':
-                    text = `💡 发现新主题：<strong>"${r.category_path || '?'}"</strong>`;
+                    text = `💡 發現新主題：<strong>"${r.category_path || '?'}"</strong>`;
                     color = '#ffd580';
                     break;
                 case 'deep_cycle':
-                    text = `🌙 深循环完成：LLM <strong>${detail?.llm_calls || '?'}</strong> 次，未分类 ${detail?.unclassified_remaining ?? '?'}，种子 ${detail?.seeds_remaining ?? '?'}`;
+                    text = `🌙 深迴圈完成：LLM <strong>${detail?.llm_calls || '?'}</strong> 次，未分類 ${detail?.unclassified_remaining ?? '?'}，種子 ${detail?.seeds_remaining ?? '?'}`;
                     color = '#8ab4ff';
                     break;
                 case 'classify':
-                    text = `🪐 分类碎片：<strong>${detail?.count || '?'}</strong> 条归入 ${detail?.constellations || '?'} 个星座`;
+                    text = `🪐 分類碎片：<strong>${detail?.count || '?'}</strong> 條歸入 ${detail?.constellations || '?'} 個星座`;
                     color = '#5ee8b0';
                     break;
                 case 'rematch':
-                    text = `🔗 字面回补：<strong>${detail?.count || '?'}</strong> 条碎片归位`;
+                    text = `🔗 字面回補：<strong>${detail?.count || '?'}</strong> 條碎片歸位`;
                     color = '#89c4ff';
                     break;
                 case 'semantic_rematch':
-                    text = `🔮 语义回补：<strong>${detail?.count || '?'}</strong> 条描述性提及归位`;
+                    text = `🔮 語義回補：<strong>${detail?.count || '?'}</strong> 條描述性提及歸位`;
                     color = '#b8a9ff';
                     break;
                 case 'insights':
-                    text = `💭 碎片洞察：提取 <strong>${detail?.count || '?'}</strong> 条行为模式`;
+                    text = `💭 碎片洞察：提取 <strong>${detail?.count || '?'}</strong> 條行為模式`;
                     color = '#ffb3d4';
                     break;
                 case 'entity_relation':
-                    text = `👤 更新人物关系：<strong>${detail?.entity_name || '?'}</strong>`;
+                    text = `👤 更新人物關係：<strong>${detail?.entity_name || '?'}</strong>`;
                     color = '#ffb3d4';
                     break;
                 case 'memory_correction':
-                    text = `✏️ 修正记忆：<strong>"${(detail?.wrong || '?').slice(0, 40)}"</strong> → "${(detail?.correct || '?').slice(0, 40)}"`;
+                    text = `✏️ 修正記憶：<strong>"${(detail?.wrong || '?').slice(0, 40)}"</strong> → "${(detail?.correct || '?').slice(0, 40)}"`;
                     color = '#ff9d8a';
                     break;
                 default:
@@ -565,7 +565,7 @@ router.get('/api/memory/universe', requireAuth, (req, res) => {
             };
         });
 
-        // ── 待确认合并提案（AI 提案，用户裁决）──
+        // ── 待確認合併提案（AI 提案，使用者裁決）──
         const mergeProposals = db.prepare(`
             SELECT id, category_path, detail, created_at
             FROM ontology_changelog
@@ -601,7 +601,7 @@ router.get('/api/memory/universe', requireAuth, (req, res) => {
     }
 });
 
-// GET /api/memory/pipeline-status — 管线状态总览（memory.html 顶部状态条用）
+// GET /api/memory/pipeline-status — 管線狀態總覽（memory.html 頂部狀態條用）
 router.get('/api/memory/pipeline-status', requireAuth, (req, res) => {
     try {
         const db = getDb();
@@ -633,10 +633,10 @@ router.get('/api/memory/pipeline-status', requireAuth, (req, res) => {
     }
 });
 
-// GET /api/memory/:id - 获取单个记忆详情
+// GET /api/memory/:id - 獲取單個記憶詳情
 router.get('/api/memory/:id', requireAuth, async (req, res, next) => {
-    // 具名路由（/api/memory/core-insight 等）注册在这个通配路由之后，
-    // 不挡一下会被它整个吃掉，变成 "Memory not found" 404。
+    // 具名路由（/api/memory/core-insight 等）註冊在這個通配路由之後，
+    // 不擋一下會被它整個吃掉，變成 "Memory not found" 404。
     if (!/^\d+$/.test(req.params.id)) return next();
 
     const db = getDb();
@@ -652,7 +652,7 @@ router.get('/api/memory/:id', requireAuth, async (req, res, next) => {
         const decryptedContent = encryption.decryptForDisplay(memory.content);
         const tags = JSON.parse(memory.tags || '[]');
 
-        // 显式查看 = 访问记录，供生命周期衰减用
+        // 顯式檢視 = 訪問記錄，供生命週期衰減用
         try {
             db.prepare("UPDATE memories SET last_accessed_at = datetime('now') WHERE id = ?").run(memoryId);
         } catch (_) {}
@@ -670,7 +670,7 @@ router.get('/api/memory/:id', requireAuth, async (req, res, next) => {
 });
 
 // ═══════════════════════════════════════════════════════
-// v4.8: 合并提案裁决 — 用户人工确认/拒绝
+// v4.8: 合併提案裁決 — 使用者人工確認/拒絕
 // POST /api/memory/merge-proposal/:id  body: { decision: 'approve' | 'reject' }
 // ═══════════════════════════════════════════════════════
 
@@ -689,7 +689,7 @@ router.post('/api/memory/merge-proposal/:id', requireAuth, (req, res) => {
         const detail = safeJsonParse(row.detail) || {};
 
         if (decision === 'approve') {
-            // 碎片多者存活；同数则名字短者存活
+            // 碎片多者存活；同數則名字短者存活
             const aFc = detail.a_fc || 0, bFc = detail.b_fc || 0;
             const [survivorId, victimId] = (aFc > bFc ||
                 (aFc === bFc && (detail.a_name || '').length <= (detail.b_name || '').length))
@@ -701,7 +701,7 @@ router.post('/api/memory/merge-proposal/:id', requireAuth, (req, res) => {
             return res.json({ ok: true, merged: true });
         }
         if (decision === 'reject') {
-            // rejected 状态留底——mergeDuplicateSeeds 不会对同一对重复提案
+            // rejected 狀態留底——mergeDuplicateSeeds 不會對同一對重複提案
             db.prepare(`UPDATE ontology_changelog SET status = 'rejected' WHERE id = ?`).run(proposalId);
             return res.json({ ok: true, merged: false });
         }
@@ -713,7 +713,7 @@ router.post('/api/memory/merge-proposal/:id', requireAuth, (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════
-// v5.0: 核心洞察 — 用户手动编辑
+// v5.0: 核心洞察 — 使用者手動編輯
 // ═══════════════════════════════════════════════════════
 
 router.get('/api/memory/core-insight', requireAuth, async (req, res) => {
@@ -750,7 +750,7 @@ router.post('/api/memory/core-insight', requireAuth, async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════
-// v5.0: 手动解除碎片-实体链接
+// v5.0: 手動解除碎片-實體連結
 // ═══════════════════════════════════════════════════════
 
 router.post('/api/memory/unlink-fragment', requireAuth, (req, res) => {
@@ -765,7 +765,7 @@ router.post('/api/memory/unlink-fragment', requireAuth, (req, res) => {
         }
         // Update fragment_count
         db.prepare(`UPDATE entity_profiles SET fragment_count = (SELECT COUNT(*) FROM fragment_entities WHERE entity_id=?), updated_at=datetime('now') WHERE id=?`).run(entity_id, entity_id);
-        console.log(`[memory-api] 🔗 手动解除: fragment #${fragment_id} ← entity #${entity_id}`);
+        console.log(`[memory-api] 🔗 手動解除: fragment #${fragment_id} ← entity #${entity_id}`);
         res.json({ ok: true });
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -773,7 +773,7 @@ router.post('/api/memory/unlink-fragment', requireAuth, (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════
-// v4.7: 溯源链路 — 碎片 → 源消息
+// v4.7: 溯源鏈路 — 碎片 → 源訊息
 // GET /api/memory/trace/:fragmentId
 // ═══════════════════════════════════════════════════════
 
@@ -863,7 +863,7 @@ router.get('/api/memory/trace/:fragmentId', requireAuth, (req, res) => {
     }
 });
 
-// DELETE /api/memory/:id - 删除记忆
+// DELETE /api/memory/:id - 刪除記憶
 router.delete('/api/memory/:id', requireAuth, async (req, res) => {
     const db = getDb();
     const memoryId = req.params.id;
@@ -875,14 +875,14 @@ router.delete('/api/memory/:id', requireAuth, async (req, res) => {
             return res.status(404).json({ error: "Memory not found" });
         }
 
-        // 写入纠正日志（删除即纠正信号）
+        // 寫入糾正日誌（刪除即糾正訊號）
         try {
             db.prepare(`INSERT INTO correction_log (target_type, target_id, wrong_summary, correct_summary, source, status, created_at)
                 VALUES ('memory', ?, ?, '', 'manual', 'active', datetime('now'))`).run(
                 memoryId, existing.title
             );
         } catch (logErr) {
-            console.error('⚠️ correction_log写入失败:', logErr.message);
+            console.error('⚠️ correction_log寫入失敗:', logErr.message);
         }
 
         db.prepare(`DELETE FROM memories WHERE id = ?`).run(memoryId);
@@ -912,7 +912,7 @@ router.delete('/api/memory/:id', requireAuth, async (req, res) => {
 
 // ========== Embedding 配置 ==========
 
-// 获取当前embedding配置
+// 獲取當前embedding配置
 router.get('/api/embedding-config', requireAuth, (req, res) => {
     try {
         const db = getDb();
@@ -940,19 +940,19 @@ router.get('/api/embedding-config', requireAuth, (req, res) => {
             });
         }
     } catch (error) {
-        console.error('获取embedding配置失败:', error);
+        console.error('獲取embedding配置失敗:', error);
         res.status(500).json({ error: error.message });
     }
 });
 
-// 测试embedding连接
+// 測試embedding連線
 router.post('/api/test-embedding', requireAuth, async (req, res) => {
     const { api_key, model_name, provider, endpoint } = req.body;
     
     if (!api_key || !model_name) {
         return res.status(400).json({ 
             success: false, 
-            error: '缺少必需参数' 
+            error: '缺少必需引數' 
         });
     }
     
@@ -966,34 +966,34 @@ router.post('/api/test-embedding', requireAuth, async (req, res) => {
         
         await assertSafeEndpoint(testConfig.endpoint);
         
-        const testText = '这是一条测试文本，用于验证embedding API是否正常工作。';
+        const testText = '這是一條測試文本，用於驗證embedding API是否正常工作。';
         const testEmbedding = await getEmbedding(testText, testConfig);
         
         if (testEmbedding && Array.isArray(testEmbedding) && testEmbedding.length > 0) {
             res.json({ 
                 success: true, 
                 dimension: testEmbedding.length,
-                message: `连接成功！向量维度: ${testEmbedding.length}`
+                message: `連線成功！向量維度: ${testEmbedding.length}`
             });
         } else {
             res.json({ 
                 success: false, 
-                error: '返回格式错误或向量为空' 
+                error: '返回格式錯誤或向量為空' 
             });
         }
     } catch (error) {
-        console.error('测试embedding失败:', error);
+        console.error('測試embedding失敗:', error);
         if (error instanceof SsrfError) {
             return res.status(400).json({ success: false, error: error.message });
         }
         res.json({ 
             success: false, 
-            error: error.message || '连接失败，请检查API Key和endpoint'
+            error: error.message || '連線失敗，請檢查API Key和endpoint'
         });
     }
 });
 
-// 保存embedding配置
+// 儲存embedding配置
 router.post('/api/save-embedding-config', requireAuth, async (req, res) => {
     const db = getDb();
     const { api_key, model_name, provider, endpoint } = req.body;
@@ -1001,7 +1001,7 @@ router.post('/api/save-embedding-config', requireAuth, async (req, res) => {
     if (!api_key || !model_name) {
         return res.status(400).json({ 
             success: false,
-            error: '缺少必需参数: api_key 和 model_name' 
+            error: '缺少必需引數: api_key 和 model_name' 
         });
     }
     
@@ -1041,21 +1041,21 @@ router.post('/api/save-embedding-config', requireAuth, async (req, res) => {
                 model_name,
                 0, 0
             );
-            console.log(`已创建embedding配置 (ID: ${result.lastInsertRowid})`);
+            console.log(`已建立embedding配置 (ID: ${result.lastInsertRowid})`);
         }
         
-        res.json({ success: true, message: '配置保存成功' });
+        res.json({ success: true, message: '配置儲存成功' });
         
     } catch (error) {
-        console.error('保存embedding配置失败:', error);
+        console.error('儲存embedding配置失敗:', error);
         if (error instanceof SsrfError) return res.status(400).json({ success: false, error: error.message });
         res.status(500).json({ success: false, error: error.message });
     }
 });
 
-// ========== 记忆库 LLM 配置 ==========
+// ========== 記憶庫 LLM 配置 ==========
 
-// 获取记忆库LLM配置
+// 獲取記憶庫LLM配置
 router.get('/api/memory-llm-config', requireAuth, (req, res) => {
     try {
         const db = getDb();
@@ -1079,29 +1079,29 @@ router.get('/api/memory-llm-config', requireAuth, (req, res) => {
             res.json({ source: 'environment', exists: false });
         }
     } catch (error) {
-        console.error('获取LLM配置失败:', error);
+        console.error('獲取LLM配置失敗:', error);
         res.status(500).json({ error: error.message });
     }
 });
 
-// 测试LLM连接
+// 測試LLM連線
 router.post('/api/test-llm', requireAuth, async (req, res) => {
     const { api_key, model_name, endpoint } = req.body;
     
     if (!api_key || !model_name) {
-        return res.status(400).json({ success: false, error: '缺少必需参数' });
+        return res.status(400).json({ success: false, error: '缺少必需引數' });
     }
     
     try {
         const testEndpoint = endpoint || 'https://generativelanguage.googleapis.com/v1beta';
-        // SSRF 防护：端点由使用者提供，先验证再连线；不拼接字串，不跟随转址
+        // SSRF 防護：端點由使用者提供，先驗證再連線；不拼接字串，不跟隨轉址
         const url = joinEndpointPath(testEndpoint, `models/${model_name}:generateContent`, { key: api_key });
         
         const response = await safeFetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                contents: [{ parts: [{ text: '测试连接' }] }],
+                contents: [{ parts: [{ text: '測試連線' }] }],
                 generationConfig: { maxOutputTokens: 10 }
             })
         });
@@ -1109,30 +1109,30 @@ router.post('/api/test-llm', requireAuth, async (req, res) => {
         if (response.ok) {
             const data = await response.json();
             if (data.candidates && data.candidates.length > 0) {
-                res.json({ success: true, message: '连接成功！模型响应正常' });
+                res.json({ success: true, message: '連線成功！模型響應正常' });
             } else {
-                res.json({ success: false, error: '模型返回格式异常' });
+                res.json({ success: false, error: '模型返回格式異常' });
             }
         } else {
             const errorText = await response.text();
             res.json({ success: false, error: `HTTP ${response.status}: ${errorText}` });
         }
     } catch (error) {
-        console.error('测试LLM失败:', error);
+        console.error('測試LLM失敗:', error);
         if (error instanceof SsrfError) {
             return res.status(400).json({ success: false, error: error.message });
         }
-        res.json({ success: false, error: error.message || '连接失败' });
+        res.json({ success: false, error: error.message || '連線失敗' });
     }
 });
 
-// 智能提取标签
+// 智慧提取標籤
 router.post('/api/extract-tags', requireAuth, async (req, res) => {
     const db = getDb();
     const { title, content } = req.body;
     
     if (!content) {
-        return res.status(400).json({ success: false, error: '内容不能为空' });
+        return res.status(400).json({ success: false, error: '內容不能為空' });
     }
     
     try {
@@ -1159,15 +1159,15 @@ router.post('/api/extract-tags', requireAuth, async (req, res) => {
             return res.status(500).json({ success: false, error: 'API Key未配置' });
         }
         
-        const prompt = `从以下文本中提取3-8个关键标签，要求：
-1. 优先提取专有名词、人名、地点、特定概念
-2. 避免虚词和泛化概念（如"重要"、"讨论"、"记忆"）
-3. 保持简洁，每个标签1-3个字
-4. 只返回逗号分隔的标签列表，不要其他解释
+        const prompt = `從以下文本中提取3-8個關鍵標籤，要求：
+1. 優先提取專有名詞、人名、地點、特定概念
+2. 避免虛詞和泛化概念（如"重要"、"討論"、"記憶"）
+3. 保持簡潔，每個標籤1-3個字
+4. 只返回逗號分隔的標籤列表，不要其他解釋
 
-${title ? `标题: ${title}\n` : ''}内容: ${content}
+${title ? `標題: ${title}\n` : ''}內容: ${content}
 
-标签列表：`;
+標籤列表：`;
         
         const url = joinEndpointPath(endpoint, `models/${modelName}:generateContent`, { key: apiKey });
         
@@ -1182,13 +1182,13 @@ ${title ? `标题: ${title}\n` : ''}内容: ${content}
         
         if (!response.ok) {
             const errorText = await response.text();
-            throw new Error(`LLM调用失败: ${response.status} ${errorText}`);
+            throw new Error(`LLM呼叫失敗: ${response.status} ${errorText}`);
         }
         
         const data = await response.json();
         
         if (!data.candidates || !data.candidates[0]?.content?.parts?.[0]?.text) {
-            throw new Error('LLM返回格式异常');
+            throw new Error('LLM返回格式異常');
         }
         
         const rawText = data.candidates[0].content.parts[0].text.trim();
@@ -1200,18 +1200,18 @@ ${title ? `标题: ${title}\n` : ''}内容: ${content}
         res.json({ success: true, tags: tags });
         
     } catch (error) {
-        console.error('提取标签失败:', error);
+        console.error('提取標籤失敗:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
 
-// 保存记忆库完整配置（Embedding + LLM）
+// 儲存記憶庫完整配置（Embedding + LLM）
 router.post('/api/save-memory-config', requireAuth, async (req, res) => {
     const db = getDb();
     const { api_key, embedding, llm } = req.body;
     
     if (!api_key || !embedding || !llm) {
-        return res.status(400).json({ success: false, error: '缺少必需参数' });
+        return res.status(400).json({ success: false, error: '缺少必需引數' });
     }
     
     try {
@@ -1219,7 +1219,7 @@ router.post('/api/save-memory-config', requireAuth, async (req, res) => {
         if (llm.endpoint) await assertSafeEndpoint(llm.endpoint);
         const encryptedKey = encryption.encrypt(api_key);
         
-        // 保存Embedding配置
+        // 儲存Embedding配置
         const existingEmb = db.prepare(`
             SELECT id FROM api_configs 
             WHERE model_name LIKE '%embedding%'
@@ -1236,10 +1236,10 @@ router.post('/api/save-memory-config', requireAuth, async (req, res) => {
                 INSERT INTO api_configs (name, provider, endpoint, api_key, model_name, is_default, supports_tools)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             `).run('Embedding API', 'gemini', embedding.endpoint || 'https://generativelanguage.googleapis.com/v1beta', encryptedKey, embedding.model_name, 0, 0);
-            console.log(`✅ 创建Embedding配置 (ID: ${result.lastInsertRowid})`);
+            console.log(`✅ 建立Embedding配置 (ID: ${result.lastInsertRowid})`);
         }
         
-        // 保存LLM配置
+        // 儲存LLM配置
         const existingLLM = db.prepare(`
             SELECT id FROM api_configs WHERE name = 'Memory LLM' LIMIT 1
         `).get();
@@ -1254,21 +1254,21 @@ router.post('/api/save-memory-config', requireAuth, async (req, res) => {
                 INSERT INTO api_configs (name, provider, endpoint, api_key, model_name, is_default, supports_tools)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             `).run('Memory LLM', 'gemini', llm.endpoint || 'https://generativelanguage.googleapis.com/v1beta', encryptedKey, llm.model_name, 0, 0);
-            console.log(`✅ 创建LLM配置 (ID: ${result.lastInsertRowid})`);
+            console.log(`✅ 建立LLM配置 (ID: ${result.lastInsertRowid})`);
         }
         
-        res.json({ success: true, message: '配置保存成功' });
+        res.json({ success: true, message: '配置儲存成功' });
         
     } catch (error) {
-        console.error('保存配置失败:', error);
+        console.error('儲存配置失敗:', error);
         if (error instanceof SsrfError) return res.status(400).json({ success: false, error: error.message });
         res.status(500).json({ success: false, error: error.message });
     }
 });
 
-// ========== 记忆碎片 API（memory_fragments） ==========
+// ========== 記憶碎片 API（memory_fragments） ==========
 
-// GET /api/fragments — 获取碎片列表（分页+筛选）
+// GET /api/fragments — 獲取碎片列表（分頁+篩選）
 router.get('/api/fragments', requireAuth, (req, res) => {
     const db = getDb();
     const { status, min_ew, max_ew, source_date, page, limit } = req.query;
@@ -1319,12 +1319,12 @@ router.get('/api/fragments', requireAuth, (req, res) => {
             }
         });
     } catch (e) {
-        console.error('[fragments API] 列表获取失败:', e.message);
+        console.error('[fragments API] 列表獲取失敗:', e.message);
         res.status(500).json({ error: e.message });
     }
 });
 
-// GET /api/fragments/months — 获取有数据的月份列表
+// GET /api/fragments/months — 獲取有資料的月份列表
 router.get('/api/fragments/months', requireAuth, (req, res) => {
     const db = getDb();
     try {
@@ -1337,12 +1337,12 @@ router.get('/api/fragments/months', requireAuth, (req, res) => {
         `).all();
         res.json({ months });
     } catch (e) {
-        console.error('[fragments API] 月份列表失败:', e.message);
+        console.error('[fragments API] 月份列表失敗:', e.message);
         res.status(500).json({ error: e.message });
     }
 });
 
-// GET /api/fragment/:id — 获取单个碎片
+// GET /api/fragment/:id — 獲取單個碎片
 router.get('/api/fragment/:id', requireAuth, (req, res) => {
     const db = getDb();
     try {
@@ -1354,7 +1354,7 @@ router.get('/api/fragment/:id', requireAuth, (req, res) => {
     }
 });
 
-// PUT /api/fragment/:id — 更新碎片（权重、状态、内容）
+// PUT /api/fragment/:id — 更新碎片（權重、狀態、內容）
 router.put('/api/fragment/:id', requireAuth, (req, res) => {
     const db = getDb();
     const { emotional_weight, status, content, entity } = req.body;
@@ -1381,36 +1381,36 @@ router.put('/api/fragment/:id', requireAuth, (req, res) => {
             params.push(entity);
         }
 
-        if (updates.length === 0) return res.status(400).json({ error: '没有要更新的字段' });
+        if (updates.length === 0) return res.status(400).json({ error: '沒有要更新的欄位' });
 
         params.push(req.params.id);
         db.prepare(`UPDATE memory_fragments SET ${updates.join(', ')} WHERE id = ?`).run(...params);
         res.json({ success: true });
     } catch (e) {
-        console.error('[fragment API] 更新失败:', e.message);
+        console.error('[fragment API] 更新失敗:', e.message);
         res.status(500).json({ error: e.message });
     }
 });
 
-// DELETE /api/fragment/:id — 真删除碎片 + 级联降权同源碎片
+// DELETE /api/fragment/:id — 真刪除碎片 + 級聯降權同源碎片
 router.delete('/api/fragment/:id', requireAuth, async (req, res) => {
     const db = getDb();
     try {
         const frag = db.prepare(`SELECT id, content, source_msg_ids, emotional_weight FROM memory_fragments WHERE id = ?`).get(req.params.id);
         if (!frag) return res.status(404).json({ error: '碎片不存在' });
 
-        // 写入纠正日志（删除即纠正信号）
+        // 寫入糾正日誌（刪除即糾正訊號）
         try {
             db.prepare(`INSERT INTO correction_log (target_type, target_id, wrong_summary, correct_summary, source, status, created_at)
                 VALUES ('fragment', ?, ?, '', 'manual', 'active', datetime('now'))`).run(
                 frag.id, (frag.content || '').slice(0, 80)
             );
-            console.log(`[Correction] 碎片删除写入纠正日志 #${frag.id}`);
+            console.log(`[Correction] 碎片刪除寫入糾正日誌 #${frag.id}`);
         } catch (logErr) {
-            console.error('⚠️ correction_log写入失败:', logErr.message);
+            console.error('⚠️ correction_log寫入失敗:', logErr.message);
         }
 
-        // 级联降权：查同源碎片（同一批对话提取的），emotional_weight × 0.5
+        // 級聯降權：查同源碎片（同一批對話提取的），emotional_weight × 0.5
         let sourceIds = [];
         try { sourceIds = JSON.parse(frag.source_msg_ids || '[]'); } catch (_) {}
         if (sourceIds.length > 0) {
@@ -1429,11 +1429,11 @@ router.delete('/api/fragment/:id', requireAuth, async (req, res) => {
             if (sameSource.length > 0) {
                 const demote = db.prepare("UPDATE memory_fragments SET emotional_weight = MAX(0.1, emotional_weight * 0.5), lifecycle_updated_at = datetime('now') WHERE id = ?");
                 for (const s of sameSource) demote.run(s.id);
-                console.log(`[Correction] 级联降权: ${sameSource.length}条同源碎片 ew×0.5 (source: fragment #${frag.id})`);
+                console.log(`[Correction] 級聯降權: ${sameSource.length}條同源碎片 ew×0.5 (source: fragment #${frag.id})`);
             }
         }
 
-        // 删除 ChromaDB 向量
+        // 刪除 ChromaDB 向量
         try {
             const { chromaDBOperation } = require('../services/memory');
             await chromaDBOperation('delete', { id: `fragment_${frag.id}` });
@@ -1441,7 +1441,7 @@ router.delete('/api/fragment/:id', requireAuth, async (req, res) => {
             console.error(`ChromaDB delete fragment_${frag.id} failed:`, e.message);
         }
 
-        // 真删除
+        // 真刪除
         db.prepare(`DELETE FROM memory_fragments WHERE id = ?`).run(frag.id);
         console.log(`🗑️ Fragment hard-deleted: #${frag.id} "${(frag.content || '').slice(0, 50)}"`);
         res.json({ success: true, demotedSameSource: true });
@@ -1452,7 +1452,7 @@ router.delete('/api/fragment/:id', requireAuth, async (req, res) => {
     }
 });
 
-// GET /api/fragments/stats — 碎片统计
+// GET /api/fragments/stats — 碎片統計
 router.get('/api/fragments/stats', requireAuth, (req, res) => {
     const db = getDb();
     try {
@@ -1470,9 +1470,9 @@ router.get('/api/fragments/stats', requireAuth, (req, res) => {
     }
 });
 
-// ========== 纠正反馈闭环 API ==========
+// ========== 糾正反饋閉環 API ==========
 
-// 纠正反馈模块是可选的
+// 糾正反饋模組是可選的
 let recordCorrection, getActiveCorrections, getMergedGuidelines, mergeGuidelines;
 try { ({ recordCorrection, getActiveCorrections, getMergedGuidelines, mergeGuidelines } = require('../services/correction')); } catch (_) {
   recordCorrection = () => {};
@@ -1481,12 +1481,12 @@ try { ({ recordCorrection, getActiveCorrections, getMergedGuidelines, mergeGuide
   mergeGuidelines = () => {};
 }
 
-// POST /api/corrections — 记录一条纠正
+// POST /api/corrections — 記錄一條糾正
 router.post('/api/corrections', requireAuth, (req, res) => {
     const { targetType, targetId, wrongSummary, correctSummary, source, chatMessageId } = req.body;
 
     if (!targetType || !wrongSummary || !correctSummary) {
-        return res.status(400).json({ error: 'targetType, wrongSummary, correctSummary 为必填字段' });
+        return res.status(400).json({ error: 'targetType, wrongSummary, correctSummary 為必填欄位' });
     }
 
     try {
@@ -1500,12 +1500,12 @@ router.post('/api/corrections', requireAuth, (req, res) => {
         });
         res.json({ success: true, id });
     } catch (e) {
-        console.error('[corrections API] 记录纠正失败:', e.message);
+        console.error('[corrections API] 記錄糾正失敗:', e.message);
         res.status(500).json({ error: e.message });
     }
 });
 
-// GET /api/corrections — 获取纠正列表（活跃+统计）
+// GET /api/corrections — 獲取糾正列表（活躍+統計）
 router.get('/api/corrections', requireAuth, (req, res) => {
     const db = getDb();
     try {
@@ -1536,29 +1536,29 @@ router.get('/api/corrections', requireAuth, (req, res) => {
             }
         });
     } catch (e) {
-        console.error('[corrections API] 获取列表失败:', e.message);
+        console.error('[corrections API] 獲取列表失敗:', e.message);
         res.status(500).json({ error: e.message });
     }
 });
 
-// POST /api/corrections/merge — 手动触发合并
+// POST /api/corrections/merge — 手動觸發合併
 router.post('/api/corrections/merge', requireAuth, async (req, res) => {
     try {
         const guidelines = await mergeGuidelines();
         res.json({ success: true, guidelines });
     } catch (e) {
-        console.error('[corrections API] 合并失败:', e.message);
+        console.error('[corrections API] 合併失敗:', e.message);
         res.status(500).json({ error: e.message });
     }
 });
 
-// GET /api/corrections/guidelines — 获取已合并的长期准则
+// GET /api/corrections/guidelines — 獲取已合併的長期準則
 router.get('/api/corrections/guidelines', requireAuth, async (req, res) => {
     try {
         const guidelines = await getMergedGuidelines();
         res.json({ guidelines: guidelines || null });
     } catch (e) {
-        console.error('[corrections API] 获取准则失败:', e.message);
+        console.error('[corrections API] 獲取準則失敗:', e.message);
         res.status(500).json({ error: e.message });
     }
 });
@@ -1572,14 +1572,14 @@ router.get('/api/archivist/status', requireAuth, (req, res) => {
         const agentRaw = getStatus();
 
         const toolLabels = {
-            classify_fragments: '归类新记忆',
-            discover_relationships: '识别人物关系',
-            extract_insights: '提炼碎片洞察',
-            detect_themes: '发掘新主题',
-            check_overdensity: '监控过密类别',
-            analyze_leaf_structure: '分析叶子类别结构',
-            audit_tree: '审查知识树结构',
-            regenerate_descriptions: '更新类别描述',
+            classify_fragments: '歸類新記憶',
+            discover_relationships: '識別人物關係',
+            extract_insights: '提煉碎片洞察',
+            detect_themes: '發掘新主題',
+            check_overdensity: '監控過密類別',
+            analyze_leaf_structure: '分析葉子類別結構',
+            audit_tree: '審查知識樹結構',
+            regenerate_descriptions: '更新類別描述',
             regenerate_entity_overviews: '生成人物概述',
         };
 

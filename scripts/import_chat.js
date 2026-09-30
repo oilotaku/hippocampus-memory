@@ -1,18 +1,18 @@
-// scripts/import_chat.js — 导入聊天记录到记忆库
+// scripts/import_chat.js — 匯入聊天記錄到記憶庫
 //
 // 用法：
-//   node scripts/import_chat.js <文件.jsonl|文件.txt> [选项]
+//   node scripts/import_chat.js <檔案.jsonl|檔案.txt> [選項]
 //
-// 选项：
-//   --name "会话名"    新会话的名字（默认 "导入 <文件名> <日期>"）
-//   --chat-id <N>      写入到已有的 chat（不新建）
-//   --dry-run          只解析不写入，打印前几行预览
+// 選項：
+//   --name "會話名"    新會話的名字（預設 "匯入 <檔名> <日期>"）
+//   --chat-id <N>      寫入到已有的 chat（不新建）
+//   --dry-run          只解析不寫入，列印前幾行預覽
 //
-// 支持格式（与 services/chatParser.js 一致）：
-//   JSON 数组 / JSONL（每行一个 JSON）/ TXT（每行「名字: 内容」）
+// 支援格式（與 services/chatParser.js 一致）：
+//   JSON 陣列 / JSONL（每行一個 JSON）/ TXT（每行「名字: 內容」）
 //
-// 导入后，后台 agent loop（2 分钟一次 tick）会自动触发 Scribe 扫描这批消息、
-// 提取记忆碎片，无需手动操作。
+// 匯入後，後臺 agent loop（2 分鐘一次 tick）會自動觸發 Scribe 掃描這批訊息、
+// 提取記憶碎片，無需手動操作。
 
 const fs = require('fs');
 const path = require('path');
@@ -21,7 +21,7 @@ const { USER, AI } = require('../services/nameResolver');
 const { parseAny } = require('../services/chatParser');
 const { fillTimestamps, importMessages } = require('../services/chatImport');
 
-// ── 参数解析 ──
+// ── 引數解析 ──
 function parseArgs(argv) {
     const args = { file: null, name: null, chatId: null, dryRun: false };
     for (let i = 0; i < argv.length; i++) {
@@ -38,11 +38,11 @@ function parseArgs(argv) {
 async function main() {
     const args = parseArgs(process.argv.slice(2));
     if (!args.file) {
-        console.log('用法: node scripts/import_chat.js <文件.jsonl|文件.txt> [--name "会话名"] [--chat-id N] [--dry-run]');
+        console.log('用法: node scripts/import_chat.js <檔案.jsonl|檔案.txt> [--name "會話名"] [--chat-id N] [--dry-run]');
         process.exit(1);
     }
     if (!fs.existsSync(args.file)) {
-        console.error(`❌ 文件不存在: ${args.file}`);
+        console.error(`❌ 檔案不存在: ${args.file}`);
         process.exit(1);
     }
 
@@ -51,29 +51,29 @@ async function main() {
     const raw = fs.readFileSync(args.file, 'utf8');
     const msgs = fillTimestamps(parseAny(raw));
     if (msgs.length === 0) {
-        console.error('❌ 没有解析出任何消息。请检查格式（JSON 数组 / JSONL 每行一个 JSON / TXT 每行「名字: 内容」）。');
+        console.error('❌ 沒有解析出任何訊息。請檢查格式（JSON 陣列 / JSONL 每行一個 JSON / TXT 每行「名字: 內容」）。');
         process.exit(1);
     }
 
-    console.log(`\n📥 解析到 ${msgs.length} 条消息`);
-    console.log(`   用户消息: ${msgs.filter(m => m.sender === 'user').length} 条`);
-    console.log(`   伴侣消息: ${msgs.filter(m => m.sender === 'ai').length} 条`);
-    console.log('   预览：');
+    console.log(`\n📥 解析到 ${msgs.length} 條訊息`);
+    console.log(`   使用者訊息: ${msgs.filter(m => m.sender === 'user').length} 條`);
+    console.log(`   伴侶訊息: ${msgs.filter(m => m.sender === 'ai').length} 條`);
+    console.log('   預覽：');
     for (const m of msgs.slice(0, 5)) {
         console.log(`     [${m.timestamp}] ${m.sender === 'user' ? USER.name : AI.name}: ${m.content.slice(0, 40)}`);
     }
 
     if (args.dryRun) {
-        console.log('\n(dry-run 模式，未写入)');
+        console.log('\n(dry-run 模式，未寫入)');
         process.exit(0);
     }
 
-    const name = args.name || `导入 ${path.basename(args.file)} ${new Date().toISOString().slice(0, 10)}`;
+    const name = args.name || `匯入 ${path.basename(args.file)} ${new Date().toISOString().slice(0, 10)}`;
     const { chatId, count } = importMessages(msgs, { chatId: args.chatId, name });
 
-    console.log(`✅ 已写入 ${count} 条消息到 chat #${chatId}`);
-    console.log(`\n下一步：后台 agent loop 会在下个 tick（约 2 分钟内）自动运行 Scribe 提取记忆碎片。`);
+    console.log(`✅ 已寫入 ${count} 條訊息到 chat #${chatId}`);
+    console.log(`\n下一步：後臺 agent loop 會在下個 tick（約 2 分鐘內）自動執行 Scribe 提取記憶碎片。`);
     process.exit(0);
 }
 
-main().catch(e => { console.error('❌ 导入失败:', e); process.exit(1); });
+main().catch(e => { console.error('❌ 匯入失敗:', e); process.exit(1); });

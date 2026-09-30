@@ -1,23 +1,23 @@
 // =================================================================
-// utils/ssrf-guard.js — SSRF（CWE-918）防护
+// utils/ssrf-guard.js — SSRF（CWE-918）防護
 //
-// 规则：
-//   1. 只允许 https，网址不可夹带帐密（user:pass@）。
-//   2. 先做 DNS 解析，解析出的「所有」IP 都必须是公网地址；私有/保留网段一律拒绝。
-//      IP 写法（十进位 2130706433、十六进位 0x7f.1、八进位 017700000001…）由 WHATWG URL
-//      解析器统一正规化成点分十进位后才检查；IPv6 手动解析成 8 个 hextet 后判断，
-//      IPv4-mapped（::ffff:a.b.c.d）、NAT64（64:ff9b::/96）、6to4（2002::/16）都会取出内嵌 IPv4 再判断。
-//   3. 禁止跟随转址（3xx 视为封锁）——见 safeFetch。
-//   4. 例外：环境变量 LLM_ENDPOINT_ALLOWLIST（逗号分隔的完整 origin，如 http://127.0.0.1:11434）。
-//      只有 origin「完全相符」（scheme+host+port，先正规化）的端点可以是私有 IP 或 http，
-//      绝不使用字串前缀比对。预设为空 = 完全套用上述规则。
+// 規則：
+//   1. 只允許 https，網址不可夾帶帳密（user:pass@）。
+//   2. 先做 DNS 解析，解析出的「所有」IP 都必須是公網地址；私有/保留網段一律拒絕。
+//      IP 寫法（十進位 2130706433、十六進位 0x7f.1、八進位 017700000001…）由 WHATWG URL
+//      解析器統一正規化成點分十進位後才檢查；IPv6 手動解析成 8 個 hextet 後判斷，
+//      IPv4-mapped（::ffff:a.b.c.d）、NAT64（64:ff9b::/96）、6to4（2002::/16）都會取出內嵌 IPv4 再判斷。
+//   3. 禁止跟隨轉址（3xx 視為封鎖）——見 safeFetch。
+//   4. 例外：環境變數 LLM_ENDPOINT_ALLOWLIST（逗號分隔的完整 origin，如 http://127.0.0.1:11434）。
+//      只有 origin「完全相符」（scheme+host+port，先正規化）的端點可以是私有 IP 或 http，
+//      絕不使用字串字首比對。預設為空 = 完全套用上述規則。
 //
-// 残余风险（DNS rebinding / TOCTOU）：
-//   assertSafeEndpoint 验证与实际连线是两次 DNS 查询，攻击者可让第二次查询回内网 IP。
-//   safeFetch 用 undici Agent 的 connect.lookup 把连线「钉」在验证过的 IP 上（URL 主机名不变，
-//   所以 Host 与 TLS SNI/证书验证照常），可消除这个风险。但 services/llm.js 走 axios 或
-//   经本机代理（127.0.0.1:7890）的路径无法钉 IP：那些路径只做「连线前验证」，仍有极小的 rebinding 窗口；
-//   经代理时目标主机的 DNS 解析发生在代理端。
+// 殘餘風險（DNS rebinding / TOCTOU）：
+//   assertSafeEndpoint 驗證與實際連線是兩次 DNS 查詢，攻擊者可讓第二次查詢回內網 IP。
+//   safeFetch 用 undici Agent 的 connect.lookup 把連線「釘」在驗證過的 IP 上（URL 主機名不變，
+//   所以 Host 與 TLS SNI/證書驗證照常），可消除這個風險。但 services/llm.js 走 axios 或
+//   經本機代理（127.0.0.1:7890）的路徑無法釘 IP：那些路徑只做「連線前驗證」，仍有極小的 rebinding 視窗；
+//   經代理時目標主機的 DNS 解析發生在代理端。
 // =================================================================
 
 const dns = require('dns');
@@ -40,7 +40,7 @@ function parseIPv4(str) {
     return p.every(n => n <= 255) ? p : null;
 }
 
-// [起始, 前缀长度]
+// [起始, 字首長度]
 const V4_BLOCKED = [
     ['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8],
     ['169.254.0.0', 16], ['172.16.0.0', 12], ['192.0.0.0', 24], ['192.0.2.0', 24],
@@ -59,13 +59,13 @@ function isBlockedIPv4Parts(p) {
 }
 
 // ---------- IPv6 ----------
-// 回传 8 个 hextet（数字）或 null
+// 回傳 8 個 hextet（數字）或 null
 function parseIPv6(str) {
     let s = str.toLowerCase();
     const zone = s.indexOf('%');
     if (zone !== -1) s = s.slice(0, zone);
     if (!/^[0-9a-f:.]+$/.test(s)) return null;
-    // 结尾内嵌 IPv4 → 转成两个 hextet
+    // 結尾內嵌 IPv4 → 轉成兩個 hextet
     const lastColon = s.lastIndexOf(':');
     if (lastColon === -1) return null;
     const tail = s.slice(lastColon + 1);
@@ -96,7 +96,7 @@ function parseIPv6(str) {
     return out;
 }
 
-function embeddedV4(h6, a, b) { // 取 h6[a],h6[b] 两个 hextet 为 IPv4
+function embeddedV4(h6, a, b) { // 取 h6[a],h6[b] 兩個 hextet 為 IPv4
     return [h6[a] >> 8, h6[a] & 255, h6[b] >> 8, h6[b] & 255];
 }
 
@@ -107,16 +107,16 @@ function isBlockedIPv6Parts(h) {
     if (h[0] === 0x64 && h[1] === 0xff9b && h.slice(2, 6).every(x => x === 0)) return isBlockedIPv4Parts(embeddedV4(h, 6, 7));
     // 6to4 2002::/16
     if (h[0] === 0x2002) return isBlockedIPv4Parts(embeddedV4(h, 1, 2));
-    // 只放行全球单播 2000::/3，再剔除特殊用途段
-    if ((h[0] & 0xe000) !== 0x2000) return true; // ::、::1、fc00::/7、fe80::/10、fec0::/10、ff00::/8、::/8 等全部落在这里
+    // 只放行全球單播 2000::/3，再剔除特殊用途段
+    if ((h[0] & 0xe000) !== 0x2000) return true; // ::、::1、fc00::/7、fe80::/10、fec0::/10、ff00::/8、::/8 等全部落在這裡
     if (h[0] === 0x2001 && h[1] === 0x0000) return true;      // Teredo 2001::/32
-    if (h[0] === 0x2001 && h[1] === 0x0db8) return true;      // 文档用 2001:db8::/32
+    if (h[0] === 0x2001 && h[1] === 0x0db8) return true;      // 文件用 2001:db8::/32
     if (h[0] === 0x2001 && h[1] < 0x0200) return true;        // IETF 保留 2001::/23
-    if (h[0] === 0x3fff && h[1] < 0x1000) return true;        // 文档用 3fff::/20
+    if (h[0] === 0x3fff && h[1] < 0x1000) return true;        // 文件用 3fff::/20
     return false;
 }
 
-/** 该 IP 字串是否属于私有/保留网段（无法解析的一律视为封锁） */
+/** 該 IP 字串是否屬於私有/保留網段（無法解析的一律視為封鎖） */
 function isBlockedIP(ip) {
     if (typeof ip !== 'string') return true;
     let s = ip.trim();
@@ -128,13 +128,13 @@ function isBlockedIP(ip) {
     return true;
 }
 
-// ---------- 白名单 ----------
+// ---------- 白名單 ----------
 function normalizeOrigin(str) {
     try {
         const u = new URL(String(str).trim());
         if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
         if (u.username || u.password) return null;
-        return u.origin.toLowerCase(); // URL 已小写 host、去掉预设 port
+        return u.origin.toLowerCase(); // URL 已小寫 host、去掉預設 port
     } catch { return null; }
 }
 
@@ -158,24 +158,24 @@ async function defaultResolver(hostname) {
 async function resolveAll(hostname, resolver) {
     const raw = await (resolver || defaultResolver)(hostname);
     const list = (Array.isArray(raw) ? raw : [raw]).map(r => (typeof r === 'string' ? r : r && r.address)).filter(Boolean);
-    if (list.length === 0) throw new SsrfError(`无法解析主机名：${hostname}`);
+    if (list.length === 0) throw new SsrfError(`無法解析主機名：${hostname}`);
     return list;
 }
 
 /**
- * 验证端点是否安全。通过时回传 { url, addresses, allowlisted }，失败抛 SsrfError（status 400）。
+ * 驗證端點是否安全。通過時回傳 { url, addresses, allowlisted }，失敗拋 SsrfError（status 400）。
  * @param {string} endpoint
  * @param {{resolver?: (host:string)=>Promise<Array<string|{address:string}>>, allowlist?: string|string[]}} [opts]
  */
 async function assertSafeEndpoint(endpoint, opts = {}) {
-    if (typeof endpoint !== 'string' || !endpoint.trim()) throw new SsrfError('端点不能为空');
+    if (typeof endpoint !== 'string' || !endpoint.trim()) throw new SsrfError('端點不能為空');
     let url;
-    try { url = new URL(endpoint.trim()); } catch { throw new SsrfError('端点不是合法的网址'); }
-    if (url.protocol !== 'https:' && url.protocol !== 'http:') throw new SsrfError('端点只允许 http(s) 协议');
-    if (url.username || url.password) throw new SsrfError('端点网址不可包含帐号密码');
+    try { url = new URL(endpoint.trim()); } catch { throw new SsrfError('端點不是合法的網址'); }
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') throw new SsrfError('端點只允許 http(s) 協議');
+    if (url.username || url.password) throw new SsrfError('端點網址不可包含帳號密碼');
 
     const allowlisted = getAllowlist(opts).includes(url.origin.toLowerCase());
-    if (url.protocol !== 'https:' && !allowlisted) throw new SsrfError('端点必须使用 HTTPS');
+    if (url.protocol !== 'https:' && !allowlisted) throw new SsrfError('端點必須使用 HTTPS');
 
     let host = url.hostname.toLowerCase();
     if (host.startsWith('[') && host.endsWith(']')) host = host.slice(1, -1);
@@ -183,25 +183,25 @@ async function assertSafeEndpoint(endpoint, opts = {}) {
 
     const isLiteral = net.isIP(host) !== 0 || parseIPv4(host) !== null;
     if (isLiteral) {
-        if (!allowlisted && isBlockedIP(host)) throw new SsrfError('端点指向私有或保留地址，已被阻止');
+        if (!allowlisted && isBlockedIP(host)) throw new SsrfError('端點指向私有或保留地址，已被阻止');
         return { url, addresses: [host], allowlisted };
     }
     if (!allowlisted && (host === 'localhost' || host.endsWith('.localhost'))) {
-        throw new SsrfError('端点指向私有或保留地址，已被阻止');
+        throw new SsrfError('端點指向私有或保留地址，已被阻止');
     }
     const addresses = await resolveAll(host, opts.resolver);
     if (!allowlisted && addresses.some(isBlockedIP)) {
-        throw new SsrfError('端点解析到私有或保留地址，已被阻止');
+        throw new SsrfError('端點解析到私有或保留地址，已被阻止');
     }
     return { url, addresses, allowlisted };
 }
 
 // ---------- URL 拼接 ----------
 /**
- * 把 suffix 接在 endpoint 的路径之后（保留 endpoint 自带的路径，如 /v1beta），
- * 不像 new URL('/models/x', endpoint) 会吃掉 endpoint 的路径。
- * suffix 里的 ? # 会被当成路径字符编码，不会改变主机或查询。
- * query 为物件时以 searchParams 附加（自动编码）。
+ * 把 suffix 接在 endpoint 的路徑之後（保留 endpoint 自帶的路徑，如 /v1beta），
+ * 不像 new URL('/models/x', endpoint) 會吃掉 endpoint 的路徑。
+ * suffix 裡的 ? # 會被當成路徑字元編碼，不會改變主機或查詢。
+ * query 為物件時以 searchParams 附加（自動編碼）。
  */
 function joinEndpointPath(endpoint, suffix, query) {
     const u = new URL(endpoint);
@@ -214,12 +214,12 @@ function joinEndpointPath(endpoint, suffix, query) {
     return u.toString();
 }
 
-// ---------- 钉 IP 连线 ----------
+// ---------- 釘 IP 連線 ----------
 function createPinnedDispatcher(addresses) {
     const { Agent } = require('undici');
     let i = 0;
     return new Agent({
-        keepAliveTimeout: 1000, // 一次性连线，不长时间占用 socket
+        keepAliveTimeout: 1000, // 一次性連線，不長時間佔用 socket
         connect: {
             lookup: (hostname, options, cb) => {
                 if (typeof options === 'function') { cb = options; options = {}; }
@@ -233,7 +233,7 @@ function createPinnedDispatcher(addresses) {
 }
 
 /**
- * 验证 + 钉 IP + 禁止转址的 fetch。3xx 回应一律抛 SsrfError。
+ * 驗證 + 釘 IP + 禁止轉址的 fetch。3xx 回應一律拋 SsrfError。
  */
 async function safeFetch(url, options = {}, guardOpts = {}) {
     const { addresses } = await assertSafeEndpoint(url, guardOpts);
@@ -242,9 +242,9 @@ async function safeFetch(url, options = {}, guardOpts = {}) {
         const resp = await fetch(url, { ...options, redirect: 'manual', dispatcher });
         if ((resp.status >= 300 && resp.status < 400) || resp.type === 'opaqueredirect') {
             try { await resp.body?.cancel(); } catch { /* ignore */ }
-            throw new SsrfError('端点回应转址（3xx），为防止 SSRF 已阻止');
+            throw new SsrfError('端點回應轉址（3xx），為防止 SSRF 已阻止');
         }
-        return resp; // dispatcher 不主动 close：body 尚未读完，keepAliveTimeout 到期后自动释放
+        return resp; // dispatcher 不主動 close：body 尚未讀完，keepAliveTimeout 到期後自動釋放
     } catch (e) {
         dispatcher.close().catch(() => {});
         throw e;

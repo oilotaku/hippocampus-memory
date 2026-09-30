@@ -106,7 +106,7 @@ describe('runFragmentGC：碎片生命週期', () => {
         assert.equal(stats.tombstoned, 1);
     });
 
-    test('一次 GC 最多只推進一級（剛冷卻的不會同輪凍結，剛凍結的不會同輪墓碑）', async () => {
+    test('一次 GC 最多隻推進一級（剛冷卻的不會同輪凍結，剛凍結的不會同輪墓碑）', async () => {
         const a = frag({ createdDaysAgo: 500 });                                     // active → cooling
         const b = frag({ status: 'cooling', lifecycleDaysAgo: 400 });                 // cooling → frozen
         const c = frag({ status: 'frozen', lifecycleDaysAgo: 400 });                  // frozen → tombstone
@@ -194,7 +194,7 @@ describe('recalculateMemoryWeights：每日權重重算（範圍 2–8）', () =
         lc.recalculateMemoryWeights();
         assert.equal(w(id), 5);
     });
-    test('7 天內存取 +2、30 天內存取 +1', () => {
+    test('7 天記憶體取 +2、30 天記憶體取 +1', () => {
         const a = memSql({ createdDays: 0, accessedDays: 3 });
         const b = memSql({ createdDays: 0, accessedDays: 20 });
         const c = memSql({ createdDays: 0, accessedDays: 40 });
@@ -249,7 +249,7 @@ describe('runCorrectionFeedback（每週級聯降權）', () => {
         assert.equal(db.prepare('SELECT status FROM correction_log WHERE id=?').get(cid).status, 'applied');
     });
 
-    test('非 memory 類型的紀錄只被標記 applied，不降權', async () => {
+    test('非 memory 型別的紀錄只被標記 applied，不降權', async () => {
         const f = frag({ ew: 0.8 });
         db.prepare(`INSERT INTO correction_log (target_type, target_id, wrong_summary, correct_summary, status) VALUES ('hallucination', ?, 'w','c','active')`).run(f);
         const stats = await lc.runCorrectionFeedback();
@@ -268,7 +268,7 @@ describe('runLifecycleMaintenance：每日主流程', () => {
         assert.equal(r.gcStats.cooled, 1);
         assert.equal(r.decayStats.matured, 1);
         assert.ok('memoriesUpdated' in r.weightStats);
-        // 實體提取與纠正回饋只在週日跑
+        // 實體提取與糾正回饋只在週日跑
         if (new Date().getDay() === 0) assert.ok(r.entityStats && r.correctionStats);
         else assert.equal(r.entityStats, null), assert.equal(r.correctionStats, null);
     });

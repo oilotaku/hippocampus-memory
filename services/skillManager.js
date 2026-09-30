@@ -1,14 +1,14 @@
 // =================================================================
-// Skill Manager — Archivist 自我进化技能系统
+// Skill Manager — Archivist 自我進化技能系統
 //
-// Skill 是 Archivist 创造的个性化分析工具，存储在 archivist_skills 表。
-// 生命周期：hypothesis → 追踪观察 → 自评估 → 升级 (monitor) 或变性 (lesson)
+// Skill 是 Archivist 創造的個性化分析工具，儲存在 archivist_skills 表。
+// 生命週期：hypothesis → 追蹤觀察 → 自評估 → 升級 (monitor) 或變性 (lesson)
 //
-// 两种方向：
-//   - 对用户的认知：行为模式、情绪规律
-//   - 对记忆系统质量：分类纠错、图谱健康
+// 兩種方向：
+//   - 對使用者的認知：行為模式、情緒規律
+//   - 對記憶系統質量：分類糾錯、圖譜健康
 //
-// 创建门槛：机械筛选（≥3 独立数据点）+ LLM 判断（是否是模式）
+// 建立門檻：機械篩選（≥3 獨立資料點）+ LLM 判斷（是否是模式）
 // =================================================================
 
 const { getDb } = require('../database');
@@ -17,18 +17,18 @@ const { WORLD_CONTEXT } = require('./worldContext');
 const { USER, AI } = require('./nameResolver');
 
 const SKILL_LLM_CONFIG = 38;  // flash model, cheap — skill evaluation
-const SKILL_CREATE_MIN_OBSERVATIONS = 3;   // 至少3个数据点才创建
-const SKILL_EVAL_MIN_OBSERVATIONS = 5;      // 至少5个观察才自评估
+const SKILL_CREATE_MIN_OBSERVATIONS = 3;   // 至少3個數據點才建立
+const SKILL_EVAL_MIN_OBSERVATIONS = 5;      // 至少5個觀察才自評估
 const SKILL_INITIAL_CONFIDENCE = 0.25;      // 初始置信度
 
 // ═══════════════════════════════════════════════════════
-// Skill Creation — 机械筛选 + LLM 判断
+// Skill Creation — 機械篩選 + LLM 判斷
 // ═══════════════════════════════════════════════════════
 
 /**
  * @param {Object} params
- * @param {'user'|'system'} params.domain — 对用户的认知 or 对记忆系统质量
- * @param {string} params.sourcePattern — 触发创建的模式描述
+ * @param {'user'|'system'} params.domain — 對使用者的認知 or 對記憶系統質量
+ * @param {string} params.sourcePattern — 觸發建立的模式描述
  * @param {string[]} params.entityIds — 涉及的 entity IDs
  * @param {Object} params.triggerConfig — { type: 'keyword'|'entity'|'schedule'|'threshold', config: {...} }
  * @param {Object} params.analysisConfig — { type: 'llm'|'sql'|'statistical', prompt?: string, query?: string }
@@ -40,7 +40,7 @@ async function createSkill(params) {
 
     // Mechanical filter: do we have enough evidence?
     if (!sourcePattern || sourcePattern.length < 10) {
-        console.log('[SkillManager] 创建跳过: 模式描述不足');
+        console.log('[SkillManager] 建立跳過: 模式描述不足');
         return null;
     }
 
@@ -49,14 +49,14 @@ async function createSkill(params) {
         "SELECT id FROM archivist_skills WHERE source_pattern = ? AND status IN ('active','verified') LIMIT 1"
     ).get(sourcePattern);
     if (existing) {
-        console.log(`[SkillManager] 创建跳过: 已有相似技能 #${existing.id}`);
+        console.log(`[SkillManager] 建立跳過: 已有相似技能 #${existing.id}`);
         return null;
     }
 
     // LLM judgment: is this a real pattern or coincidence?
     const isPattern = await _judgePattern(domain, sourcePattern);
     if (!isPattern) {
-        console.log('[SkillManager] LLM判断: 非显著模式，不创建 skill');
+        console.log('[SkillManager] LLM判斷: 非顯著模式，不建立 skill');
         return null;
     }
 
@@ -72,28 +72,28 @@ async function createSkill(params) {
     );
 
     const skillId = info.lastInsertRowid;
-    console.log(`[SkillManager] 创建 hypothesis skill #${skillId}: ${sourcePattern.substring(0, 80)}...`);
+    console.log(`[SkillManager] 建立 hypothesis skill #${skillId}: ${sourcePattern.substring(0, 80)}...`);
     return skillId;
 }
 
 async function _judgePattern(domain, sourcePattern) {
-    const domainLabel = domain === 'system' ? '记忆系统分类质量' : '{user}的行为/情绪模式';
+    const domainLabel = domain === 'system' ? '記憶系統分類質量' : '{user}的行為/情緒模式';
 
-    const prompt = `你是认知模式分析器。Archivist 观察到一个潜在模式，需要你判断这是真正的规律还是随机巧合。
+    const prompt = `你是認知模式分析器。Archivist 觀察到一個潛在模式，需要你判斷這是真正的規律還是隨機巧合。
 
-## 领域
+## 領域
 ${domainLabel}
 
-## 观察到的模式
+## 觀察到的模式
 ${sourcePattern}
 
-## 判断标准
-- 如果这个模式描述的是随时间重复出现的规律，且至少出现了2-3次，可能是真模式
-- 如果描述的是单一的、孤立的观察，或两个事件之间没有因果/统计关联，则是巧合
-- 保守判断：不确定时倾向于认为不是模式
+## 判斷標準
+- 如果這個模式描述的是隨時間重複出現的規律，且至少出現了2-3次，可能是真模式
+- 如果描述的是單一的、孤立的觀察，或兩個事件之間沒有因果/統計關聯，則是巧合
+- 保守判斷：不確定時傾向於認為不是模式
 
-只输出一个JSON：
-{"is_pattern": true/false, "reason": "一句话理由（20字以内）"}`;
+只輸出一個JSON：
+{"is_pattern": true/false, "reason": "一句話理由（20字以內）"}`;
 
     try {
         const response = await callLLM(
@@ -107,16 +107,16 @@ ${sourcePattern}
         const match = text.match(/\{[\s\S]*\}/);
         if (!match) return false;
         const result = JSON.parse(match[0]);
-        console.log(`[SkillManager] 模式判断: ${result.is_pattern} — ${result.reason}`);
+        console.log(`[SkillManager] 模式判斷: ${result.is_pattern} — ${result.reason}`);
         return result.is_pattern === true;
     } catch (e) {
-        console.error('[SkillManager] 模式判断失败:', e.message);
+        console.error('[SkillManager] 模式判斷失敗:', e.message);
         return false;
     }
 }
 
 // ═══════════════════════════════════════════════════════
-// Skill Trigger — 检查条件是否满足，执行分析
+// Skill Trigger — 檢查條件是否滿足，執行分析
 // ═══════════════════════════════════════════════════════
 
 /**
@@ -147,12 +147,12 @@ async function triggerSkills(context = {}) {
                 triggered++;
             }
         } catch (e) {
-            console.error(`[SkillManager] skill #${skill.id} 触发失败:`, e.message);
+            console.error(`[SkillManager] skill #${skill.id} 觸發失敗:`, e.message);
         }
     }
 
     if (triggered > 0) {
-        console.log(`[SkillManager] 触发了 ${triggered}/${skills.length} 个 skill`);
+        console.log(`[SkillManager] 觸發了 ${triggered}/${skills.length} 個 skill`);
     }
     return triggered;
 }
@@ -225,13 +225,13 @@ async function _runAnalysis(skill, context) {
     switch (analysisConfig.type) {
         case 'llm': {
             // LLM-based analysis: run the prompt from analysisConfig
-            const prompt = analysisConfig.prompt || '分析以下观察数据，输出一句话的观察结论。';
+            const prompt = analysisConfig.prompt || '分析以下觀察資料，輸出一句話的觀察結論。';
             const data = await _gatherAnalysisData(skill, context, analysisConfig);
             if (!data) return null;
 
             try {
                 const response = await callLLM(
-                    [{ role: 'user', parts: [{ text: `${prompt}\n\n数据：\n${data}` }] }],
+                    [{ role: 'user', parts: [{ text: `${prompt}\n\n資料：\n${data}` }] }],
                     WORLD_CONTEXT,
                     null,
                     { temperature: 0.2, maxOutputTokens: 200 },
@@ -239,7 +239,7 @@ async function _runAnalysis(skill, context) {
                 );
                 return (response?.reply || '').trim();
             } catch (e) {
-                console.error(`[SkillManager] LLM分析 skill #${skill.id} 失败:`, e.message);
+                console.error(`[SkillManager] LLM分析 skill #${skill.id} 失敗:`, e.message);
                 return null;
             }
         }
@@ -252,7 +252,7 @@ async function _runAnalysis(skill, context) {
                 const rows = db.prepare(query).all();
                 return JSON.stringify(rows);
             } catch (e) {
-                console.error(`[SkillManager] SQL分析 skill #${skill.id} 失败:`, e.message);
+                console.error(`[SkillManager] SQL分析 skill #${skill.id} 失敗:`, e.message);
                 return null;
             }
         }
@@ -260,7 +260,7 @@ async function _runAnalysis(skill, context) {
         case 'statistical': {
             // Simple statistical check
             const data = await _gatherAnalysisData(skill, context, analysisConfig);
-            return data ? `统计观察: ${data}` : null;
+            return data ? `統計觀察: ${data}` : null;
         }
 
         default:
@@ -323,11 +323,11 @@ function _recordObservation(skillId, observation) {
     db.prepare('UPDATE archivist_skills SET observations = ? WHERE id = ?')
         .run(JSON.stringify(trimmed), skillId);
 
-    console.log(`[SkillManager] skill #${skillId} 观察记录: ${observation.substring(0, 80)}...`);
+    console.log(`[SkillManager] skill #${skillId} 觀察記錄: ${observation.substring(0, 80)}...`);
 }
 
 // ═══════════════════════════════════════════════════════
-// Skill Evaluation — 自评估：升级、变性、或继续观察
+// Skill Evaluation — 自評估：升級、變性、或繼續觀察
 // ═══════════════════════════════════════════════════════
 
 /**
@@ -364,7 +364,7 @@ async function evaluateSkills() {
                         status = 'verified', last_evaluated_at = datetime('now')
                     WHERE id = ?
                 `).run(result.confidence, JSON.stringify(result), skill.id);
-                console.log(`[SkillManager] skill #${skill.id} 升级为 monitor: ${skill.source_pattern?.substring(0, 60)}...`);
+                console.log(`[SkillManager] skill #${skill.id} 升級為 monitor: ${skill.source_pattern?.substring(0, 60)}...`);
                 upgraded++;
             } else if (result.verdict === 'falsified') {
                 // Transform to lesson
@@ -374,11 +374,11 @@ async function evaluateSkills() {
                         status = 'falsified', last_evaluated_at = datetime('now')
                     WHERE id = ?
                 `).run(JSON.stringify(result), skill.id);
-                console.log(`[SkillManager] skill #${skill.id} 变性为 lesson: ${result.reason?.substring(0, 60)}...`);
+                console.log(`[SkillManager] skill #${skill.id} 變性為 lesson: ${result.reason?.substring(0, 60)}...`);
 
                 // Falsified lesson feeds into cognitive correction
                 _feedLessonToCorrection(skill, result).catch(e =>
-                    console.error('[SkillManager] lesson 转 correction 失败:', e.message));
+                    console.error('[SkillManager] lesson 轉 correction 失敗:', e.message));
 
                 falsified++;
             } else {
@@ -388,15 +388,15 @@ async function evaluateSkills() {
                     SET last_evaluated_at = datetime('now'), self_evaluation = ?
                     WHERE id = ?
                 `).run(JSON.stringify(result), skill.id);
-                console.log(`[SkillManager] skill #${skill.id} 继续观察 (${observations.length} obs)`);
+                console.log(`[SkillManager] skill #${skill.id} 繼續觀察 (${observations.length} obs)`);
             }
         } catch (e) {
-            console.error(`[SkillManager] skill #${skill.id} 评估失败:`, e.message);
+            console.error(`[SkillManager] skill #${skill.id} 評估失敗:`, e.message);
         }
     }
 
     if (evaluated > 0) {
-        console.log(`[SkillManager] 评估了 ${evaluated} 个 skill (${upgraded} 升级, ${falsified} 变性)`);
+        console.log(`[SkillManager] 評估了 ${evaluated} 個 skill (${upgraded} 升級, ${falsified} 變性)`);
     }
     return { evaluated, upgraded, falsified };
 }
@@ -406,22 +406,22 @@ async function _selfEvaluate(skill, observations) {
         `${i + 1}. [${o.timestamp?.substring(0, 10) || '?'}] ${o.content}`
     ).join('\n');
 
-    const prompt = `你是认知 skill 的自我评估器。一个 hypothesis skill 已经积累了 ${observations.length} 次观察，你需要判断它是否成立。
+    const prompt = `你是認知 skill 的自我評估器。一個 hypothesis skill 已經積累了 ${observations.length} 次觀察，你需要判斷它是否成立。
 
 ## Skill 描述
-${skill.source_pattern || '未记录'}
+${skill.source_pattern || '未記錄'}
 
-## 观察记录
+## 觀察記錄
 ${obsText}
 
-## 判断标准
-- 如果观察一致地支持原始假设（≥60% 观察与假设一致），且没有明显的反例 → verified
-- 如果大部分观察与假设相悖，或模式从未真正出现 → falsified
-- 如果数据还不足以判断，证据混杂 → uncertain
-- 保守判断：不确定时选 uncertain
+## 判斷標準
+- 如果觀察一致地支援原始假設（≥60% 觀察與假設一致），且沒有明顯的反例 → verified
+- 如果大部分觀察與假設相悖，或模式從未真正出現 → falsified
+- 如果資料還不足以判斷，證據混雜 → uncertain
+- 保守判斷：不確定時選 uncertain
 
-只输出一个JSON：
-{"verdict":"verified|falsified|uncertain","confidence":0.0-1.0,"reason":"一句话理由（30字以内）","evidence_summary":"关键证据概述（50字以内）"}`;
+只輸出一個JSON：
+{"verdict":"verified|falsified|uncertain","confidence":0.0-1.0,"reason":"一句話理由（30字以內）","evidence_summary":"關鍵證據概述（50字以內）"}`;
 
     try {
         const response = await callLLM(
@@ -436,7 +436,7 @@ ${obsText}
         if (!match) return null;
         return JSON.parse(match[0]);
     } catch (e) {
-        console.error('[SkillManager] 自评估 LLM 失败:', e.message);
+        console.error('[SkillManager] 自評估 LLM 失敗:', e.message);
         return null;
     }
 }
@@ -460,18 +460,18 @@ async function _feedLessonToCorrection(skill, evalResult) {
             entity.name,
             `SKILL_HYPOTHESIS: ${skill.source_pattern?.substring(0, 40)}`,
             `FALSIFIED: ${evalResult.reason?.substring(0, 60)}`,
-            evalResult.evidence_summary || 'skill 观察数据不支持原始假设',
+            evalResult.evidence_summary || 'skill 觀察資料不支援原始假設',
             evalResult.evidence_summary || '',
             0
         );
         console.log(`[SkillManager] lesson #${skill.id} → cognitive correction (entity: ${entity.name})`);
     } catch (e) {
-        console.error('[SkillManager] lesson 转 correction 失败:', e.message);
+        console.error('[SkillManager] lesson 轉 correction 失敗:', e.message);
     }
 }
 
 // ═══════════════════════════════════════════════════════
-// Skill Scanning — 主动扫描是否有值得创建 skill 的模式
+// Skill Scanning — 主動掃描是否有值得建立 skill 的模式
 // ═══════════════════════════════════════════════════════
 
 /**
@@ -506,7 +506,7 @@ async function scanForPatterns() {
 
         // Pattern: this entity keeps appearing but relationship stays uncertain
         // → create a skill to monitor for relationship signals
-        const sourcePattern = `${ent.name} 频繁出现在{user}的生活中（${ent.frag_count} 条碎片），但关系仍不确定（当前：${ent.relationship_to_user || '未知'}，confidence: ${ent.relationship_confidence || 'low'}）`;
+        const sourcePattern = `${ent.name} 頻繁出現在{user}的生活中（${ent.frag_count} 條碎片），但關係仍不確定（當前：${ent.relationship_to_user || '未知'}，confidence: ${ent.relationship_confidence || 'low'}）`;
 
         await createSkill({
             domain: 'user',
@@ -518,7 +518,7 @@ async function scanForPatterns() {
             },
             analysisConfig: {
                 type: 'llm',
-                prompt: `分析以下与 ${ent.name} 相关的最新碎片，判断是否有足够信息确定TA与{user}的关系。如果有新线索，描述关系的可能方向。如果仍不确定，说明为什么信息不足。`,
+                prompt: `分析以下與 ${ent.name} 相關的最新碎片，判斷是否有足夠資訊確定TA與{user}的關係。如果有新線索，描述關係的可能方向。如果仍不確定，說明為什麼資訊不足。`,
             },
         });
     }
@@ -539,10 +539,10 @@ async function scanForPatterns() {
     for (const cluster of highEWClusters) {
         const existing = db.prepare(
             "SELECT id FROM archivist_skills WHERE source_pattern LIKE ? AND status = 'active'"
-        ).get(`%${cluster.source_date}%高情绪%`);
+        ).get(`%${cluster.source_date}%高情緒%`);
         if (existing) continue;
 
-        const sourcePattern = `${cluster.source_date} 当天出现了 ${cluster.cnt} 条高情绪碎片（avg ew=${cluster.avg_ew.toFixed(2)}），可能存在情绪触发事件`;
+        const sourcePattern = `${cluster.source_date} 當天出現了 ${cluster.cnt} 條高情緒碎片（avg ew=${cluster.avg_ew.toFixed(2)}），可能存在情緒觸發事件`;
 
         await createSkill({
             domain: 'user',

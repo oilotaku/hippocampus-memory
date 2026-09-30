@@ -51,30 +51,30 @@ async function extractFragmentInsights(batchSize = INSIGHT_BATCH_MAX) {
     const fragmentList = fragments.map((f, i) => {
         const ep = f.entity_id ? entityMap.get(f.entity_id) : null;
         const entityNote = ep && ep.relationship_to_user
-            ? ` [已知关系: ${ep.name} — ${ep.relationship_to_user}]`
+            ? ` [已知關係: ${ep.name} — ${ep.relationship_to_user}]`
             : (f.entity ? ` [涉及: ${f.entity}]` : '');
         return `[${i}] ${f.content}${entityNote}`;
     }).join('\n\n');
 
     const prompt = `${WORLD_CONTEXT}
-${entityContext ? '## 人物关系参考\n' + entityContext + '\n' : ''}
-你是User的个人认知提取器。阅读以下记忆碎片，提取每条碎片**揭示了User的什么个人特质/价值观/行为模式/情感倾向**。
+${entityContext ? '## 人物關係參考\n' + entityContext + '\n' : ''}
+你是User的個人認知提取器。閱讀以下記憶碎片，提取每條碎片**揭示了User的什麼個人特質/價值觀/行為模式/情感傾向**。
 
 ## 碎片
 
 ${fragmentList}
 
-## 任务
+## 任務
 
-对每条碎片，用第三人称一句话概括它揭示了User的什么（性格侧面 / 情感模式 / 价值取向 / 行为规律）。
-- 如果碎片只是纯事实记录（如"今天吃了大餐"）没有揭示个人特质，输出 null
-- 不要重复碎片内容本身，要提取它**暗示的更深层的东西**
-- 句子要有温度，像是在理解一个人而不是分析数据
+對每條碎片，用第三人稱一句話概括它揭示了User的什麼（性格側面 / 情感模式 / 價值取向 / 行為規律）。
+- 如果碎片只是純事實記錄（如"今天吃了大餐"）沒有揭示個人特質，輸出 null
+- 不要重複碎片內容本身，要提取它**暗示的更深層的東西**
+- 句子要有溫度，像是在理解一個人而不是分析資料
 
-## 输出格式
+## 輸出格式
 
-只输出一个JSON数组，不要markdown包裹（下面内容是虚构的，只演示格式）：
-[{"index":0,"insight":"User在疲惫时会用一个固定的小习惯给自己缓冲，那对User而言是恢复的方式"},{"index":2,"insight":"User对某类事物有一套自己的取舍标准，平时很少明说但一直在按它选","dimension":"emotional"},{"index":3,"insight":null}]`;
+只輸出一個JSON陣列，不要markdown包裹（下面內容是虛構的，只演示格式）：
+[{"index":0,"insight":"User在疲憊時會用一個固定的小習慣給自己緩衝，那對User而言是恢復的方式"},{"index":2,"insight":"User對某類事物有一套自己的取捨標準，平時很少明說但一直在按它選","dimension":"emotional"},{"index":3,"insight":null}]`;
 
     try {
         const response = await callLLM(
@@ -87,7 +87,7 @@ ${fragmentList}
         let text = (response?.reply || '').replace(/```json|```/g, '').trim();
         const match = text.match(/\[[\s\S]*\]/);
         if (!match) {
-            console.error('[Archivist] insight 提取: LLM返回非JSON数组');
+            console.error('[Archivist] insight 提取: LLM返回非JSON陣列');
             return { extracted: 0 };
         }
 
@@ -102,10 +102,10 @@ ${fragmentList}
             }
         }
 
-        console.log(`[Archivist] insight 提取: ${extracted}/${fragments.length} 条`);
+        console.log(`[Archivist] insight 提取: ${extracted}/${fragments.length} 條`);
         return { extracted };
     } catch (e) {
-        console.error('[Archivist] insight 提取失败:', e.message);
+        console.error('[Archivist] insight 提取失敗:', e.message);
         return { extracted: 0 };
     }
 }

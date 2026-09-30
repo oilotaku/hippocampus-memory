@@ -1,7 +1,7 @@
 // ========================================
-// 记忆星图 v5 — 视图状态机
-// 单一状态对象，4 层级：universe / galaxy / constellation / star
-// 所有转换走本模块函数，渲染层只读 view
+// 記憶星圖 v5 — 檢視狀態機
+// 單一狀態物件，4 層級：universe / galaxy / constellation / star
+// 所有轉換走本模組函式，渲染層只讀 view
 // ========================================
 
 import { conById } from './data.js';
@@ -11,7 +11,7 @@ export const view = {
     galaxyId: null,
     conId: null,
     starId: null,
-    // 过渡动画：0→1 的交叉淡入进度
+    // 過渡動畫：0→1 的交叉淡入進度
     transition: 1,
     prevLevel: null,
 };
@@ -63,17 +63,17 @@ export function gotoStar(starId, conId) {
     emit();
 }
 
-// Esc / 点空白：上退一级
+// Esc / 點空白：上退一級
 export function goUp() {
     switch (view.level) {
         case 'star': gotoConstellation(view.conId); break;
         case 'constellation': gotoGalaxy(view.galaxyId); break;
         case 'galaxy': gotoUniverse(); break;
-        // universe: 无操作
+        // universe: 無操作
     }
 }
 
-// 面包屑数据
+// 麵包屑資料
 export function breadcrumb() {
     const items = [{ label: '宇宙', action: gotoUniverse, active: view.level === 'universe' }];
     if (view.galaxyId) {
@@ -86,7 +86,7 @@ export function breadcrumb() {
         if (con) items.push({ label: con.label, action: () => gotoConstellation(cid), active: view.level === 'constellation' });
     }
     if (view.starId && view.level === 'star') {
-        items.push({ label: '记忆碎片', action: () => {}, active: true });
+        items.push({ label: '記憶碎片', action: () => {}, active: true });
     }
     return items;
 }

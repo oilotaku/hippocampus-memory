@@ -1,16 +1,16 @@
-# Memory Constellations 记忆库 — Docker 镜像
+# Memory Constellations 記憶庫 — Docker 映象
 FROM node:20-bookworm
 
 WORKDIR /app
 
-# 先装依赖（利用 Docker 层缓存）
+# 先裝依賴（利用 Docker 層快取）
 COPY package.json ./
 RUN npm install
 
-# 复制源码
+# 複製原始碼
 COPY . .
 
 EXPOSE 3000
 
-# 启动前初始化数据库，再起服务（首次运行自动从 example 生成 core-prompt.txt）
+# 啟動前初始化資料庫，再起服務（首次執行自動從 example 生成 core-prompt.txt）
 CMD ["sh", "-c", "cp -n core-prompt.example.txt core-prompt.txt 2>/dev/null; cp -n memory_config.example.json memory_config.json 2>/dev/null; node -e \"require('./database').initDatabase()\" && node index.js"]

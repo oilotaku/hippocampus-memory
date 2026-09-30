@@ -8,14 +8,14 @@ const { encryption } = require('../../encryption');
 const { getCompanionPersonaBase } = require('../companionPersona');
 
 
-// v5.10: 增强版 system prompt — Companion 人格 + User 画像
-// 供 detectNewTraits / readUserRawMessages 等需要深度理解 {{user.name}} 的 LLM 调用使用
+// v5.10: 增強版 system prompt — Companion 人格 + User 畫像
+// 供 detectNewTraits / readUserRawMessages 等需要深度理解 {{user.name}} 的 LLM 呼叫使用
 function _buildModelSystemPrompt() {
     let sp = WORLD_CONTEXT + '\n\n---\n\n';
     // Companion 人格
     const persona = getCompanionPersonaBase();
     if (persona) sp += persona + '\n\n---\n\n';
-    // {{user.name}} 现有画像摘要
+    // {{user.name}} 現有畫像摘要
     try {
         const { assembleProfile } = require('../userProfile');
         const profile = assembleProfile(300);

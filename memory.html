@@ -17,9 +17,9 @@
     <button class="gpill active" data-galaxy="">全部</button>
   </nav>
   <div class="tb-sep"></div>
-  <button class="stardust-btn" id="stardust-btn" title="星尘 · 观测日志">✦</button>
-  <button class="tb-action" id="import-btn" title="导入聊天记录（JSONL/TXT）">导入</button>
-  <button class="tb-action" id="export-btn" title="导出记忆库（JSONL）">导出</button>
+  <button class="stardust-btn" id="stardust-btn" title="星塵 · 觀測日誌">✦</button>
+  <button class="tb-action" id="import-btn" title="匯入聊天記錄（JSONL/TXT）">匯入</button>
+  <button class="tb-action" id="export-btn" title="匯出記憶庫（JSONL）">匯出</button>
   <span class="tb-count" id="tb-count">— fragments</span>
 </div>
 
@@ -37,8 +37,8 @@
 <div id="archlog" class="collapsed">
   <div id="arch-header">
     <div class="arch-pulse"></div>
-    <span class="arch-title">观星手记</span>
-    <span class="arch-sub">AI · 归档代理</span>
+    <span class="arch-title">觀星手記</span>
+    <span class="arch-sub">AI · 歸檔代理</span>
     <span class="arch-chevron">▲</span>
   </div>
   <div id="arch-body"></div>
@@ -47,7 +47,7 @@
 <div id="model-panel" class="collapsed">
   <div class="mp-header" id="mp-header">
     <div class="mp-dot"></div>
-    <span class="mp-title">认知模型</span>
+    <span class="mp-title">認知模型</span>
     <span class="mp-chevron">▲</span>
   </div>
   <div id="mp-body"></div>
@@ -64,10 +64,10 @@
     <span class="mp-chevron">▲</span>
   </div>
   <div id="ci-body" style="display:none">
-    <textarea id="ci-editor" rows="4" placeholder="AI 对 User 当前最深的理解……"></textarea>
+    <textarea id="ci-editor" rows="4" placeholder="AI 對 User 當前最深的理解……"></textarea>
     <div style="margin-top:6px;font-size:11px;color:#888">
       <span id="ci-updated"></span>
-      <button id="ci-save" style="margin-left:8px;padding:2px 10px">保存</button>
+      <button id="ci-save" style="margin-left:8px;padding:2px 10px">儲存</button>
     </div>
   </div>
 </div>
@@ -75,7 +75,7 @@
 <div id="merge-proposals" style="display:none">
   <div class="mq-header">
     <div class="mq-dot"></div>
-    <span class="mq-title">AI 的疑问</span>
+    <span class="mq-title">AI 的疑問</span>
     <span class="mq-count" id="mq-count"></span>
   </div>
   <div id="mq-body"></div>
@@ -84,14 +84,14 @@
 <div id="tt"></div>
 <div id="hint">scroll to zoom · drag to pan<br>click to dive in · Esc to surface</div>
 
-<!-- 星尘透镜 -->
+<!-- 星塵透鏡 -->
 <div id="stardust-overlay">
   <div id="stardust-lens">
     <div id="stardust-header">
-      <span class="sd-title">✦ 星尘 · 观测日志</span>
-      <input id="sd-search" placeholder="搜索信号..." autocomplete="off">
+      <span class="sd-title">✦ 星塵 · 觀測日誌</span>
+      <input id="sd-search" placeholder="搜尋訊號..." autocomplete="off">
       <select id="sd-filter">
-        <option value="1">最近24小时</option>
+        <option value="1">最近24小時</option>
         <option value="3">最近3天</option>
         <option value="7" selected>最近7天</option>
         <option value="30">最近30天</option>
@@ -99,24 +99,24 @@
       <button id="sd-close">✕</button>
     </div>
     <div id="stardust-body"></div>
-    <div id="stardust-hint">点击信号展开详情 · 点击星座名跳转星图 · 点击空白处关闭</div>
+    <div id="stardust-hint">點選訊號展開詳情 · 點選星座名跳轉星圖 · 點選空白處關閉</div>
   </div>
 </div>
-<!-- 导入聊天记录 弹窗 -->
+<!-- 匯入聊天記錄 彈窗 -->
 <div id="import-overlay" style="display:none">
   <div id="import-lens">
     <div id="import-header">
-      <span class="imp-title">导入聊天记录</span>
+      <span class="imp-title">匯入聊天記錄</span>
       <button id="import-close">✕</button>
     </div>
     <div id="import-drop" class="imp-drop">
       <input type="file" id="import-file" accept=".txt,.jsonl,.json">
-      <div class="imp-drop-hint">点击选择文件，或拖拽到这里</div>
-      <div class="imp-drop-sub">支持 JSON 数组 / JSONL / TXT（名字: 内容）</div>
+      <div class="imp-drop-hint">點選選擇檔案，或拖拽到這裡</div>
+      <div class="imp-drop-sub">支援 JSON 陣列 / JSONL / TXT（名字: 內容）</div>
     </div>
     <div id="import-preview" style="display:none"></div>
     <div id="import-actions" style="display:none">
-      <button id="import-confirm" class="imp-confirm">确认导入</button>
+      <button id="import-confirm" class="imp-confirm">確認匯入</button>
       <span class="imp-count" id="import-count"></span>
     </div>
     <div id="import-result"></div>
@@ -222,7 +222,7 @@
       preview.textContent = lines.slice(0, 8).join('\n') + (lines.length > 8 ? '\n…' : '');
       preview.style.display = 'block';
       actions.style.display = 'flex';
-      countEl.textContent = '约 ' + lines.length + ' 行';
+      countEl.textContent = '約 ' + lines.length + ' 行';
     };
     reader.readAsText(file);
   }
@@ -230,23 +230,23 @@
   confirmBtn.addEventListener('click', function () {
     if (!fileText.trim()) return;
     confirmBtn.disabled = true;
-    resultEl.textContent = '导入中…'; resultEl.className = '';
+    resultEl.textContent = '匯入中…'; resultEl.className = '';
     fetch('/api/import/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content: fileText })
     }).then(function (r) { return r.json(); }).then(function (data) {
       if (data.success) {
-        resultEl.textContent = '✓ 已导入 ' + data.count + ' 条消息（用户 ' + data.userCount + ' / AI ' + data.aiCount + '）。后台会在大约 2 分钟内开始提取记忆。';
+        resultEl.textContent = '✓ 已匯入 ' + data.count + ' 條訊息（使用者 ' + data.userCount + ' / AI ' + data.aiCount + '）。後臺會在大約 2 分鐘內開始提取記憶。';
         resultEl.className = 'ok';
         preview.style.display = 'none'; actions.style.display = 'none';
       } else {
-        resultEl.textContent = '导入失败：' + (data.error || '未知错误');
+        resultEl.textContent = '匯入失敗：' + (data.error || '未知錯誤');
         resultEl.className = 'err';
         confirmBtn.disabled = false;
       }
     }).catch(function (e) {
-      resultEl.textContent = '导入失败：' + e.message;
+      resultEl.textContent = '匯入失敗：' + e.message;
       resultEl.className = 'err';
       confirmBtn.disabled = false;
     });

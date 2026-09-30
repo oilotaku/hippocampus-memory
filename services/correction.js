@@ -1,14 +1,14 @@
 // =================================================================
-// Correction（纠正闭环）：用户纠正 → 教训 → Scribe 注入
+// Correction（糾正閉環）：使用者糾正 → 教訓 → Scribe 注入
 // =================================================================
-// 两条闭环共用 correction_log 表：
-//   ① correct_memory 工具 → processChatCorrection → 定位错源、修记忆、记账
-//   ② recordCorrection 攒到 MERGE_THRESHOLD → mergeGuidelines → 长期准则 → Scribe 注入
+// 兩條閉環共用 correction_log 表：
+//   ① correct_memory 工具 → processChatCorrection → 定位錯源、修記憶、記賬
+//   ② recordCorrection 攢到 MERGE_THRESHOLD → mergeGuidelines → 長期準則 → Scribe 注入
 //
-// ⚠️ correction_log.status 只表示「合并生命周期」（active → merged）。
-//    「这条纠正是否已做过级联降权」是另一件事，必须另开列记账——
-//    把两件事塞进同一个 status 会让两边互相掐死（一方处理完就把行移出 active，
-//    另一方永远攒不到阈值）。见 README 的架构说明。
+// ⚠️ correction_log.status 只表示「合併生命週期」（active → merged）。
+//    「這條糾正是否已做過級聯降權」是另一件事，必須另開列記賬——
+//    把兩件事塞進同一個 status 會讓兩邊互相掐死（一方處理完就把行移出 active，
+//    另一方永遠攢不到閾值）。見 README 的架構說明。
 
 const { getDb } = require('../database');
 const { sealField } = require('./memoryCrypto');
@@ -17,14 +17,14 @@ const { chromaDBOperation } = require('./memory');
 const { fillPrompt, USER } = require('./nameResolver');
 
 const CORRECTION_CONFIG = {
-    // 归因判断用哪个模型配置：字符串=按名称查，数字=按 id 查，null=用 is_default=1 的配置。
-    // 新库没有内置的 api_configs id，留 null 即可（跑 scripts/setup_llm.js 建默认配置）。
+    // 歸因判斷用哪個模型配置：字串=按名稱查，數字=按 id 查，null=用 is_default=1 的配置。
+    // 新庫沒有內建的 api_configs id，留 null 即可（跑 scripts/setup_llm.js 建預設配置）。
     API_CONFIG_ID: null,
-    ACTIVE_LIMIT: 5,        // Scribe 注入最近 N 条活跃教训
-    MERGE_THRESHOLD: 10,    // 累积 N 条 → 合并为长期准则
+    ACTIVE_LIMIT: 5,        // Scribe 注入最近 N 條活躍教訓
+    MERGE_THRESHOLD: 10,    // 累積 N 條 → 合併為長期準則
 };
 
-// 写入一条纠正
+// 寫入一條糾正
 function recordCorrection({ targetType, targetId, wrongSummary, correctSummary, source = 'manual', chatMessageId = null }) {
     const db = getDb();
     const insert = db.prepare(`
@@ -32,9 +32,9 @@ function recordCorrection({ targetType, targetId, wrongSummary, correctSummary, 
         VALUES (?, ?, ?, ?, ?, ?, 'active')
     `);
     const info = insert.run(targetType, targetId || null, wrongSummary, correctSummary, source, chatMessageId);
-    console.log(`[Correction] 记录纠正 #${info.lastInsertRowid}: ${wrongSummary.slice(0, 50)} → ${correctSummary.slice(0, 50)}`);
+    console.log(`[Correction] 記錄糾正 #${info.lastInsertRowid}: ${wrongSummary.slice(0, 50)} → ${correctSummary.slice(0, 50)}`);
 
-    // 观星手记可见化：聊天自动纠正写入 changelog（手动删除已有自己的可见路径）
+    // 觀星手記可見化：聊天自動糾正寫入 changelog（手動刪除已有自己的可見路徑）
     if (source === 'chat_correction') {
         try {
             db.prepare(`INSERT INTO ontology_changelog (action, category_path, detail, status) VALUES ('memory_correction', NULL, ?, 'done')`)
@@ -43,31 +43,31 @@ function recordCorrection({ targetType, targetId, wrongSummary, correctSummary, 
                     correct: (correctSummary || '').slice(0, 80),
                     target: targetType,
                 }));
-        } catch (e) { /* changelog 失败不影响纠正主流程 */ }
+        } catch (e) { /* changelog 失敗不影響糾正主流程 */ }
     }
 
-    // 如果被纠正的记忆在 memories 表中，降权
+    // 如果被糾正的記憶在 memories 表中，降權
     if (targetType === 'memory' && targetId) {
         db.prepare("UPDATE memories SET weight = MAX(1, weight * 0.3), updated_at = datetime('now') WHERE id = ?").run(targetId);
-        console.log(`[Correction] 记忆 #${targetId} 已降权 ×0.3`);
+        console.log(`[Correction] 記憶 #${targetId} 已降權 ×0.3`);
     }
     if (targetType === 'fragment' && targetId) {
         db.prepare("UPDATE memory_fragments SET status = 'consolidated' WHERE id = ?").run(targetId);
-        console.log(`[Correction] 碎片 #${targetId} 已标记 consolidated`);
+        console.log(`[Correction] 碎片 #${targetId} 已標記 consolidated`);
     }
 
-    // 检查是否需要合并
+    // 檢查是否需要合併
     const activeCount = db.prepare("SELECT COUNT(*) as c FROM correction_log WHERE status='active'").get();
     if (activeCount.c >= CORRECTION_CONFIG.MERGE_THRESHOLD) {
-        console.log(`[Correction] 活跃纠正已达 ${activeCount.c} 条，触发合并...`);
-        // 异步合并，不阻塞请求
-        mergeGuidelines().catch(e => console.error('[Correction] 合并失败:', e.message));
+        console.log(`[Correction] 活躍糾正已達 ${activeCount.c} 條，觸發合併...`);
+        // 非同步合併，不阻塞請求
+        mergeGuidelines().catch(e => console.error('[Correction] 合併失敗:', e.message));
     }
 
     return info.lastInsertRowid;
 }
 
-// 获取最近活跃纠正教训（供 Scribe 注入）
+// 獲取最近活躍糾正教訓（供 Scribe 注入）
 function getActiveCorrections(limit = CORRECTION_CONFIG.ACTIVE_LIMIT) {
     const db = getDb();
     const rows = db.prepare(`
@@ -79,11 +79,11 @@ function getActiveCorrections(limit = CORRECTION_CONFIG.ACTIVE_LIMIT) {
     if (!rows.length) return null;
 
     return rows.map(r =>
-        `- 错误：${r.wrong_summary} → 正确：${r.correct_summary}`
+        `- 錯誤：${r.wrong_summary} → 正確：${r.correct_summary}`
     ).join('\n');
 }
 
-// 合并活跃纠正为长期准则
+// 合併活躍糾正為長期準則
 async function mergeGuidelines() {
     const db = getDb();
     const rows = db.prepare("SELECT id, wrong_summary, correct_summary FROM correction_log WHERE status='active'").all();
@@ -91,14 +91,14 @@ async function mergeGuidelines() {
 
     const itemsText = rows.map(r => `- wrong: ${r.wrong_summary}\n  correct: ${r.correct_summary}`).join('\n');
 
-    const systemPrompt = `你是编辑准则合并器。将多条纠正教训归纳为3-5条"长期编辑准则"，每条一句话（不超过40字），去重合并同类项。
+    const systemPrompt = `你是編輯準則合併器。將多條糾正教訓歸納為3-5條"長期編輯準則"，每條一句話（不超過40字），去重合並同類項。
 
-输出JSON：{"guidelines": ["准则1", "准则2", ...]}`;
+輸出JSON：{"guidelines": ["準則1", "準則2", ...]}`;
 
     let guidelines = [];
     try {
         const raw = await callLLM(
-            [{ role: 'user', parts: [{ text: `请合并以下纠正教训为编辑准则：\n\n${itemsText}` }] }],
+            [{ role: 'user', parts: [{ text: `請合併以下糾正教訓為編輯準則：\n\n${itemsText}` }] }],
             systemPrompt,
             null,
             { temperature: 0.3, maxOutputTokens: 1000 },
@@ -108,11 +108,11 @@ async function mergeGuidelines() {
         const result = JSON.parse(clean);
         guidelines = result.guidelines || [];
     } catch (e) {
-        console.error('[Correction] LLM合并失败，使用原文:', e.message);
+        console.error('[Correction] LLM合併失敗，使用原文:', e.message);
         guidelines = rows.map(r => `${r.wrong_summary} → ${r.correct_summary}`);
     }
 
-    // 写入 user_settings
+    // 寫入 user_settings
     const { setUserSetting } = require('../utils/settings');
     await setUserSetting('scribe_guidelines', JSON.stringify({
         guidelines,
@@ -120,15 +120,15 @@ async function mergeGuidelines() {
         merged_from: rows.length
     }));
 
-    // 标记已合并
+    // 標記已合併
     const mark = db.prepare("UPDATE correction_log SET status='merged' WHERE status='active'");
     mark.run();
 
-    console.log(`[Correction] 合并完成：${rows.length}条 → ${guidelines.length}条长期准则`);
+    console.log(`[Correction] 合併完成：${rows.length}條 → ${guidelines.length}條長期準則`);
     return guidelines;
 }
 
-// 获取长期准则（供 Scribe 注入）
+// 獲取長期準則（供 Scribe 注入）
 async function getMergedGuidelines() {
     const { getUserSetting } = require('../utils/settings');
     const setting = await getUserSetting('scribe_guidelines');
@@ -144,7 +144,7 @@ async function getMergedGuidelines() {
 }
 
 // =================================================================
-// 聊天修正：{{ai.name}} 调 correct_memory 工具 → 小模型定位源记忆 → 执行修正
+// 聊天修正：{{ai.name}} 調 correct_memory 工具 → 小模型定位源記憶 → 執行修正
 // =================================================================
 
 async function createCoreFragment(content, chatId) {
@@ -163,7 +163,7 @@ async function createCoreFragment(content, chatId) {
         'active'
     );
     const fragId = info.lastInsertRowid;
-    console.log(`[Correction] 写入修正 fragment #${fragId}`);
+    console.log(`[Correction] 寫入修正 fragment #${fragId}`);
 
     try {
         await chromaDBOperation('index_batch', {
@@ -175,7 +175,7 @@ async function createCoreFragment(content, chatId) {
         });
         console.log(`[Correction] ChromaDB indexed: fragment_${fragId}`);
     } catch (e) {
-        console.error(`[Correction] ChromaDB 索引失败 fragment_${fragId}:`, e.message);
+        console.error(`[Correction] ChromaDB 索引失敗 fragment_${fragId}:`, e.message);
     }
 
     return fragId;
@@ -183,27 +183,27 @@ async function createCoreFragment(content, chatId) {
 
 async function judgeCorrectionSource(wrongStatement, correction, candidates) {
     const candLines = candidates.map((c, i) =>
-        `[${i}] id=${c.id} source_table=${c.source_table}\n内容: ${c.content}`
+        `[${i}] id=${c.id} source_table=${c.source_table}\n內容: ${c.content}`
     ).join('\n\n');
 
-    // 只有模板串过 fillPrompt；下面拼进去的是用户/记忆原文，不能再走 fillPrompt
-    // （原文里出现 {user} 之类的字面量会被误替换）。
-    const systemPrompt = fillPrompt(`你是记忆修正判断器。给定：
-1. 一条错误陈述（{{ai.name}}说的话）
-2. 正确的版本（{{user.name}}的纠正）
-3. 若干候选记忆条目
+    // 只有模板串過 fillPrompt；下面拼進去的是使用者/記憶原文，不能再走 fillPrompt
+    // （原文裡出現 {user} 之類的字面量會被誤替換）。
+    const systemPrompt = fillPrompt(`你是記憶修正判斷器。給定：
+1. 一條錯誤陳述（{{ai.name}}說的話）
+2. 正確的版本（{{user.name}}的糾正）
+3. 若干候選記憶條目
 
-判断：错误陈述是否来源于某条候选记忆？
-- 如果是 → 指出是哪条（id），并生成修正后的内容（保持原记忆的第三人称风格）
-- 如果不是 → 标记为 hallucination
+判斷：錯誤陳述是否來源於某條候選記憶？
+- 如果是 → 指出是哪條（id），並生成修正後的內容（保持原記憶的第三人稱風格）
+- 如果不是 → 標記為 hallucination
 
-输出严格JSON：{"matched": true/false, "memory_id": null或数字, "source_table": "fragment"或"memory"或null, "corrected_content": "修正后的记忆内容（第三人称）", "explanation": "简短中文判断理由"}`);
+輸出嚴格JSON：{"matched": true/false, "memory_id": null或數字, "source_table": "fragment"或"memory"或null, "corrected_content": "修正後的記憶內容（第三人稱）", "explanation": "簡短中文判斷理由"}`);
 
-    const userPrompt = `错误陈述：「${wrongStatement}」
-正确版本：「${correction}」
+    const userPrompt = `錯誤陳述：「${wrongStatement}」
+正確版本：「${correction}」
 
-候选记忆：
-${candLines || '（无候选记忆）'}`;
+候選記憶：
+${candLines || '（無候選記憶）'}`;
 
     let reply;
     try {
@@ -216,8 +216,8 @@ ${candLines || '（无候选记忆）'}`;
         );
         reply = res.reply;
     } catch (e) {
-        console.error('[Correction] 归因判断调用失败:', e.message);
-        return { matched: false, memory_id: null, source_table: null, corrected_content: correction, explanation: 'LLM调用失败，按幻听处理' };
+        console.error('[Correction] 歸因判斷呼叫失敗:', e.message);
+        return { matched: false, memory_id: null, source_table: null, corrected_content: correction, explanation: 'LLM呼叫失敗，按幻聽處理' };
     }
 
     try {
@@ -230,23 +230,23 @@ ${candLines || '（无候选记忆）'}`;
             explanation: json.explanation || ''
         };
     } catch (e) {
-        console.error('[Correction] JSON解析失败:', reply.slice(0, 200));
-        return { matched: false, memory_id: null, source_table: null, corrected_content: correction, explanation: '解析失败，按幻听处理' };
+        console.error('[Correction] JSON解析失敗:', reply.slice(0, 200));
+        return { matched: false, memory_id: null, source_table: null, corrected_content: correction, explanation: '解析失敗，按幻聽處理' };
     }
 }
 
 async function processChatCorrection({ wrongStatement, correction, memoryId, chatId }) {
-    // 参数护栏：缺参数时直接把话说回去。否则下面的 wrongStatement.slice 会抛
-    // TypeError，工具结果喂不回上下文，表现为{{ai.name}}「说完就沉默」。
+    // 引數護欄：缺引數時直接把話說回去。否則下面的 wrongStatement.slice 會拋
+    // TypeError，工具結果喂不回上下文，表現為{{ai.name}}「說完就沉默」。
     if (!wrongStatement || !correction) {
-        return { success: false, formatted: '需要同时给出 wrong_statement（说错的那句）和 correction（正确版本）。' };
+        return { success: false, formatted: '需要同時給出 wrong_statement（說錯的那句）和 correction（正確版本）。' };
     }
 
     const db = getDb();
     const candidates = [];
 
-    // 1. 收集候选记忆
-    // 1a. 传了 memoryId → 查 DB
+    // 1. 收集候選記憶
+    // 1a. 傳了 memoryId → 查 DB
     if (memoryId) {
         let record = db.prepare('SELECT id, content, \'memory\' AS source_table FROM memories WHERE id = ?').get(memoryId);
         if (!record) {
@@ -257,7 +257,7 @@ async function processChatCorrection({ wrongStatement, correction, memoryId, cha
         }
     }
 
-    // 1b. 工作记忆池
+    // 1b. 工作記憶池
     try {
         const { getRecentFragments } = require('./workingMemory');
         const recent = getRecentFragments();
@@ -269,12 +269,12 @@ async function processChatCorrection({ wrongStatement, correction, memoryId, cha
                 candidates.push({ id: r.id, content: r.content, source_table: r.source_table });
             }
         }
-        console.log(`[Correction] 工作记忆池候选: ${recent.length} 条`);
+        console.log(`[Correction] 工作記憶池候選: ${recent.length} 條`);
     } catch (e) {
-        console.error('[Correction] 工作记忆池查询失败:', e.message);
+        console.error('[Correction] 工作記憶池查詢失敗:', e.message);
     }
 
-    // 1c. 向量搜索补位
+    // 1c. 向量搜尋補位
     try {
         const { searchMemoriesByVector } = require('./memory');
         const vecResults = await searchMemoriesByVector(wrongStatement, 5);
@@ -287,27 +287,27 @@ async function processChatCorrection({ wrongStatement, correction, memoryId, cha
                 candidates.push({ id: v.id, content: v.content || v.title, source_table: sourceTable });
             }
         }
-        console.log(`[Correction] 向量搜索候选: ${vecResults.length} 条`);
+        console.log(`[Correction] 向量搜尋候選: ${vecResults.length} 條`);
     } catch (e) {
-        console.error('[Correction] 向量搜索失败:', e.message);
+        console.error('[Correction] 向量搜尋失敗:', e.message);
     }
 
-    console.log(`[Correction] 候选记忆共 ${candidates.length} 条（wrong="${wrongStatement.slice(0, 60)}", correction="${correction.slice(0, 60)}"）`);
+    console.log(`[Correction] 候選記憶共 ${candidates.length} 條（wrong="${wrongStatement.slice(0, 60)}", correction="${correction.slice(0, 60)}"）`);
 
-    // 2. 纯幻觉：无候选
+    // 2. 純幻覺：無候選
     if (candidates.length === 0) {
-        console.log('[Correction] 无候选记忆 → 纯幻觉');
+        console.log('[Correction] 無候選記憶 → 純幻覺');
         const fragId = await createCoreFragment(correction, chatId);
         recordCorrection({ targetType: 'hallucination', targetId: null, wrongSummary: wrongStatement, correctSummary: correction, source: 'chat_correction', chatMessageId: chatId });
         return {
             success: true,
-            formatted: `记忆库里没有找到相关的记忆——你刚才说的「${wrongStatement.slice(0, 50)}」很可能是你自己编造或混淆的。我已将正确版本存为新记忆 #${fragId}。`
+            formatted: `記憶庫裡沒有找到相關的記憶——你剛才說的「${wrongStatement.slice(0, 50)}」很可能是你自己編造或混淆的。我已將正確版本存為新記憶 #${fragId}。`
         };
     }
 
-    // 3. 小模型判断
+    // 3. 小模型判斷
     const judgment = await judgeCorrectionSource(wrongStatement, correction, candidates);
-    console.log(`[Correction] 判断结果: matched=${judgment.matched} id=${judgment.memory_id} ${judgment.explanation}`);
+    console.log(`[Correction] 判斷結果: matched=${judgment.matched} id=${judgment.memory_id} ${judgment.explanation}`);
 
     if (judgment.matched && judgment.memory_id) {
         const sourceTable = judgment.source_table === 'memory' ? 'memory' : 'fragment';
@@ -316,24 +316,24 @@ async function processChatCorrection({ wrongStatement, correction, memoryId, cha
         } else {
             db.prepare(`UPDATE memories SET layer = 'cooling' WHERE id = ?`).run(judgment.memory_id);
         }
-        console.log(`[Correction] 标记 ${sourceTable}[${judgment.memory_id}] 为 cooling`);
+        console.log(`[Correction] 標記 ${sourceTable}[${judgment.memory_id}] 為 cooling`);
 
         const fragId = await createCoreFragment(judgment.corrected_content, chatId);
         recordCorrection({ targetType: sourceTable, targetId: judgment.memory_id, wrongSummary: wrongStatement, correctSummary: correction, source: 'chat_correction', chatMessageId: chatId });
 
         return {
             success: true,
-            formatted: `记忆修正完成。找到了你说错的来源——记忆 #${judgment.memory_id}（${judgment.explanation || '内容有误'}）。已将那条记忆标记为降温，并写入了修正后的新记忆 #${fragId}。`
+            formatted: `記憶修正完成。找到了你說錯的來源——記憶 #${judgment.memory_id}（${judgment.explanation || '內容有誤'}）。已將那條記憶標記為降溫，並寫入了修正後的新記憶 #${fragId}。`
         };
     }
 
-    // 未命中 → 幻听
+    // 未命中 → 幻聽
     const fragId = await createCoreFragment(judgment.corrected_content || correction, chatId);
     recordCorrection({ targetType: 'hallucination', targetId: null, wrongSummary: wrongStatement, correctSummary: correction, source: 'chat_correction', chatMessageId: chatId });
 
     return {
         success: true,
-        formatted: `记忆库中有 ${candidates.length} 条可能相关的记忆，但经过比对，你刚才说的似乎是自己编造或混淆的（${judgment.explanation || '找不到确切的来源记忆'}）。我已将正确版本存为新记忆 #${fragId}。`
+        formatted: `記憶庫中有 ${candidates.length} 條可能相關的記憶，但經過比對，你剛才說的似乎是自己編造或混淆的（${judgment.explanation || '找不到確切的來源記憶'}）。我已將正確版本存為新記憶 #${fragId}。`
     };
 }
 

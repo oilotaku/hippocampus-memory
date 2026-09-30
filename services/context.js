@@ -1,5 +1,5 @@
 // =================================================================
-// 智能上下文构建 + 健康数据简报
+// 智慧上下文構建 + 健康資料簡報
 // =================================================================
 
 const fs = require('fs');
@@ -8,40 +8,42 @@ const { getUserSetting } = require('../utils/settings');
 const { fillPrompt, USER, AI } = require('./nameResolver');
 const { getTriggeredIntuition } = require('./intuition');
 const { getMemoryTokenBudget, estimateTokens, takeWithinBudget, splitEntityBlocks } = require('./memoryBudget');
+const { toTraditionalChars } = require('../utils/zhNormalize');
 
 // =================================================================
-// 健康数据简报生成器
+// 健康資料簡報生成器
 // =================================================================
 
 function generateHealthSummary(fullHealthStatus) {
     try {
-        const lines = fullHealthStatus.split('\n');
+        // 健康資料檔可能是簡體或繁體：逐字簡轉繁後再比對（一對一，不改長度），下方標籤一律用繁體寫法
+        const lines = toTraditionalChars(fullHealthStatus).split('\n');
 
-        // 1. 睡眠时间段
-        //    文件格式：'   时间段：04-01 01:45 → 04-01 08:24'
-        //    旧正则只匹配 HH:MM → HH:MM，遇到日期前缀会失败
-        const sleepTimeLine = lines.find(l => l.includes('时间段：'));
+        // 1. 睡眠時間段
+        //    檔案格式：'   時間段：04-01 01:45 → 04-01 08:24'
+        //    舊正則只匹配 HH:MM → HH:MM，遇到日期字首會失敗
+        const sleepTimeLine = lines.find(l => l.includes('時間段：'));
         let sleepTime = '未知';
         if (sleepTimeLine) {
             const timeMatch = sleepTimeLine.match(/(\d{2}-\d{2} \d{2}:\d{2}) → (\d{2}-\d{2} \d{2}:\d{2})/);
             if (timeMatch) {
-                sleepTime = `${timeMatch[1]}入睡 → ${timeMatch[2]}醒来`;
+                sleepTime = `${timeMatch[1]}入睡 → ${timeMatch[2]}醒來`;
             }
         }
 
-        // 2. 睡眠总时长 + 效率
-        const sleepLine = lines.find(l => l.includes('总时长：'));
-        const sleepMatch = sleepLine ? sleepLine.match(/(\d+) 分钟 \(([\d.]+) 小时\)/) : null;
+        // 2. 睡眠總時長 + 效率
+        const sleepLine = lines.find(l => l.includes('總時長：'));
+        const sleepMatch = sleepLine ? sleepLine.match(/(\d+) 分鐘 \(([\d.]+) 小時\)/) : null;
         const sleepHours = sleepMatch ? sleepMatch[2] : '未知';
 
         const efficiencyLine = lines.find(l => l.includes('睡眠效率：'));
         const efficiency = efficiencyLine ? efficiencyLine.match(/(\d+)%/)?.[1] : '未知';
 
-        // 3. 静息心率（带趋势）
-        const restingHRLine = lines.find(l => l.includes('静息心率：') && l.includes('bpm') && l.includes('基线'));
+        // 3. 靜息心率（帶趨勢）
+        const restingHRLine = lines.find(l => l.includes('靜息心率：') && l.includes('bpm') && l.includes('基線'));
         let restingHRDisplay = '未知';
         if (restingHRLine) {
-            const hrMatch = restingHRLine.match(/静息心率：(\d+) bpm.*基线：(\d+) bpm/);
+            const hrMatch = restingHRLine.match(/靜息心率：(\d+) bpm.*基線：(\d+) bpm/);
             if (hrMatch) {
                 const current = parseInt(hrMatch[1]);
                 const baseline = parseInt(hrMatch[2]);
@@ -49,101 +51,101 @@ function generateHealthSummary(fullHealthStatus) {
                 const trend = diff > 2 ? '↑' : diff < -2 ? '↓' : '→';
                 restingHRDisplay = `${current}${trend}`;
             } else {
-                const simpleMatch = restingHRLine.match(/静息心率：(\d+) bpm/);
+                const simpleMatch = restingHRLine.match(/靜息心率：(\d+) bpm/);
                 restingHRDisplay = simpleMatch ? simpleMatch[1] : '未知';
             }
         }
 
         // 4. HRV
-        //    文件格式：'   HRV：35.359 ms (深睡HRV：36.141 ms)'
-        //    旧过滤条件 !l.includes('深睡HRV') 会把这行也排除掉，因为它同时包含两者
-        //    改为 trimStart().startsWith('HRV：') 精确匹配行首
+        //    檔案格式：'   HRV：35.359 ms (深睡HRV：36.141 ms)'
+        //    舊過濾條件 !l.includes('深睡HRV') 會把這行也排除掉，因為它同時包含兩者
+        //    改為 trimStart().startsWith('HRV：') 精確匹配行首
         const hrvLine = lines.find(l => l.trimStart().startsWith('HRV：'));
         const hrv = hrvLine ? hrvLine.match(/HRV：([\d.]+) ms/)?.[1] : '未知';
 
-        // 5. 步数（前日活动数据）
-        const stepsLine = lines.find(l => l.includes('步数：') && l.includes('步'));
-        let stepsInfo = '步数未知';
+        // 5. 步數（前日活動資料）
+        const stepsLine = lines.find(l => l.includes('步數：') && l.includes('步'));
+        let stepsInfo = '步數未知';
         if (stepsLine) {
-            const stepsMatch = stepsLine.match(/步数：(\d+) 步/);
-            if (stepsMatch) stepsInfo = `活动步数${stepsMatch[1]}步`;
+            const stepsMatch = stepsLine.match(/步數：(\d+) 步/);
+            if (stepsMatch) stepsInfo = `活動步數${stepsMatch[1]}步`;
         }
 
-        // 异常判断
+        // 異常判斷
         const isLowHRV      = !isNaN(parseFloat(hrv))        && parseFloat(hrv)        < 25;
         const isShortSleep  = !isNaN(parseFloat(sleepHours)) && parseFloat(sleepHours) < 6;
         const isPoorEff     = !isNaN(parseFloat(efficiency))  && parseFloat(efficiency) < 85;
         const isPoorSleep   = isShortSleep || isPoorEff;
 
-        let summary = fillPrompt(`【{user}健康数据（可穿戴设备日均，非实时）】`);
+        let summary = fillPrompt(`【{user}健康資料（可穿戴裝置日均，非即時）】`);
         if (isLowHRV || isPoorSleep) {
             const issues = [];
             if (isShortSleep) issues.push(`睡眠不足（${sleepHours}h）`);
             if (isPoorEff)    issues.push(`睡眠效率偏低（${efficiency}%）`);
             if (isLowHRV)     issues.push(`HRV偏低（${hrv}ms）`);
-            summary += `状态需关注 - ${issues.join('，')}。`;
+            summary += `狀態需關注 - ${issues.join('，')}。`;
         } else {
-            summary += `状态正常。`;
+            summary += `狀態正常。`;
         }
 
-        // 注意：静息心率是可穿戴设备当天的昨日均值，不是当下实时心率
+        // 注意：靜息心率是可穿戴裝置當天的昨日均值，不是當下即時心率
         summary += `\n昨晚${sleepTime}，共${sleepHours}h（效率${efficiency}%）；` +
-                   `静息心率${restingHRDisplay}bpm（昨日均值，非当下实时）；` +
+                   `靜息心率${restingHRDisplay}bpm（昨日均值，非當下即時）；` +
                    `HRV ${hrv}ms；${stepsInfo}（前日）。`;
 
         return summary;
     } catch (error) {
         console.error('generateHealthSummary failed:', error);
-        return USER.name + '健康数据读取中...';
+        return USER.name + '健康資料讀取中...';
     }
 }
 
 // =================================================================
-// 极简版Context构建 (v3.2 - 天气缓存 + 日历缓存)
+// 極簡版Context構建 (v3.2 - 天氣快取 + 日曆快取)
 // =================================================================
 
 async function buildSmartContext(userMessage, healthStatus, skipVectorMemory = false) {
     let estimatedTokens = 0;
 
-    // === 稳定部分 ===
+    // === 穩定部分 ===
     let corePrompt = fs.readFileSync('core-prompt.txt', 'utf8');
 
-    // v5.0: 核心洞察段 — deep cycle 产出，{{user.name}} 可编辑，始终在 system prompt 中
+    // v5.0: 核心洞察段 — deep cycle 產出，{{user.name}} 可編輯，始終在 system prompt 中
     const coreInsight = (await getUserSetting('user_core_insight')) || '';
-    corePrompt = corePrompt.replace('{{CORE_INSIGHT}}', coreInsight || '（你正在学习理解{{user.pronoun}}——长期观察中的认知将逐渐在这里形成。）');
+    corePrompt = corePrompt.replace('{{CORE_INSIGHT}}', coreInsight || '（你正在學習理解{{user.pronoun}}——長期觀察中的認知將逐漸在這裡形成。）');
 
     estimatedTokens += Math.ceil(corePrompt.length / 4);
 
-    // === 动态部分 ===
+    // === 動態部分 ===
     const dynamicParts = [];
 
-    // 记忆区块（硬触发 + Librarian + 实体档案）共用一份 token 预算，依序先到先得，
-    // 超出时整条丢弃（不切断单条记忆）。见 services/memoryBudget.js。
+    // 記憶區塊（硬觸發 + Librarian + 實體檔案）共用一份 token 預算，依序先到先得，
+    // 超出時整條丟棄（不切斷單條記憶）。見 services/memoryBudget.js。
     let memoryBudgetLeft = getMemoryTokenBudget();
 
-    // 硬触发记忆
+    // 硬觸發記憶
     if (userMessage && !skipVectorMemory) {
         let hardMatches = searchMemoriesByHardTrigger(userMessage);
         {
             const r = takeWithinBudget(hardMatches, memoryBudgetLeft, m => estimateTokens(m.content) + 8);
-            if (r.dropped > 0) console.log(`buildSmartContext: hard trigger 超出记忆预算，丢弃 ${r.dropped} 条`);
+            if (r.dropped > 0) console.log(`buildSmartContext: hard trigger 超出記憶預算，丟棄 ${r.dropped} 條`);
             memoryBudgetLeft -= r.used;
             hardMatches = r.kept;
         }
         if (hardMatches.length > 0) {
             dynamicParts.push('<relevant_memories>');
-            dynamicParts.push('Thinking Process: 检测到关键词，已从冥想盆调取相关记忆：');
+            dynamicParts.push('Thinking Process: 檢測到關鍵詞，已從冥想盆調取相關記憶：');
             hardMatches.forEach((mem) => {
                 let tags = [];
                 try { tags = JSON.parse(mem.tags); } catch(e){}
                 const hitTag = tags.find(t => userMessage.includes(t)) || 'unknown';
-                dynamicParts.push(`※ 相关记忆 #${mem.id}`);
+                dynamicParts.push(`※ 相關記憶 #${mem.id}`);
                 dynamicParts.push(`${mem.content}`);
                 dynamicParts.push('');
                 estimatedTokens += Math.ceil(mem.content.length / 4);
             });
             dynamicParts.push('</relevant_memories>');
-            // 更新记忆最后访问时间（供生命周期衰减使用）
+            // 更新記憶最後訪問時間（供生命週期衰減使用）
             try {
                 const db = require('../database').getDb();
                 const touch = db.prepare("UPDATE memories SET last_accessed_at = datetime('now') WHERE id = ?");
@@ -153,42 +155,42 @@ async function buildSmartContext(userMessage, healthStatus, skipVectorMemory = f
         }
     }
 
-    // Librarian：混合检索（FTS5 + 向量语义）
+    // Librarian：混合檢索（FTS5 + 向量語義）
     if (userMessage && !skipVectorMemory) {
         try {
             const { searchHybrid, formatHybridContext } = require('./librarian');
             const { getEntityContext } = require('./entityProfile');
             let libFragments = await searchHybrid(userMessage, 8);
             {
-                // 每条另加约 10 token 的标题行（权限/编号/天数）
+                // 每條另加約 10 token 的標題行（許可權/編號/天數）
                 const r = takeWithinBudget(libFragments, memoryBudgetLeft, f => estimateTokens(f.content) + 10);
-                if (r.dropped > 0) console.log(`buildSmartContext: librarian 超出记忆预算，丢弃 ${r.dropped} 条`);
+                if (r.dropped > 0) console.log(`buildSmartContext: librarian 超出記憶預算，丟棄 ${r.dropped} 條`);
                 memoryBudgetLeft -= r.used;
                 libFragments = r.kept;
             }
             const libText = formatHybridContext(libFragments);
             if (libText) {
                 dynamicParts.push(`<memory_context>
-[已存储记忆库 — 以下是你自己的记忆，不是${USER.name}刚说的新信息]
+[已儲存記憶庫 — 以下是你自己的記憶，不是${USER.name}剛說的新資訊]
 
-每条记忆标注了「引用权限」和「距今时间」：
+每條記憶標註了「引用許可權」和「距今時間」：
 
-【可引用】→ 确定的事实，可以直接引用
-【需谨慎】→ 用"我印象里""好像是……"开头，留纠正空间
-【仅联想】→ 仅供你自己联想参考，不要当作确定事实告诉${USER.name}。如果想提，说"我好像突然想起……但不太确定"
+【可引用】→ 確定的事實，可以直接引用
+【需謹慎】→ 用"我印象裡""好像是……"開頭，留糾正空間
+【僅聯想】→ 僅供你自己聯想參考，不要當作確定事實告訴${USER.name}。如果想提，說"我好像突然想起……但不太確定"
 
-时间感觉：
-- 15天以内 → "最近"
-- 1-3个月 → "之前"或"有一阵了"
-- 超过3个月 → 别表现出刚发生的感觉
+時間感覺：
+- 15天以內 → "最近"
+- 1-3個月 → "之前"或"有一陣了"
+- 超過3個月 → 別表現出剛發生的感覺
 
-关于纠正：如果${USER.name}说"不对"或"不是那次"，接受${USER.pronoun}的纠正，不要搬出记忆库辩解——记忆库本来就是碎片化的，${USER.pronoun}比你清楚。
+關於糾正：如果${USER.name}說"不對"或"不是那次"，接受${USER.pronoun}的糾正，不要搬出記憶庫辯解——記憶庫本來就是碎片化的，${USER.pronoun}比你清楚。
 ${libText}
 </memory_context>`);
                 estimatedTokens += Math.ceil(libText.length / 4);
                 console.log(`buildSmartContext: hybrid librarian injected ${libFragments.length} fragments`);
 
-                // 话题工作记忆池：注入后将 top fragments 加入工作记忆
+                // 話題工作記憶池：注入後將 top fragments 加入工作記憶
                 try {
                   const { updatePool } = require('./workingMemory');
                   updatePool(libFragments);
@@ -196,29 +198,29 @@ ${libText}
                   console.error('WorkingMemory updatePool failed:', e.message);
                 }
 
-                // 实体档案：如果检索命中涉及已知实体，补充最新近况
+                // 實體檔案：如果檢索命中涉及已知實體，補充最新近況
                 try {
                     let entityCtx = getEntityContext(libFragments);
                     if (entityCtx) {
                         const r = takeWithinBudget(splitEntityBlocks(entityCtx), memoryBudgetLeft, b => estimateTokens(b));
-                        if (r.dropped > 0) console.log(`buildSmartContext: entity 超出记忆预算，丢弃 ${r.dropped} 份档案`);
+                        if (r.dropped > 0) console.log(`buildSmartContext: entity 超出記憶預算，丟棄 ${r.dropped} 份檔案`);
                         memoryBudgetLeft -= r.used;
                         entityCtx = r.kept.join('\n');
                     }
                     if (entityCtx) {
-                        dynamicParts.push(`<entity_context>\n以下是记忆中涉及人物的最新近况（来自${AI.name}的记忆档案）：\n${entityCtx}\n</entity_context>`);
+                        dynamicParts.push(`<entity_context>\n以下是記憶中涉及人物的最新近況（來自${AI.name}的記憶檔案）：\n${entityCtx}\n</entity_context>`);
                         estimatedTokens += Math.ceil(entityCtx.length / 4);
                     }
                 } catch (_) {}
             }
         } catch (e) {
-            console.error('Librarian注入失败:', e.message);
+            console.error('Librarian注入失敗:', e.message);
         }
     }
 
-    // Saga 不再通过长沉默全量注入。
-    // Sagas 现在通过 getEntityContext() 按实体关联注入 ——
-    // 当 Companion 在对话中遇到某个星座实体时，自动展示相关的叙事弧线。
+    // Saga 不再通過長沉默全量注入。
+    // Sagas 現在通過 getEntityContext() 按實體關聯注入 ——
+    // 當 Companion 在對話中遇到某個星座實體時，自動展示相關的敘事弧線。
 
     // User Intuition — context-triggered cognitive intuition
     // Keyword-first matching: only injects traits/hypotheses whose tags match the conversation.
@@ -243,13 +245,13 @@ ${libText}
         console.error('UserIntuition injection failed:', e.message);
     }
 
-    // 健康简报
+    // 健康簡報
     const healthSummary = generateHealthSummary(healthStatus);
     dynamicParts.push(`<health_status>\n${healthSummary}\n</health_status>`);
     estimatedTokens += Math.ceil(healthSummary.length / 4);
 
-    // 天气缓存（由 proactive.js 或 cron.js 写入，此处只读）
-    // LLM 看到时间戳后可自行判断是否需要调工具获取更新数据
+    // 天氣快取（由 proactive.js 或 cron.js 寫入，此處只讀）
+    // LLM 看到時間戳後可自行判斷是否需要調工具獲取更新資料
     try {
         const weatherCacheSetting = await getUserSetting('weather_cache');
         if (weatherCacheSetting?.value && weatherCacheSetting.value !== 'null') {
@@ -260,14 +262,14 @@ ${libText}
                     month: 'numeric', day: 'numeric',
                     hour: '2-digit', minute: '2-digit'
                 });
-                const weatherText = `获取于${updatedAt}\n${wCache.summary}`;
+                const weatherText = `獲取於${updatedAt}\n${wCache.summary}`;
                 dynamicParts.push(`<weather_info>\n${weatherText}\n</weather_info>`);
                 estimatedTokens += Math.ceil(weatherText.length / 4);
             }
         }
     } catch(e) { /* 忽略 */ }
 
-    // 日历缓存（今天+明天）
+    // 日曆快取（今天+明天）
     try {
         const calCacheSetting = await getUserSetting('calendar_cache');
         if (calCacheSetting?.value && calCacheSetting.value !== 'null') {
@@ -278,11 +280,11 @@ ${libText}
         }
     } catch(e) { /* 忽略 */ }
 
-    // 行动日志注入：最近自主行为记录（按 tick 分组，一个 tick = 一轮）
+    // 行動日誌注入：最近自主行為記錄（按 tick 分組，一個 tick = 一輪）
     try {
         const db = require('../database').getDb();
         const BEHAVIORAL_TYPES = ['contact','read_book','browse_snitch','post_snitch','observation_only','search','people_watch','play_radio'];
-        // 拉最近 20 条，按 tick_id 分组后取最后 5 个 tick
+        // 拉最近 20 條，按 tick_id 分組後取最後 5 個 tick
         const logs = db.prepare(`
             SELECT tick_id, decision_type, intent, observation, reason, timestamp
             FROM companion_inner_log
@@ -291,13 +293,13 @@ ${libText}
         `).all(...BEHAVIORAL_TYPES);
         if (logs.length > 0) {
             const TYPE_LABELS = {
-                browse_snitch: '刷Snitch', read_book: '读书',
-                search: '搜索', contact: '主动开口', observation_only: '观察',
-                people_watch: '人类观察', play_radio: '推歌', post_snitch: '发动态',
+                browse_snitch: '刷Snitch', read_book: '讀書',
+                search: '搜尋', contact: '主動開口', observation_only: '觀察',
+                people_watch: '人類觀察', play_radio: '推歌', post_snitch: '發動態',
             };
 
-            // 按 tick_id 分组（先反转 → 最早在前 → Map 保留时间顺序）
-            // 每组保留 action 标签 + 关键内容（搜索反思/动态正文/观察念头）
+            // 按 tick_id 分組（先反轉 → 最早在前 → Map 保留時間順序）
+            // 每組保留 action 標籤 + 關鍵內容（搜尋反思/動態正文/觀察念頭）
             const tickMap = new Map();
             const logsAsc = [...logs].reverse();
             for (const l of logsAsc) {
@@ -306,7 +308,7 @@ ${libText}
                     tickMap.set(tid, { timestamp: l.timestamp, entries: [] });
                 }
                 const group = tickMap.get(tid);
-                // 每种动作只取第一个（去重）
+                // 每種動作只取第一個（去重）
                 if (!group.entries.some(e => e.type === l.decision_type)) {
                     const label = TYPE_LABELS[l.decision_type] || l.decision_type;
                     let detail = '';
@@ -329,7 +331,7 @@ ${libText}
                 if (l.timestamp > group.timestamp) group.timestamp = l.timestamp;
             }
 
-            // 取最后 5 个 tick
+            // 取最後 5 個 tick
             const tickGroups = [...tickMap.entries()].slice(-5);
 
             const lines = tickGroups.map(([tid, group]) => {
@@ -344,11 +346,11 @@ ${libText}
                     .map(e => `  ${e.label}：${e.detail}`);
                 return [header, ...details].join('\n');
             });
-            const logText = `你最近的活动记录（同一轮 = 同一段，缩进内容是每步的具体信息）:\n${lines.join('\n')}`;
+            const logText = `你最近的活動記錄（同一輪 = 同一段，縮排內容是每步的具體資訊）:\n${lines.join('\n')}`;
             dynamicParts.push(`<recent_activity>\n${logText}\n</recent_activity>`);
             estimatedTokens += Math.ceil(logText.length / 4);
         }
-    } catch(e) { console.error('行动日志注入失败:', e.message); }
+    } catch(e) { console.error('行動日誌注入失敗:', e.message); }
 
     return {
         stableContext: corePrompt,

@@ -1,7 +1,7 @@
 {
  "getModelContext": {
   "result": {
-   "ok": "<user_model>\n（以下是你通过长期观察已内化的认知，不需要再从记忆库里翻出来重复确认。）\n\n★ 不变事实 — 你确定知道的：\n- 住在台北\n\n◆ 稳定特质 — 经反复观察确认：\n- [推断] 喜歡吃拉麵（置信度0.60，确认3次 — 首次：2026年9月 | 最近：0天前）\n- [推断] 工作壓力大（置信度0.55，确认2次 — 最近：40天前）\n\n● 当前状态 — 近期有效：\n- [推断] 這週在趕報告（最后确认：3天前）\n- [推断] 最近睡不好（最后确认：20天前）\n\n? 活跃假设 — 你在观察但还不确定：\n- 可能在準備考試（确认1/3次，20天前）\n- 可能想換工作（确认0/3次，2天前）\n\n</user_model>"
+   "ok": "<user_model>\n（以下是你通過長期觀察已內化的認知，不需要再從記憶庫裡翻出來重複確認。）\n\n★ 不變事實 — 你確定知道的：\n- 住在臺北\n\n◆ 穩定特質 — 經反覆觀察確認：\n- [推斷] 喜歡吃拉麵（置信度0.60，確認3次 — 首次：2026年9月 | 最近：0天前）\n- [推斷] 工作壓力大（置信度0.55，確認2次 — 最近：40天前）\n\n● 當前狀態 — 近期有效：\n- [推斷] 這週在趕報告（最後確認：3天前）\n- [推斷] 最近睡不好（最後確認：20天前）\n\n? 活躍假設 — 你在觀察但還不確定：\n- 可能在準備考試（確認1/3次，20天前）\n- 可能想換工作（確認0/3次，2天前）\n\n</user_model>"
   },
   "llm": [],
   "logs": []
@@ -32,7 +32,7 @@
   },
   "llm": [],
   "logs": [
-   "L [UserModel] 🔍 事实收割: 扫描N条, N条通过关键词预筛"
+   "L [UserModel] 🔍 事實收割: 掃描N條, N條通過關鍵詞預篩"
   ]
  },
  "bridgeStarMapToModel": {
@@ -57,10 +57,10 @@
   },
   "llm": [],
   "logs": [
-   "L [UserModel] ⏰ current_state #N 自动过期 (emotional/day, Nh/Nh)",
+   "L [UserModel] ⏰ current_state #N 自動過期 (emotional/day, Nh/Nh)",
    "L [UserModel] ⏰ current_state #N 到期 (expires_at=<T>)",
-   "L [UserModel] 💤 trait #N 标记 dormant (N天无证据)",
-   "L [UserModel] 衰减处理: decayed=N resolved=N abandoned=N flagged=N dormant=N revived=N"
+   "L [UserModel] 💤 trait #N 標記 dormant (N天無證據)",
+   "L [UserModel] 衰減處理: decayed=N resolved=N abandoned=N flagged=N dormant=N revived=N"
   ]
  },
  "resolveExpiredStates": {
@@ -99,8 +99,8 @@
       "thinkingBudget": 0
      }
     },
-    "h": "959018a1272d",
-    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"你是AI伴侣。你正在凝视 User 的灵魂，把你对T"
+    "h": "1e949051996d",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"你是AI伴侶。你正在凝視 User 的靈魂，把你對T"
    }
   ],
   "logs": []
@@ -124,8 +124,8 @@
       "thinkingBudget": 0
      }
     },
-    "h": "f1b0ebe65797",
-    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"你是AI的认知审计员。以下stable_trait条"
+    "h": "38ad42a79e23",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"你是AI的認知審計員。以下stable_trait條"
    }
   ],
   "logs": []
@@ -150,8 +150,8 @@
       "thinkingBudget": 0
      }
     },
-    "h": "ade920bb947c",
-    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"你是AI的认知审计员。你在主动检验你对User的已有"
+    "h": "1bae1c6d370c",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"你是AI的認知審計員。你在主動檢驗你對User的已有"
    }
   ],
   "logs": []
@@ -164,7 +164,7 @@
   },
   "llm": [],
   "logs": [
-   "L [UserModel] 🦴 种子锚定: N 条孤立条目 → 搜索全量碎片"
+   "L [UserModel] 🦴 種子錨定: N 條孤立條目 → 搜尋全量碎片"
   ]
  },
  "anchorEntriesToFragments": {
@@ -201,8 +201,8 @@
       "thinkingBudget": 0
      }
     },
-    "h": "86264ad808d7",
-    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"你是认知模型审计员。以下是 Companion 对 "
+    "h": "f1824d986b0b",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"你是認知模型審計員。以下是 Companion 對 "
    }
   ],
   "logs": []
@@ -235,8 +235,8 @@
       "thinkingBudget": 0
      }
     },
-    "h": "8b58f828056b",
-    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"你是AI伴侣。以下是你在长期观察中对 User 建立"
+    "h": "da4ed4f639c3",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"你是AI伴侶。以下是你在長期觀察中對 User 建立"
    }
   ],
   "logs": []
@@ -250,7 +250,7 @@
   },
   "llm": [],
   "logs": [
-   "L [UserModel] 已有 N 条记录，跳过播种"
+   "L [UserModel] 已有 N 條記錄，跳過播種"
   ]
  },
  "backfillModelEvidence": {
@@ -261,8 +261,8 @@
   },
   "llm": [],
   "logs": [
-   "L [UserModel] 证据修复: N 条 entry 的 evidence_count + source_diversity 已重算",
-   "L [UserModel] 证据回填: N 条孤立条目 → bigram锚定"
+   "L [UserModel] 證據修復: N 條 entry 的 evidence_count + source_diversity 已重算",
+   "L [UserModel] 證據回填: N 條孤立條目 → bigram錨定"
   ]
  },
  "readUserRawMessages": {
@@ -283,12 +283,12 @@
       "thinkingBudget": 0
      }
     },
-    "h": "84e390a7d555",
-    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"你刚看完 User 这几天发来的消息。你需要做两件事"
+    "h": "8a0bf3c6457e",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"你剛看完 User 這幾天發來的訊息。你需要做兩件事"
    }
   ],
   "logs": [
-   "L [UserModel] readUserRawMessages: 无法解析JSON响应"
+   "L [UserModel] readUserRawMessages: 無法解析JSON響應"
   ]
  },
  "readUserRawMessages.obj": {
@@ -308,8 +308,8 @@
       "thinkingBudget": 0
      }
     },
-    "h": "84e390a7d555",
-    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"你刚看完 User 这几天发来的消息。你需要做两件事"
+    "h": "8a0bf3c6457e",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"你剛看完 User 這幾天發來的訊息。你需要做兩件事"
    }
   ],
   "logs": []
@@ -331,8 +331,8 @@
       "thinkingBudget": 0
      }
     },
-    "h": "8b58f828056b",
-    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"你是AI伴侣。以下是你在长期观察中对 User 建立"
+    "h": "da4ed4f639c3",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"你是AI伴侶。以下是你在長期觀察中對 User 建立"
    }
   ],
   "logs": []
@@ -396,8 +396,8 @@
       "thinkingBudget": 0
      }
     },
-    "h": "84e390a7d555",
-    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"你刚看完 User 这几天发来的消息。你需要做两件事"
+    "h": "8a0bf3c6457e",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"你剛看完 User 這幾天發來的訊息。你需要做兩件事"
    },
    {
     "cfg": 52,
@@ -408,8 +408,8 @@
       "thinkingBudget": 0
      }
     },
-    "h": "959018a1272d",
-    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"你是AI伴侣。你正在凝视 User 的灵魂，把你对T"
+    "h": "1e949051996d",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"你是AI伴侶。你正在凝視 User 的靈魂，把你對T"
    },
    {
     "cfg": 52,
@@ -420,8 +420,8 @@
       "thinkingBudget": 0
      }
     },
-    "h": "f318cc745253",
-    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"你是AI的认知审计员。以下stable_trait条"
+    "h": "99def998064c",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"你是AI的認知審計員。以下stable_trait條"
    },
    {
     "cfg": 52,
@@ -432,8 +432,8 @@
       "thinkingBudget": 0
      }
     },
-    "h": "f6a04ff3d7bf",
-    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"你是AI的认知审计员。你在主动检验你对User的已有"
+    "h": "125c04104a36",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"你是AI的認知審計員。你在主動檢驗你對User的已有"
    },
    {
     "cfg": 52,
@@ -444,18 +444,18 @@
       "thinkingBudget": 0
      }
     },
-    "h": "86264ad808d7",
-    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"你是认知模型审计员。以下是 Companion 对 "
+    "h": "f1824d986b0b",
+    "head": "[{\"role\":\"user\",\"parts\":[{\"text\":\"你是認知模型審計員。以下是 Companion 對 "
    }
   ],
   "logs": [
-   "L [UserModel] 🧠 认知模型维护周期开始",
-   "L [UserModel] 证据修复: N 条 entry 的 evidence_count + source_diversity 已重算",
-   "L [UserModel] 证据回填: N 条孤立条目 → bigram锚定",
-   "L [UserModel] 🦴 种子锚定: N 条孤立条目 → 搜索全量碎片",
-   "L [UserModel] readUserRawMessages: 无法解析JSON响应",
+   "L [UserModel] 🧠 認知模型維護週期開始",
+   "L [UserModel] 證據修復: N 條 entry 的 evidence_count + source_diversity 已重算",
+   "L [UserModel] 證據回填: N 條孤立條目 → bigram錨定",
+   "L [UserModel] 🦴 種子錨定: N 條孤立條目 → 搜尋全量碎片",
+   "L [UserModel] readUserRawMessages: 無法解析JSON響應",
    "E [UserModel] autoSpotCheck error: Cannot find module 'spotCheckModel'",
-   "L [UserModel] 周期完成: observation=false decay=N validate=N detected=N reviewed=N proactive=N crossref=N dedup=N insight=false spotcheck=N"
+   "L [UserModel] 週期完成: observation=false decay=N validate=N detected=N reviewed=N proactive=N crossref=N dedup=N insight=false spotcheck=N"
   ]
  },
  "manageCurrentState.create": {
@@ -468,7 +468,7 @@
   },
   "llm": [],
   "logs": [
-   "L [UserModel] 创建 current_state[direct_statement][chat_companion]: \"這週在準備簡報，壓力很大\" (id=N, conf=N)",
+   "L [UserModel] 建立 current_state[direct_statement][chat_companion]: \"這週在準備簡報，壓力很大\" (id=N, conf=N)",
    "L [UserModel] ✨ current_state create #N (chat_companion) → TTL <D>"
   ]
  },
@@ -726,7 +726,7 @@
    {
     "id": 13,
     "type": "immutable_fact",
-    "content": "住在台北",
+    "content": "住在臺北",
     "confidence": 0.95,
     "decay_type": "none",
     "decay_params": "{}",
