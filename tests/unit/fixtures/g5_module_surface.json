@@ -2527,6 +2527,10 @@
   [
    "MAX_QUOTE_LEN",
    "number"
+  ],
+  [
+   "quoteSourceDate",
+   "function"
   ]
  ],
  "services/summary.js": [

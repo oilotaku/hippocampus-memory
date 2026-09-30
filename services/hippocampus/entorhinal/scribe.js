@@ -2,7 +2,7 @@
 // Scribe（書記員）：對話記憶提取系統
 // =================================================================
 const { getDb } = require('../../../database');
-const { parseDbTime } = require('../../../utils/time');
+const { parseDbTime, toLocalMinute, weekdayZh } = require('../../../utils/time');
 const { callLLM } = require('../../llm');
 const { fillPrompt, USER, AI } = require('../../nameResolver');
 const { encryption } = require('../../../encryption');
@@ -18,7 +18,7 @@ try { ({ getActiveCorrections, getMergedGuidelines } = require('../ca1/correctio
 const { chromaDBOperation } = require('../ca3/memory');
 const { WORLD_CONTEXT } = require('../../worldContext');
 const { renderTagSpecForPrompt } = require('../../tagRouting');
-const { filterEntriesByQuote, normalizedContentHash, findDuplicate } = require('../dentate/scribeQuality');
+const { filterEntriesByQuote, normalizedContentHash, findDuplicate, quoteSourceDate } = require('../dentate/scribeQuality');
 const emotion = require('../amygdala');
 const { spawn } = require('child_process');
 const path = require('path');
@@ -315,16 +315,20 @@ ${renderTagSpecForPrompt()}
 
 {EMOTION_RULES}## 時間表達（關鍵規則）
 
-輸入訊息帶有時間戳，例如 \`[2026-05-02 13:22]\` 表示2026年5月2日13:22傳送的訊息。
+輸入訊息帶有當地時間戳與星期，例如 \`[2026-05-02 13:22 週六]\` 表示2026年5月2日（星期六）13:22傳送的訊息。
 
 你在寫content時，**絕對禁止**直接使用以下相對時間詞：
 昨天 / 前天 / 後天 / 今天 / 明天 / 上週 / 這週 / 下週 / 上月 / 這個月 / 下月 / 去年 / 今年 / 明年
 
-必須根據訊息自帶的時間戳，將它們轉換為具體日期。例如訊息時間戳是2026-05-02：
-- 對話中寫"昨天" → content中寫"5月1日"
-- 對話中寫"前天" → content中寫"4月30日"
-- 對話中寫"後天" → content中寫"5月4日"
-- 對話中寫"上週五" → content中寫"4月24日"
+必須根據**說這句話那則訊息**的時間戳（不是整段對話最後一則）換算成具體日期，並在日期後附上星期。
+換算「週X」時，從時間戳上的星期往前或往後數，不要自己推算星期幾。一週從週一開始。例如訊息時間戳是 2026-05-02 週六：
+- 對話中寫"昨天" → content中寫"5月1日（週五）"
+- 對話中寫"前天" → content中寫"4月30日（週四）"
+- 對話中寫"後天" → content中寫"5月4日（週一）"
+- 對話中寫"這週三" → content中寫"4月29日（週三）"
+- 對話中寫"下週三" → content中寫"5月6日（週三）"
+- 對話中寫"上週五" → content中寫"4月24日（週五）"
+- 對話中寫"下下週六" → content中寫"5月16日（週六）"
 - 不能精確到日的，寫"約X月"或"X月左右"。**嚴禁**原樣複製相對時間詞到content中。
 
 ## 糾正教訓（從過去的錯誤中學習）
@@ -567,7 +571,9 @@ async function runScribe(messages, since) {
     const formatMsg = (m) => {
         if (m.message_type === 'image') return null;
         const sender = m.sender === 'user' ? USER.name : AI.name;
-        const time = m.timestamp?.slice(0, 16) || '';
+        // DB 存 UTC；給模型看當地時間＋星期（見提示詞「時間表達」），相對日期才換算得對
+        const local = toLocalMinute(m.timestamp);
+        const time = local ? `${local} ${weekdayZh(local)}` : (m.timestamp?.slice(0, 16) || '');
         const content = sanitizeForJSON(dec(m).slice(0, 500));
         return `[${time}] ${sender}: ${content}`;
     };
@@ -747,14 +753,19 @@ async function runScribe(messages, since) {
     // source_date 必須是有效日期。歷史上出現過 JSON 物件誤入 message.timestamp，
     // 會把 source_date 寫成髒值（如 {"llm_call 之類）。與下方 safeUntil 同款守衛：
     // 從末尾往前找最後一個有效時間戳，取它的日期。
+    // source_date 一律是當地（UTC+8）日期：DB 時間戳是 UTC，直接 slice 會讓當地清晨的訊息記到前一天。
     let sourceDate = null;
     for (let i = messages.length - 1; i >= 0; i--) {
         if (isValidTimestamp(messages[i]?.timestamp)) {
-            sourceDate = messages[i].timestamp.slice(0, 10);
+            sourceDate = toLocalMinute(messages[i].timestamp).slice(0, 10) || messages[i].timestamp.slice(0, 10);
             break;
         }
     }
-    if (!sourceDate) sourceDate = new Date().toISOString().slice(0, 10);
+    if (!sourceDate) sourceDate = toLocalMinute(new Date()).slice(0, 10);
+    // 每條記憶的日期＝原話所在那則訊息的日期（一批可橫跨數週）；對不上時退回批次日期
+    const msgDates = messages
+        .filter(m => m.message_type !== 'image' && isValidTimestamp(m?.timestamp))
+        .map(m => ({ text: dec(m).slice(0, 500), date: toLocalMinute(m.timestamp).slice(0, 10) }));
     const newFragmentIds = [];
 
     // 收集分析視窗內的所有訊息 ID（buffer + main messages），作為證據鏈
@@ -902,7 +913,7 @@ async function runScribe(messages, since) {
                 sealField('memory_fragments', 'content', entry.content),
                 entry.emotional_weight ?? 0.3,
                 fragmentSource,
-                sourceDate,
+                quoteSourceDate(entry.quote, msgDates) || sourceDate,
                 sourceMsgIds,
                 isRP ? 1 : 0,
                 msgChatMode,

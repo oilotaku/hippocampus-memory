@@ -4,7 +4,7 @@ const { fragmentsMatchQuery, memoriesMatchQuery } = require('../../memoryCrypto'
 const { AI, SKIP_NAMES } = require('../../nameResolver');
 const { toQueryTokens } = require('../../../utils/cjkTokenize');
 const { toTraditionalChars } = require('../../../utils/zhNormalize');
-const { parseDbTime } = require('../../../utils/time');
+const { parseDbTime, weekdayZh, daysSinceLocalDate } = require('../../../utils/time');
 const { effectiveIntensity } = require('../amygdala/fading');
 const { getEmotionConfig } = require('../amygdala/config');
 const { getRecallConfig } = require('./recallGate');
@@ -713,12 +713,28 @@ function formatHybridContext(fragments, opts = {}) {
   const incRead = db.prepare("UPDATE memory_fragments SET read_count = COALESCE(read_count, 0) + 1, injected_count = COALESCE(injected_count, 0) + 1, last_accessed_at = datetime('now') WHERE id = ?");
   const touchMemory = db.prepare("UPDATE memories SET last_accessed_at = datetime('now') WHERE id = ?");
 
+  // 碎片的對話日期（source_date，當地日期）。各檢索通道回傳的欄位不一，缺的一次補查。
+  // 只給「N天前」（以寫入時間 created_at 起算）時，批次抽取的記憶全都變成「0天前」，
+  // 模型答不出「哪一天」「哪件事先發生」——實測中文端到端評測的時間題只答對 30%。
+  const dateOf = new Map();
+  try {
+    const missing = fragments.filter(f => f.source_table === 'fragment' && !(f.source_date || f.date_label)).map(f => f.id);
+    if (missing.length) {
+      const rows = db.prepare(`SELECT id, source_date FROM memory_fragments WHERE id IN (${missing.map(() => '?').join(',')})`).all(...missing);
+      for (const r of rows) if (r.source_date) dateOf.set(r.id, r.source_date);
+    }
+  } catch (e) { console.error('Librarian: 查詢碎片日期失敗:', e.message); }
+
   // v5.5: 先處理全部碎片（日誌+解密+read_count），同時收集 entity 歸屬
   const processed = [];
   for (const f of fragments) {
     const permission = computePermission(f);
     const days = f._daysAgo ?? f._daysOld;
-    const daysStr = days != null ? `${days}天前` : '?';
+    const sd = f.source_table === 'fragment' ? String(f.source_date || f.date_label || dateOf.get(f.id) || '').slice(0, 10) : '';
+    const wd = weekdayZh(sd);
+    const sdDays = wd ? daysSinceLocalDate(sd) : null;
+    const daysStr = wd ? `記於 ${sd}（${wd}${sdDays != null && sdDays >= 0 ? `，${sdDays}天前` : ''}）`
+        : days != null ? `${days}天前` : '?';
     const preview = f.content ? f.content.slice(0, 30) : '';
     const srcTag = f._isFloated ? '[FLOAT]'
         : f._source === 'BOTH' ? '[BOTH]'

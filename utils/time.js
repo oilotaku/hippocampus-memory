@@ -88,4 +88,36 @@ function parseDbTime(label) {
 /** parseDbTime 的毫秒值；無法解析回傳 NaN（呼叫端自行決定預設） */
 const dbTimeMs = (label) => parseDbTime(label).getTime();
 
-module.exports = { parseDbTime, dbTimeMs, getShanghaiTime, getTimeOfDay, sqlNow, sqlTimeAgo, sqlDaysAgo, sqlTimeAhead, DAY_MS };
+// ── 給 LLM 看的當地時間（UTC+8，與 getShanghaiTime 一致）──
+// DB 存 UTC；直接把 UTC 字串給模型看，當地早上 8 點前的訊息會變成「前一天」，
+// 晚上的聊天看起來像下午，「今天／昨天」的換算因此錯一天。
+const LOCAL_OFFSET_MS = 8 * 3600 * 1000;
+const WEEKDAY_ZH = ['日', '一', '二', '三', '四', '五', '六'];
+
+/** DB 時間（UTC）→ 當地 'YYYY-MM-DD HH:MM'；無法解析回 '' */
+function toLocalMinute(label) {
+    const t = dbTimeMs(label);
+    if (!Number.isFinite(t)) return '';
+    return new Date(t + LOCAL_OFFSET_MS).toISOString().slice(0, 16).replace('T', ' ');
+}
+
+/** 以 'YYYY-MM-DD' 開頭的字串 → '週X'（只看日期本身，與時區無關）；無效回 '' */
+function weekdayZh(s) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(s || ''));
+    if (!m) return '';
+    const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+    if (Number.isNaN(d.getTime()) || d.getUTCDate() !== +m[3]) return '';
+    return '週' + WEEKDAY_ZH[d.getUTCDay()];
+}
+
+/** 當地日期 'YYYY-MM-DD' 距今（當地日曆日）幾天；未來為負數；無效回 null */
+function daysSinceLocalDate(s, now = Date.now()) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(s || ''));
+    if (!m || !weekdayZh(s)) return null;
+    const today = new Date(now + LOCAL_OFFSET_MS);
+    const t = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+    return Math.round((t - Date.UTC(+m[1], +m[2] - 1, +m[3])) / DAY_MS);
+}
+
+module.exports = { parseDbTime, dbTimeMs, getShanghaiTime, getTimeOfDay, sqlNow, sqlTimeAgo, sqlDaysAgo, sqlTimeAhead, DAY_MS,
+    toLocalMinute, weekdayZh, daysSinceLocalDate };

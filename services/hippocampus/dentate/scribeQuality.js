@@ -175,8 +175,24 @@ function findDuplicate(entity, content, candidates) {
     return null;
 }
 
+/**
+ * 原話出自哪一則訊息 → 那則訊息的日期。
+ * msgs = [{ text, date }]（text 為原文、date 為當地 'YYYY-MM-DD'），依時間先後排列。
+ * 一批最多 60 則訊息、可能橫跨數週；整批共用最後一則的日期會把早期的事記到錯的日子。
+ * 找不到（quote 缺漏或對不上）回傳 null，由呼叫端退回批次日期。
+ */
+function quoteSourceDate(quote, msgs) {
+    const q = normalizeText(quote || '');
+    if (q.length < 2) return null;
+    for (const m of msgs || []) {
+        if (m && m.date && normalizeText(m.text || '').includes(q)) return m.date;
+    }
+    return null;
+}
+
 module.exports = {
     normalizeText, validateQuote, filterEntriesByQuote, detectQuoteSource, isAiChitchat,
     normalizedContentHash, isNearDuplicate, findDuplicate,
     AI_QUOTE_TYPES, MAX_QUOTE_LEN,
+    quoteSourceDate,
 };
