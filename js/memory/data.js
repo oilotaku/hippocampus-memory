@@ -197,7 +197,9 @@ export function conById(id) {
     return universe.constellations.find(c => c.id === id) || null;
 }
 
-// 碎片訪問打點（重新整理 decay 亮度），fire-and-forget
+// 碎片訪問打點（重新整理 decay 亮度），fire-and-forget。
+// ⚠️ G4：星圖「點星瀏覽」不可呼叫這個——它會把瀏覽算成回憶（read/access_count、last_accessed_at），
+// 汙染生命週期衰減。目前星圖前端已不再呼叫；函式保留（語意不變）供確實需要標記「被想起」的呼叫端使用。
 export function bumpAccess(starId) {
     if (starId && starId.startsWith('f')) {
         fetch('/api/memory/trace/' + starId.slice(1), AUTH()).catch(() => {});

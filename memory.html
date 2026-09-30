@@ -4,10 +4,15 @@
 <meta charset="UTF-8">
 <title>Memory Constellations</title>
 <link rel="stylesheet" href="/styles/memory.css">
+<!-- 4D 星圖：three.js 已 vendoring 到 /js/vendor/three（不從 CDN 載入），OrbitControls 以 bare specifier 引用 three -->
+<script type="importmap">{"imports":{"three":"/js/vendor/three/three.module.min.js"}}</script>
 </head>
 <body>
 <canvas id="bg"></canvas>
 <canvas id="mc"></canvas>
+<div id="gl-wrap" style="display:none"></div>
+<div id="gl-labels" style="display:none"></div>
+<div id="list-view" style="display:none"></div>
 
 <div id="breadcrumb"></div>
 
@@ -21,6 +26,20 @@
   <button class="tb-action" id="import-btn" title="匯入聊天記錄（JSONL/TXT）">匯入</button>
   <button class="tb-action" id="export-btn" title="匯出記憶庫（JSONL）">匯出</button>
   <span class="tb-count" id="tb-count">— fragments</span>
+</div>
+
+<div id="view-toggle" role="group" aria-label="檢視模式">
+  <button data-mode="4d" title="4D 星圖：3D 空間 + 時間軸（需 WebGL）">4D</button>
+  <button data-mode="2d" title="2D 星圖（原版）">2D</button>
+  <button data-mode="list" title="依時間排序的記憶清單">列表</button>
+</div>
+
+<div id="timebar" style="display:none">
+  <button id="tl-play" title="播放時間軸" aria-label="播放">▶</button>
+  <span class="tl-edge" id="tl-min"></span>
+  <input type="range" id="tl-range" min="0" max="1000" value="1000" aria-label="時間軸">
+  <span class="tl-edge" id="tl-max"></span>
+  <span id="tl-now"></span>
 </div>
 
 <div id="panel">
