@@ -24,3 +24,6 @@ Thumbs.db
 *.tmp
 __pycache__/
 *.pyc
+eval/results/raw/
+eval/cache/
+eval/results/scribe_prompt_dump.json
