@@ -22,20 +22,23 @@ function toNum(v) {
     return null;
 }
 
-// 回傳 { raw:{dim:0..1}, present:bool }；emotions 不是物件或一個維度都認不得 → null
+// 回傳 { raw:{dim:0..1}, valid, total }；emotions 不是物件、或有鍵但一個維度都認不得 → null
+// 空物件 {} = 模型明確表示「沒有明顯情緒」（Scribe 只列高於底噪的維度）→ 全 0
 function sanitizeEmotions(emotions) {
     if (!emotions || typeof emotions !== 'object' || Array.isArray(emotions)) return null;
     const raw = Object.fromEntries(DIMS.map(d => [d, 0]));
-    let seen = 0;
-    for (const [k, v] of Object.entries(emotions)) {
+    const keys = Object.entries(emotions);
+    let valid = 0;
+    for (const [k, v] of keys) {
         const dim = ALIASES[String(k).trim().toLowerCase()] || ALIASES[String(k).trim()];
         if (!dim) continue;
         const n = toNum(v);
         if (n === null) continue;
         raw[dim] = clamp(n, 0, 1);
-        seen++;
+        valid++;
     }
-    return seen ? { raw } : null;
+    if (keys.length && !valid) return null;
+    return { raw, valid, total: keys.length };
 }
 
 // 扣底噪後的八維（不足 0 的截成 0）
@@ -51,15 +54,10 @@ function deriveValence(f) {
     return clamp(pos - neg, -1, 1);
 }
 
-// 信心：模型回了幾個維度（八維齊全 = 1）；缺維度補 0 但信心下調
-function confidenceOf(emotions) {
-    if (!emotions || typeof emotions !== 'object') return 0;
-    let seen = 0;
-    for (const [k, v] of Object.entries(emotions)) {
-        const dim = ALIASES[String(k).trim().toLowerCase()] || ALIASES[String(k).trim()];
-        if (dim && toNum(v) !== null) seen++;
-    }
-    return Math.min(1, seen / DIMS.length);
+// 信心：模型給的鍵裡有多少比例是認得且數值合法的（{} 視為明確的「沒有明顯情緒」= 1）
+function confidenceOf(s) {
+    if (!s) return 0;
+    return s.total ? s.valid / s.total : 1;
 }
 
 // 整批分析：Scribe entry 的 emotions → 要存的欄位；無法解析回 null
@@ -70,7 +68,7 @@ function analyzeEmotions(emotions, cfg = getEmotionConfig()) {
     const intensity = deriveIntensity(f);
     return {
         raw: s.raw, floored: f, intensity, valence: deriveValence(f),
-        confidence: confidenceOf(emotions),
+        confidence: confidenceOf(s),
         informative: intensity > 1e-9,
     };
 }

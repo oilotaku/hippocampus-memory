@@ -11,6 +11,7 @@ const { SLOTS, parseUtc, toSqlUtc, localParts, slotOfHour } = require('./time');
 const { estimate, kalmanStep, zScore, robustResidualSq } = require('./ou');
 
 const DAY_MS = 86400000;
+const TIMELESS_TYPES = new Set(['preference', 'fact', 'entity_new', 'reflection']);
 
 // ── 階段 A ──────────────────────────────────────────────
 
@@ -31,7 +32,8 @@ function applyScribeEmotion(db, fragId, entry, { raisedAt } = {}) {
     const cfg = getEmotionConfig();
     if (!cfg.enabled) return null;
     const an = analyzeEmotions(entry?.emotions, cfg);
-    const eventAt = parseEventAt(entry?.event_at);
+    // 沒有時間性的類型（偏好、個人資料、反思）不會有「事件日期」；模型偶爾拿訊息日期充數，這裡擋掉
+    const eventAt = TIMELESS_TYPES.has(entry?.type) ? null : parseEventAt(entry?.event_at);
     const raised = raisedAt || toSqlUtc(new Date());
     const lp = localParts(raised, cfg.timezone);
     const sets = ['raised_at = ?', 'event_at = ?', 'raised_slot = ?', 'weekday = ?', 'tz = ?'];
@@ -163,7 +165,8 @@ function processOne(db, frag, cfg) {
     for (const d of DIMS) {
         const est = estimate(stats[d], cfg);
         const mu = est.slots[slot].mu;
-        const y = raw[d];
+        // 底噪以下無從分辨（Scribe 也只列高於底噪的維度）→ 觀測值在底噪處截斷，與族群先驗 μ=0.2 同一尺度
+        const y = Math.max(raw[d], cfg.noise_floor);
         const z = zScore(y, mu, est.sigma, cfg.obs_noise);
         if (z >= cfg.anomaly_sigma && f[d] > 0) anomalies.push({ dim: d, z: +z.toFixed(3), dev: +(y - mu).toFixed(4) });
 

@@ -86,6 +86,38 @@ test('範圍檢查與缺值：超出範圍夾住、字串數字接受、非數�
     }
 });
 
+test('稀疏輸出：只列高於底噪的維度，{} = 沒有明顯情緒（全 0、信心 1）；有鍵但全不認得 → 視為沒給', async () => {
+    await run([entry({ emotions: { anger: 0.8 } })], M());
+    let f = lastRow();
+    assert.equal(f.emo_anger, 0.8);
+    assert.equal(f.emo_joy, 0);
+    assert.equal(f.emotion_conf, 1);
+    assert.ok(Math.abs(f.intensity - 0.6) < 1e-9);
+    await run([entry({ emotions: {} })], M());
+    f = lastRow();
+    assert.equal(f.emo_anger, 0);
+    assert.equal(f.intensity, 0);
+    assert.equal(f.emotion_conf, 1);
+    assert.equal(f.emotional_weight, 0.1);
+    await run([entry({ emotions: { foo: 1, bar: 'x' }, emotional_weight: 0.5 })], M());
+    f = lastRow();
+    assert.equal(f.intensity, null);
+    assert.equal(f.emotional_weight, 0.5);
+    await run([entry({ emotions: [0.5, 0.5] })], M());
+    assert.equal(lastRow().intensity, null);
+});
+
+test('event_at：沒有時間性的類型（偏好、個人資料、反思）即使模型填了日期也丟掉；事件類保留', async () => {
+    for (const type of ['preference', 'fact', 'entity_new', 'reflection']) {
+        await run([entry({ type, emotions: EIGHT(), event_at: '2026-05-01' })], M());
+        assert.equal(lastRow().event_at, null, type);
+    }
+    for (const type of ['event', 'intention', 'state']) {
+        await run([entry({ type, emotions: EIGHT(), event_at: '2026-05-01' })], M());
+        assert.equal(lastRow().event_at, '2026-05-01', type);
+    }
+});
+
 test('event_at：無效值（不存在的日期、相對詞、非字串）→ null；YYYY-MM 保留', async () => {
     for (const bad of ['2026-02-30', '明天', 20260615, null, '', '2026-13-01']) {
         await run([entry({ emotions: EIGHT(), event_at: bad })], M());
@@ -153,7 +185,7 @@ test('階段 B：Scribe 結束後已更新個人基準並記錄轉折', async ()
 
 test('prompt：啟用時含 emotions／event_at 的欄位與規則；記錄增加的字數（估 token）', async () => {
     await run([entry({ emotions: EIGHT() })], M());
-    assert.match(lastSystemPrompt, /"emotions": \{"joy"/);
+    assert.match(lastSystemPrompt, /"emotions": \{"anger": 0\.8/);
     assert.match(lastSystemPrompt, /"event_at"/);
     assert.match(lastSystemPrompt, /## emotions 與 event_at/);
     const added = emotion.prompt.FIELDS.length + emotion.prompt.RULES.length;
