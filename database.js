@@ -1209,6 +1209,14 @@ function initDatabase() {
         }
     }
 
+    // v105: memory_fragments.quote — Scribe 原话佐证（逐字取自来源消息的片段，≤60 字）
+    runMigration(105, 'memory_fragments.quote — Scribe 原话佐证',
+        `ALTER TABLE memory_fragments ADD COLUMN quote TEXT;`);
+
+    // v106: memory_fragments.evidence_count — 跨天重复出现时累加证据，而不是丢弃
+    runMigration(106, 'memory_fragments.evidence_count — 重复证据累计',
+        `ALTER TABLE memory_fragments ADD COLUMN evidence_count INTEGER DEFAULT 1;`);
+
     // 种子数据：初始本体论类别（仅当表为空时插入）
     try {
         const existingRoots = db.prepare('SELECT COUNT(*) as c FROM memory_ontology WHERE parent_id IS NULL').get();

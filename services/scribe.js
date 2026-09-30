@@ -16,7 +16,7 @@ try { ({ getActiveCorrections, getMergedGuidelines } = require('./correction'));
 const { chromaDBOperation } = require('./memory');
 const { WORLD_CONTEXT } = require('./worldContext');
 const { renderTagSpecForPrompt } = require('./tagRouting');
-const { hashFragmentContent } = require('../utils/text');
+const { filterEntriesByQuote, normalizedContentHash, findDuplicate } = require('./scribeQuality');
 const { spawn } = require('child_process');
 const path = require('path');
 
@@ -54,6 +54,10 @@ function indexNewFragments(fragmentIds) {
         let stdout = '';
         python.stdout.on('data', (d) => stdout += d.toString());
         python.stderr.on('data', (d) => console.error('[Scribe] Chroma index error:', d.toString()));
+        python.on('error', (e) => {  // Chroma/python 不可用：降级，不让整批失败
+            console.error('[Scribe] Chroma index 无法启动（降级略过）:', e.message);
+            resolve(0);
+        });
         python.on('close', (code) => {
             if (code === 0) {
                 try {
@@ -230,6 +234,8 @@ ${USER.name}同一天可能发生多个独立的事件——它们只是碰巧�
       "entities": [
         {"name": "${USER.name}|${AI.name}|人名|地名|作品名|事件名", "relation": "related_to|knows|visited|consumed|created|attended|cares_for"}
       ],
+      "quote": "从来源消息中【逐字复制】的一段原话（≤60字，不得改写/概括/补字）。普通 entry 必须来自${USER.name}的发言；找不到原话就不要输出这条 entry",
+      "quote_from": "user（默认）|ai——仅当这条是上文允许提取的两类${AI.name}发言（情绪感知/强烈情感表达，type 只能是 observation|state|reflection）时才填 ai，此时 quote 必须逐字取自${AI.name}的发言",
       "content": "第三人称，必须以人名或实体名开头或句中明确点名（${USER.name}/${AI.name}/具体人名/地名/作品名），禁止用他/她/承认/表示等无名主语开头；不超过80字",
       "emotional_weight": 参见评分锚定表（必填，不得省略）",
       "value_tags": [],
@@ -743,6 +749,26 @@ async function runScribe(messages, since) {
     const allMsgIds = [...buffer.map(m => m.id), ...messages.map(m => m.id)];
     const sourceMsgIds = JSON.stringify(allMsgIds);
 
+    // ── 原话佐证：quote 必须是来源消息的逐字子串，否则丢弃（防幻觉写入记忆）──
+    // 来源只取本次处理的消息（buffer 仅作背景），截断长度与喂给 LLM 的一致（500 字）。
+    let quoteDropped = 0, quoteDroppedByType = {};
+    if (Array.isArray(result.entries) && result.entries.length) {
+        const srcs = { user: [], ai: [] };
+        for (const m of messages) {
+            if (m.message_type === 'image') continue;
+            srcs[m.sender === 'user' ? 'user' : 'ai'].push(dec(m).slice(0, 500));
+        }
+        const f = filterEntriesByQuote(result.entries, srcs);
+        result.entries = f.kept;
+        quoteDropped = f.dropped;
+        quoteDroppedByType = f.droppedByType;
+        if (quoteDropped > 0) {
+            const detail = Object.entries(quoteDroppedByType).map(([t, n]) => `${t}:${n}`).join(',');
+            console.log(`[Scribe] 原话佐证：丢弃 ${quoteDropped} 条（无/伪造 quote；${detail}）`);
+        }
+    }
+    let evidenceMerged = 0;
+
     if (result.entries?.length) {
         // 回环过滤：向量去重，防止 {ai} 复述已有记忆被重新提取
         let skipIndices = new Set();
@@ -785,22 +811,29 @@ async function runScribe(messages, since) {
         }
 
         const insert = db.prepare(`
-            INSERT INTO memory_fragments (type, entity, content, emotional_weight, source, source_date, source_msg_ids, is_rp, chat_mode, value_tags, priority, content_hash)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO memory_fragments (type, entity, content, emotional_weight, source, source_date, source_msg_ids, is_rp, chat_mode, value_tags, priority, content_hash, quote)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
-        // 确定性硬去重：同「内容 + 同一天」命中已有碎片即跳过（零 LLM/零向量成本）
-        // 与上面的 ChromaDB 向量去重（find_duplicates）互补——哈希抓字面重复，向量抓语义近重复。
-        //
-        // ⚠️ 必须带 source_date 条件：跨天的「同一句话」是 source_diversity（独立日期证据）的来源，
-        //    是认知模型判断稳定特质（≥3 独立日期）的信号，绝不能当重复合并。
-        //    只有同一天的字面重复（Scribe 重复提取同一事件）才该去重。
-        const findHashDup = db.prepare('SELECT id FROM memory_fragments WHERE content_hash = ? AND source_date = ? LIMIT 1');
+        // 确定性去重（同实体、active 碎片，**不限日期**）：正规化后内容相同，或近似重复且无关键差异
+        // （数字/星期/时间词/换掉一个词 → 视为不同事实，不合并）。
+        // 命中时不新增碎片，改为累加既有碎片的证据（confidence +0.05 上限 1.0，evidence_count +1）。
+        // 与 ChromaDB 向量去重互补——嵌入分不清「週三/週五」「貓/狗」，所以本地规则优先于向量。
+        const candidateStmt = db.prepare(`
+            SELECT id, content, content_hash, source_msg_ids, quote FROM memory_fragments
+            WHERE entity = ? AND status = 'active' ORDER BY id DESC LIMIT 400
+        `);
+        const bumpStmt = db.prepare(`
+            UPDATE memory_fragments
+            SET confidence = MIN(1.0, COALESCE(confidence, 0.5) + 0.05),
+                evidence_count = COALESCE(evidence_count, 1) + 1,
+                quote = COALESCE(quote, ?)
+            WHERE id = ?
+        `);
         const insertEntityLink = db.prepare(`
             INSERT OR IGNORE INTO fragment_entities (fragment_id, entity_id, relation, confidence, classified_by, created_at)
             VALUES (?, ?, ?, 0.70, 'scribe_extract', datetime('now'))
         `);
         for (let i = 0; i < result.entries.length; i++) {
-            if (skipIndices.has(i)) continue;
             const entry = result.entries[i];
 
             // ── Entity handling: support both legacy "entity" (string) and new "entities" (array) ──
@@ -829,14 +862,19 @@ async function runScribe(messages, since) {
             // 'high' = 自我剖白 / 核心价值观表达 / 身份认同声明
             const priority = entry.priority || 'normal';
 
-            // ── 确定性硬去重：同内容 + 同一天 ──
-            const contentHash = hashFragmentContent(primaryEntity, entry.content);
-            const hashDup = findHashDup.get(contentHash, sourceDate);
+            // ── 本地去重 + 证据累加（优先于 Chroma 向量去重）──
+            const contentHash = normalizedContentHash(primaryEntity, entry.content);
+            const hashDup = findDuplicate(primaryEntity, entry.content, candidateStmt.all(primaryEntity));
             if (hashDup) {
                 hashDedupCount++;
-                console.log(`[Scribe] hash去重: "${String(entry.content).slice(0, 40)}" = 已有片段 #${hashDup.id}（同天）`);
+                if (hashDup.source_msg_ids !== sourceMsgIds) {  // 同一批消息重跑不算新证据
+                    bumpStmt.run(String(entry.quote || '').trim(), hashDup.id);
+                    evidenceMerged++;
+                }
+                console.log(`[Scribe] 去重: "${String(entry.content).slice(0, 40)}" = 既有片段 #${hashDup.id}，证据+1`);
                 continue;
             }
+            if (skipIndices.has(i)) continue;
 
             const info = insert.run(
                 entry.type || 'observation',
@@ -850,7 +888,8 @@ async function runScribe(messages, since) {
                 msgChatMode,
                 valueTags,
                 priority,
-                contentHash
+                contentHash,
+                String(entry.quote || '').trim()
             );
             const fragId = info.lastInsertRowid;
             newFragmentIds.push(fragId);
@@ -944,7 +983,7 @@ async function runScribe(messages, since) {
         VALUES (?, ?, ?, 'done')
     `).run(safeUntil, messages.length, written);
 
-    console.log(`[Scribe] 完成：处理${messages.length}条消息，写入${written}条记忆片段${hashDedupCount > 0 ? `（hash去重${hashDedupCount}条）` : ''}`);
+    console.log(`[Scribe] 完成：处理${messages.length}条消息，写入${written}条记忆片段${hashDedupCount > 0 ? `（重复${hashDedupCount}条，证据累加${evidenceMerged}）` : ''}${quoteDropped > 0 ? `（quote丢弃${quoteDropped}）` : ''}`);
 
     // 新碎片写入完成 → 通知 Archivist Agent（事件驱动，秒级响应）
     if (written > 0) {
@@ -955,6 +994,7 @@ async function runScribe(messages, since) {
             console.error('[Scribe] Archivist 事件发送失败:', e.message);
         }
     }
+    return { written, duplicates: hashDedupCount, evidenceMerged, quoteDropped, quoteDroppedByType };
 }
 
-module.exports = { checkAndRunScribe, indexNewFragments };
+module.exports = { checkAndRunScribe, indexNewFragments, runScribe };
