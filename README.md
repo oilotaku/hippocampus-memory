@@ -28,9 +28,10 @@ A self-organizing long-term memory system for AI assistants and companions. It e
 | Retrieval timing gate: skip memory lookup for greetings and commands, adaptive result count, context-triggered surfacing, upcoming-event reminders, capped hard triggers | Working (on by default; `recall.gate=false` restores the old behaviour) |
 | `injected_count` (put in the prompt) split from `cited_count` (actually used) | Working; `cited_count` is fed by the `recall_memory` tool, and by `recallGate.markCitedFromReply()` for hosts that can pass the assistant's reply |
 | Eight-dimension emotion engine: per-fragment scores, personal time-of-day baselines, turning-point attribution to entities, anniversaries, fading | Working (on by default, `emotion.enabled`) |
-| Refuses instead of inventing: asked about something never mentioned, the memory system answers "not mentioned" (short set 35/35, 80k-token set 117/118) while answering from the whole transcript invented an answer in a third of cases at 80k tokens (39/59 correct refusals) | Measured; holds with the default prompt. With `scribe.prompt=v2` it drops on long histories (78% → 65% on lure questions), see [Verification details](#verification-details) |
+| Does not invent answers: asked about something never mentioned or with a wrong detail, the memory system says it is not mentioned or corrects the detail (short set 35/35, 80k-token set 118/118), while answering from the whole transcript invented an answer in 9 of 59 such questions at 80k tokens | Measured with both extraction prompts (long set 71/74 each), see [Verification details](#verification-details) |
 | Scribe extraction no longer loses whole batches: truncated replies are salvaged or split, a failed batch stops the run instead of being skipped, each batch gets the messages right before it as context | Working (see [Verification details](#verification-details)) |
-| Scribe prompt v2: half the length, one consistent "record every concrete detail" rule instead of conflicting keep-it-short / never-miss-anything rules | Optional (`scribe.prompt=v2`); default stays `legacy`, see [Verification details](#verification-details) |
+| Scribe prompt v2: half the length, one consistent "record every concrete detail" rule instead of conflicting keep-it-short / never-miss-anything rules | Working (default; `scribe.prompt=legacy` restores the original prompt byte for byte) |
+| Pre-answer check (CA1 comparator): when a question names a concrete detail, one extra model call checks it against the retrieved memories and adds a `<memory_check>` note when they disagree or say nothing | Optional (`recall.verify`, off by default); measured no gain, see [Verification details](#verification-details) |
 | Retrieval ranking v2: entities boost instead of flooding, no penalty for full-text-only hits, time decay orders but never filters | Working (on by default; `librarian.ranking=legacy` restores the old ranking) |
 | Retrieval benchmark on LoCoMo and a Traditional Chinese synthetic set (`eval/`) | Done; see [Retrieval evaluation](#retrieval-evaluation) |
 | Time information: local time and weekday for the extractor, per-memory conversation dates, dates shown when memories are injected | Working |
@@ -208,11 +209,13 @@ Personalization lives here: user and assistant names, relationship, and colors. 
 | `recall.surface_idle_hours` | 6 | Idle hours before the next message may bring up an old, never-injected fragment; fragments created on the same month and day in an earlier year also surface |
 | `recall.surface_cooldown_days / surface_max / surface_noise` | 7 / 2 / 0.15 | Cooldown after a fragment surfaces, how many may surface at once, and the Gaussian jitter used when choosing among candidates |
 | `recall.prospective_days / prospective_max` | 7 / 3 | Events dated within this many days are added to an upcoming-events block even if the message did not match them. Dates are parsed from fragment text (`M月D日`, `M/D`, `下週X`, `週X`, `明天`, ...) relative to when the fragment was written; an `event_at` column is used if present |
+| `recall.verify` | false | Pre-answer check (CA1). When the message names a weekday, date, number, time word or known entity and memories were retrieved, one model call (temperature 0) judges whether the memories support it: `supported`, `contradicted` or `unknown`. For the last two a `<memory_check>` block after the memories tells the answering model not to use a near-miss memory as the answer. A failed or slow check is skipped. Off by default because it measured no gain |
+| `recall.verify_max_memories / verify_timeout_ms` | 8 / 30000 | Memories shown to the check, and how long to wait for it |
 | `recall.hard_trigger_max` | 3 | Most hard-trigger memories injected per message; tags now match on two-character tokens instead of raw substrings |
 | `recall.cite_min_overlap / cite_min_shared` | 0.3 / 3 | How much of a fragment's two-character tokens must appear in a reply for `markCitedFromReply()` to count it as cited |
 | `scribe.max_output_tokens` | 16384 | Output limit for one extraction batch. The original fixed 4096 was below what a 60-message batch needs (median about 5,500-6,100 tokens), so most batches were truncated and, before this fix, discarded. Truncated replies are now split in half and retried, so a lower limit costs extra calls rather than memories |
 | `scribe.temperature` | 0.3 | Extraction temperature; 0 is allowed |
-| `scribe.prompt` | `legacy` | Extraction prompt. `v2` is the reorganized prompt (4,077 instead of 9,507 characters; records every concrete detail the user mentions and leaves duplicates to the deterministic deduplication). It extracts more, more consistently, and answered more questions correctly, but on long histories it made lure questions ("not mentioned" answers that differ from a real fact by one detail) easier to get wrong; see [Verification details](#verification-details) |
+| `scribe.prompt` | `v2` | Extraction prompt. `v2` is the reorganized prompt (4,077 instead of 9,507 characters; records every concrete detail the user mentions and leaves duplicates to the deterministic deduplication). It extracts more, more consistently, and answered more questions correctly without inventing more. `legacy` is the original prompt, locked byte for byte by a test |
 | `librarian.ranking` | `v2` | Retrieval ranking. `legacy` restores the original: entity channel injects its latest 10 fragments at fixed ranks, full-text-only hits ×0.7, time decay used as a score cutoff |
 | `librarian.entity_boost` | 0.1 | Candidates already found by full text or vectors that link to an entity named in the message get relevance × (1 + boost). The user's and assistant's own names never trigger it |
 | `librarian.fts_only_penalty` | 1.0 | Relevance multiplier for results found by full text only (no vector confirmation) |
@@ -309,19 +312,21 @@ What this shows:
 
 - **The extraction model matters most.** The 8B model wrote about half as many memories and none of the dates, and took 3.7 hours on CPU for what Claude did in 4 minutes.
 - **Extraction varies a lot between runs.** The same code on the same conversation scored 36 and 19 correct in two runs, a larger swing than any single change measured so far.
-- **The memory system refuses better.** On questions whose answer never came up it said "not mentioned" 35/35 times; the whole-transcript baseline invented an answer twice.
+- **The memory system invents less.** On questions whose answer never came up it said "not mentioned" or corrected the detail 35/35 times; the whole-transcript baseline invented an answer twice.
 - **Short histories do not need a memory system.** At under 10k tokens, putting the transcript in the prompt is simply more accurate.
 - **Longer histories did not close the gap, up to about 80k tokens.** The same comparison on longer synthetic sets (two conversations each):
 
   | History length | Whole transcript | Memory system (two runs) | Gap |
   |---|---|---|---|
-  | about 7.8k tokens (6 sessions) | 86% | 68% | 18 points |
-  | about 26k tokens (20 sessions) | 76% | 65% | 11 points |
-  | about 80k tokens (60 sessions) | 84% | 69% | 15 points |
+  | about 7.8k tokens (6 sessions) | 86% | 69% | 17 points |
+  | about 26k tokens (20 sessions) | 81% | 71% | 10 points |
+  | about 80k tokens (60 sessions) | 88% | 69% | 19 points |
 
-  Claude Haiku answered just as well with an 80k-token transcript as with a short one, so no crossover appeared. What did change with length is invention: on questions whose answer never came up, the whole-transcript baseline made something up in a third of cases at 80k tokens (39/59 correct refusals), while the memory system refused correctly 117/118 times. The memory system's losses are concentrated in multi-hop questions (43% vs 94%) and single facts the extractor skipped (70% vs 96%), which points back at extraction rather than retrieval.
+  These memory-system rows use the original `legacy` extraction prompt; with the current default (`v2`) the short and long sets reach 79% and 78%. Claude Haiku answered just as well with an 80k-token transcript as with a short one, so no crossover appeared. What did change with length is invention: on questions whose answer never came up, the whole-transcript baseline made something up in 9 of 59 cases at 80k tokens (for example giving one dog's allergy to another dog, or one weekday's class price for another weekday), while the memory system answered correctly 118/118 times. The memory system's losses are concentrated in multi-hop questions (43% vs 94%) and single facts the extractor skipped (70% vs 96%), which points back at extraction rather than retrieval.
 - **The original extractor silently dropped most batches.** Its 4,096-token output limit truncated most replies, a truncated reply discarded the whole batch, and the next successful batch moved the cursor past it. With that limit reproduced, only 13% of the evidence was ever stored. The evaluation shim had not applied the limit, so earlier runs did not show this. After the fix the same setup keeps 79%. See [Verification details](#verification-details).
-- **A shorter, consistent extraction prompt helps most.** Prompt v2 (`scribe.prompt=v2`) raised the short set from 68% to 79% (the whole-transcript baseline is 86%) and the long set from 65% to 68%. It also made extraction steadier: evidence coverage went from 78% ± 11% to 86% ± 8% across repeated runs. The cost is about 25% more memories, which on the long set made lure questions slip from 78% to 65% correct refusals. The default stays `legacy` until that is addressed.
+- **A shorter, consistent extraction prompt helps most.** Prompt v2, now the default, raised the short set from 69% to 79% (the whole-transcript baseline is 86%) and the long set from 71% to 78% (baseline 81%). It also made extraction steadier: evidence coverage went from 78% ± 11% to 86% ± 8% across repeated runs. It stores about 25% more memories without inventing more answers.
+- **The apparent lure-question problem was a grading artifact.** Trick questions such as "Is her pottery class on Saturday morning?" (it is on Sunday) were first graded as correct only when the answer was a refusal, so "No, it is on Sunday morning" counted as wrong. Graded so that rejecting or correcting the false premise also counts, every memory-system setup scores 94-100% on these questions, and the earlier "v2 drops lure questions from 78% to 65%" disappears (71/74 for both prompts on the long set). All tables now use this rule.
+- **The pre-answer check (CA1) did not help.** With lure questions already near 100%, it has nothing left to fix there, and on answerable questions it was within run-to-run noise on the short set (117/144 against 111 and 116) and slightly lower on the long set (75% and 74% against 80% and 75%). It stays available as `recall.verify` but off.
 - **The time fix helped time questions slightly** (22/60 to 26/60 over two runs each); the overall score did not move beyond run-to-run noise.
 
 
@@ -334,7 +339,7 @@ How a run is checked:
 1. **Extraction**: the Scribe processes the conversation in batches of up to 60 messages; every stored memory must quote its source message word for word.
 2. **Recall**: for each question the recall gate decides whether to search, then full text and the vector channel retrieve memories, which are injected with their conversation dates.
 3. **Answering**: Claude Haiku answers from the injected memories only, or says "not mentioned".
-4. **Grading**: an LLM compares the answer with the gold answer; unanswerable questions count as correct only when the answer is a refusal.
+4. **Grading**: an LLM compares the answer with the gold answer. Unanswerable questions (a premise that is wrong or never came up) count as correct when the answer says it is not mentioned or explicitly rejects or corrects the premise, and wrong when it answers as if the premise were true.
 5. **Tracing**: each question's evidence turns are checked against the turns the stored memories quote and the memories that were retrieved, which locates where a wrong answer lost the information.
 
 #### Datasets
@@ -349,26 +354,29 @@ All three sets were generated with `eval/synth/generate_zh.py`: two Claude Haiku
 
 #### Accuracy by question type
 
-Graded by Claude Sonnet (see the grader comparison below). Answers were always produced by Claude Haiku 4.5; the memory system used full text plus a bge-m3 vector channel. "Unanswerable" counts correct refusals.
+Graded by Claude Sonnet (see the grader comparison below). Answers were always produced by Claude Haiku 4.5; the memory system used full text plus a bge-m3 vector channel. "Unanswerable" counts answers that say "not mentioned" or reject the false premise. The CA1 rows reuse the memories extracted in the prompt v2 runs, so they differ from those runs only by the check and by answering noise. Rows without "prompt v2" used the `legacy` extraction prompt.
 
 | Set | Setup | Overall | Multi-hop | Time | Reasoning | Single fact | Unanswerable |
 |---|---|---|---|---|---|---|---|
 | Short | Whole transcript in the prompt | **124/144 (86%)** | 18/21 (86%) | 17/30 (57%) | 8/9 (89%) | 48/49 (98%) | 33/35 (94%) |
 | Short | Memory system, Claude extracting, before time fix, run 1 | **104/144 (72%)** | 15/21 (71%) | 10/30 (33%) | 8/9 (89%) | 36/49 (73%) | 35/35 (100%) |
-| Short | Memory system, Claude extracting, before time fix, run 2 | **91/144 (63%)** | 12/21 (57%) | 12/30 (40%) | 5/9 (56%) | 29/49 (59%) | 33/35 (94%) |
+| Short | Memory system, Claude extracting, before time fix, run 2 | **92/144 (64%)** | 12/21 (57%) | 12/30 (40%) | 5/9 (56%) | 29/49 (59%) | 34/35 (97%) |
 | Short | Memory system, Claude extracting, after time fix, run 1 | **97/144 (67%)** | 11/21 (52%) | 13/30 (43%) | 4/9 (44%) | 35/49 (71%) | 34/35 (97%) |
-| Short | Memory system, Claude extracting, after time fix, run 2 | **101/144 (70%)** | 12/21 (57%) | 13/30 (43%) | 8/9 (89%) | 35/49 (71%) | 33/35 (94%) |
-| Short | Memory system, qwen3-8b extracting (local CPU) | **58/144 (40%)** | 4/21 (19%) | 0/30 (0%) | 3/9 (33%) | 17/49 (35%) | 34/35 (97%) |
+| Short | Memory system, Claude extracting, after time fix, run 2 | **102/144 (71%)** | 12/21 (57%) | 13/30 (43%) | 8/9 (89%) | 35/49 (71%) | 34/35 (97%) |
+| Short | Memory system, qwen3-8b extracting (local CPU) | **59/144 (41%)** | 4/21 (19%) | 0/30 (0%) | 3/9 (33%) | 17/49 (35%) | 35/35 (100%) |
 | Short | Memory system, Claude extracting, prompt v2, run 1 | **111/144 (77%)** | 15/21 (71%) | 18/30 (60%) | 7/9 (78%) | 36/49 (73%) | 35/35 (100%) |
 | Short | Memory system, Claude extracting, prompt v2, run 2 | **116/144 (81%)** | 17/21 (81%) | 19/30 (63%) | 6/9 (67%) | 41/49 (84%) | 33/35 (94%) |
-| Long | Whole transcript in the prompt | **93/123 (76%)** | 13/16 (81%) | 11/24 (46%) | 5/7 (71%) | 36/39 (92%) | 28/37 (76%) |
-| Long | Memory system, Claude extracting, run 1 | **82/123 (67%)** | 9/16 (56%) | 12/24 (50%) | 3/7 (43%) | 30/39 (77%) | 28/37 (76%) |
-| Long | Memory system, Claude extracting, run 2 | **79/123 (64%)** | 7/16 (44%) | 8/24 (33%) | 3/7 (43%) | 31/39 (79%) | 30/37 (81%) |
-| Long | Memory system, Claude extracting, prompt v2, run 1 | **88/123 (72%)** | 10/16 (62%) | 12/24 (50%) | 4/7 (57%) | 37/39 (95%) | 25/37 (68%) |
-| Long | Memory system, Claude extracting, prompt v2, run 2 | **80/123 (65%)** | 11/16 (69%) | 10/24 (42%) | 3/7 (43%) | 33/39 (85%) | 23/37 (62%) |
-| Very long | Whole transcript in the prompt | **199/238 (84%)** | 32/34 (94%) | 35/48 (73%) | 12/13 (92%) | 81/84 (96%) | 39/59 (66%) |
+| Short | Prompt v2 run 1 memories + CA1 check | **117/144 (81%)** | 16/21 (76%) | 18/30 (60%) | 6/9 (67%) | 42/49 (86%) | 35/35 (100%) |
+| Long | Whole transcript in the prompt | **100/123 (81%)** | 13/16 (81%) | 11/24 (46%) | 5/7 (71%) | 36/39 (92%) | 35/37 (95%) |
+| Long | Memory system, Claude extracting, run 1 | **89/123 (72%)** | 9/16 (56%) | 12/24 (50%) | 3/7 (43%) | 30/39 (77%) | 35/37 (95%) |
+| Long | Memory system, Claude extracting, run 2 | **85/123 (69%)** | 7/16 (44%) | 8/24 (33%) | 3/7 (43%) | 31/39 (79%) | 36/37 (97%) |
+| Long | Memory system, Claude extracting, prompt v2, run 1 | **99/123 (80%)** | 10/16 (62%) | 12/24 (50%) | 4/7 (57%) | 37/39 (95%) | 36/37 (97%) |
+| Long | Memory system, Claude extracting, prompt v2, run 2 | **92/123 (75%)** | 11/16 (69%) | 10/24 (42%) | 3/7 (43%) | 33/39 (85%) | 35/37 (95%) |
+| Long | Prompt v2 run 1 memories + CA1 check | **92/123 (75%)** | 10/16 (62%) | 9/24 (38%) | 5/7 (71%) | 33/39 (85%) | 35/37 (95%) |
+| Long | Prompt v2 run 2 memories + CA1 check | **91/123 (74%)** | 10/16 (62%) | 11/24 (46%) | 4/7 (57%) | 30/39 (77%) | 36/37 (97%) |
+| Very long | Whole transcript in the prompt | **210/238 (88%)** | 32/34 (94%) | 35/48 (73%) | 12/13 (92%) | 81/84 (96%) | 50/59 (85%) |
 | Very long | Memory system, Claude extracting, run 1 | **167/238 (70%)** | 16/34 (47%) | 27/48 (56%) | 7/13 (54%) | 58/84 (69%) | 59/59 (100%) |
-| Very long | Memory system, Claude extracting, run 2 | **160/238 (67%)** | 13/34 (38%) | 22/48 (46%) | 8/13 (62%) | 59/84 (70%) | 58/59 (98%) |
+| Very long | Memory system, Claude extracting, run 2 | **161/238 (68%)** | 13/34 (38%) | 22/48 (46%) | 8/13 (62%) | 59/84 (70%) | 59/59 (100%) |
 
 #### Extraction stability: prompt v2 versus legacy
 
@@ -419,9 +427,28 @@ Each row is one conversation in one run. "Evidence turns covered" is how many di
 | Very long | Claude extracting, run 2 | zh-21 | 325 | 236/960 | 81/120 (68%) | 24 | 9 | 6 |
 | Very long | Claude extracting, run 2 | zh-22 | 367 | 261/960 | 79/118 (67%) | 11 | 12 | 15 |
 
+#### Unanswerable questions: refusal-only versus premise-aware grading
+
+Most unanswerable questions are lures: they change one detail of a real fact ("Is the baking class on Thursday evening?" when it is on Friday). The first grading rule accepted only a refusal; the current rule also accepts an answer that rejects or corrects the premise, and was applied by Claude Sonnet to the same answers.
+
+| Set | Setup | Refusal only | Premise-aware |
+|---|---|---|---|
+| Long | Whole transcript in the prompt | 28/37 | 35/37 |
+| Long | Memory system, legacy prompt, two runs | 58/74 (78%) | 71/74 (96%) |
+| Long | Memory system, prompt v2, two runs | 48/74 (65%) | 71/74 (96%) |
+| Long | Prompt v2 memories + CA1 check, two runs | 54/74 (73%) | 71/74 (96%) |
+| Very long | Whole transcript in the prompt | 39/59 | 50/59 |
+| Very long | Memory system, legacy prompt, two runs | 117/118 | 118/118 |
+
+On the short set the two rules differ by at most one question per run.
+
+#### Pre-answer check (CA1)
+
+`recall.verify=true`, answering with the memories already extracted in the prompt v2 runs (two long-set runs, one short-set run). The check ran on 185 of the 390 questions; the others had no concrete detail or no retrieved memory. Its verdicts were mostly right: 17 of the 74 long-set lure questions were judged `contradicted` with the correct differing detail (Saturday vs Sunday, 1,500 vs 2,000), and the answers then corrected the premise. But the answers without the check already did the same, so the score did not move. On answerable questions the check occasionally talked the answerer out of a correct answer (for example judging "which evening does she jog now" as contradicted because older memories named another day), which, together with answering noise, explains the slightly lower long-set score. Extra cost: one short model call (at most eight memories) per checked question.
+
 #### Grader comparison
 
-Every run was graded twice: by Claude Haiku during the run, and afterwards by Claude Sonnet reviewing all answers of a conversation at once. Haiku is stricter (it marks answers with extra correct detail as wrong). Comparisons between setups hold under either grader.
+Every run was graded twice: by Claude Haiku during the run, and afterwards by Claude Sonnet reviewing all answers of a conversation at once. Haiku is stricter (it marks answers with extra correct detail as wrong). Comparisons between setups hold under either grader. This table uses the original refusal-only rule for unanswerable questions in both columns.
 
 | Set | Setup | Haiku grader | Sonnet grader | Agreement |
 |---|---|---|---|---|
@@ -447,9 +474,9 @@ Cost of all end-to-end runs above, at API-equivalent prices through the Claude C
 - **Mixed scripts in search (mitigated).** Indexing and querying fold Simplified and Traditional characters together (character-by-character, `utils/zhNormalize.js`), so a Traditional query finds Simplified fragments and vice versa. Folding is per character, not per word, so regional vocabulary differences (e.g. 软件 / 軟體) are not bridged. Existing databases rebuild their search index once on the first start after upgrading.
 - **Local models need a context of at least 8k tokens.** The Scribe extraction prompt is about 5.4k tokens with `scribe.prompt=legacy` (about 2.3k with `v2`) (Traditional Chinese tokenizes about 10% longer than Simplified). With Ollama's default `num_ctx` of 4096 the prompt is silently truncated and an 8B model stops returning `type`/`quote`, so every entry is dropped. Create a model variant with `PARAMETER num_ctx 8192` (or set `OLLAMA_CONTEXT_LENGTH`).
 - **Assistant replies get extracted.** In testing with an 8B local model, half of the extracted fragments were the assistant's own small talk. The small-talk word list is Chinese only, so English small talk is not filtered.
-- **Extraction is tuned for Chinese.** The 60-character limit on verbatim quotes is too short for English sentences, and the Scribe reserves 4,096 output tokens, which leaves little room for input in an 8k context.
+- **Extraction is tuned for Chinese.** The 60-character limit on verbatim quotes is too short for English sentences, and the Scribe reserves up to 16,384 output tokens (`scribe.max_output_tokens`), more than an 8k-context local model has; lower it there and let truncated batches be split.
 - **Messages sent in the same second can be skipped.** The extraction cursor is a timestamp and the next run reads messages strictly after it, so a message with exactly the same timestamp as the last processed one is never extracted.
-- **Extraction is unstable and drops details.** With the default prompt, two runs of the same conversation can differ by a dozen memories, and small details (who did a chore, the name of a stretching exercise) are often skipped. `scribe.prompt=v2` reduces both, but on long histories the extra memories make the answerer more likely to accept a near-miss memory for a lure question; checking each claim against the cited memory before replying (the planned CA1 step) is the intended fix. See [Verification details](#verification-details).
+- **Extraction is unstable and drops details.** With the default prompt, two runs of the same conversation can differ by a dozen memories, and small details (who did a chore, the name of a stretching exercise) are often skipped. The default `v2` prompt reduces both but does not remove them. See [Verification details](#verification-details).
 - **English conversations are stored in Chinese.** The Scribe prompt is written in Chinese, so English conversations end up as Chinese memories that English questions rarely match. End-to-end evaluation on LoCoMo is paused until this and the quote length are fixed.
 - **Entity resolution is broken upstream.** `entityResolver.js` reads a column `related_entity_ids` that no migration creates.
 - **The vector channel needs ChromaDB.** Without it, search falls back to full text and entities only.
@@ -487,8 +514,9 @@ This version would not exist without the foundation they built. The original doc
 | Retrieval ranking | Ranking v2 (entity boost, no full-text penalty, decay orders only), with a LoCoMo and Traditional Chinese retrieval benchmark |
 | Time information | Messages reach the extractor in local time with the weekday (they were in UTC), each memory keeps the date of the message its quote came from, and injected memories show that date instead of "0 days ago" |
 | Extraction reliability | Truncation-tolerant parsing and halving instead of discarding a batch; failed batches stop the run instead of being skipped (parse failures shrink the batch and finally skip a single unreadable message, connection failures only wait); each batch gets its own preceding messages as context; chat mode decided from the batch itself; output limit and temperature configurable |
-| Extraction prompt | Optional reorganized Scribe prompt (`scribe.prompt=v2`): half the length, one consistent coverage rule, same output format; the original prompt stays the default and is locked byte-for-byte by a test |
-| Evaluation | End-to-end runner with separately configurable extractor, answerer and grader, a long-context baseline, and a Claude CLI shim |
+| Extraction prompt | Reorganized Scribe prompt, now the default: half the length, one consistent coverage rule, same output format; the original stays available as `scribe.prompt=legacy` and is locked byte-for-byte by a test |
+| Pre-answer check | Optional CA1 comparator (`recall.verify`): checks the question's concrete details against the retrieved memories before answering; off by default |
+| Evaluation | End-to-end runner with separately configurable extractor, answerer and grader, a long-context baseline, a Claude CLI shim, and premise-aware grading of trick questions |
 | Dependencies | `better-sqlite3` upgraded to 12 for prebuilt Node 24 binaries; license field corrected from ISC to MIT |
 
 ## License
