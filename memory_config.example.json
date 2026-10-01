@@ -115,7 +115,9 @@
     "_comment_max_output_tokens": "Output limit for one extraction batch. The original fixed 4096 truncated most batches: a 60-message batch measured about 5,500-6,100 output tokens at the median and up to 12,000, and a truncated reply used to discard the whole batch. Local models are limited by their context size instead; truncated replies are split in half and retried.",
     "max_output_tokens": 16384,
     "_comment_temperature": "Extraction temperature (0 allowed).",
-    "temperature": 0.3
+    "temperature": 0.3,
+    "_comment_fix_dates": "Before storing, check every 'M月D日（週X）' in a memory against the calendar. Models converting 'next Wednesday' often get the weekday right but the date one to three days off. When they disagree: a date written in the quote wins and the weekday is fixed; otherwise a relative phrase in the quote (下週三, 明天) is recomputed from the message date; otherwise the weekday wins and the date moves to the nearest such weekday.",
+    "fix_dates": true
   },
   "librarian": {
     "_comment": "Exclude specific fragment sources from search results.",

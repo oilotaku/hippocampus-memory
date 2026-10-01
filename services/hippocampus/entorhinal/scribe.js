@@ -21,6 +21,7 @@ const { renderTagSpecForPrompt } = require('../../tagRouting');
 const { getScribeConfig } = require('./scribeConfig');
 const { buildScribePromptV2 } = require('./scribePromptV2');
 const { filterEntriesByQuote, normalizedContentHash, findDuplicate, quoteSourceDate, parseScribeReply } = require('../dentate/scribeQuality');
+const { fixDateWeekday } = require('../dentate/dateFix');
 const emotion = require('../amygdala');
 const { spawn } = require('child_process');
 const path = require('path');
@@ -909,6 +910,16 @@ async function runScribe(messages, since, opts = {}) {
         if (quoteDropped > 0) {
             const detail = Object.entries(quoteDroppedByType).map(([t, n]) => `${t}:${n}`).join(',');
             console.log(`[Scribe] 原話佐證：丟棄 ${quoteDropped} 條（無/偽造 quote；${detail}）`);
+        }
+    }
+    // ── 日期與星期一致性：模型換算「下週三」常把日期算錯一到三天（星期多半對），寫入前用程式校正 ──
+    if (getScribeConfig().fix_dates && Array.isArray(result.entries)) {
+        for (const e of result.entries) {
+            if (!e || typeof e.content !== 'string') continue;
+            const r = fixDateWeekday(e.content, e.quote, quoteSourceDate(e.quote, msgDates) || sourceDate);
+            if (!r.fixes.length) continue;
+            e.content = r.content;
+            for (const f of r.fixes) console.log(`[Scribe] 日期校正(${f.how}): ${f.from} → ${f.to}`);
         }
     }
     let evidenceMerged = 0;

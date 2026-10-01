@@ -231,3 +231,26 @@ describe('checkAndRunScribe：逐批游標、失敗不越過、毒訊息', () =>
         assert.equal(last.processed_until, msgs[39].timestamp);
     });
 });
+
+describe('runScribe：日期與星期校正（scribe.fix_dates）', () => {
+    const { openField } = require('../../services/memoryCrypto');
+    const dated = (n) => { const e = entryFor(n); return { ...e, content: `${e.content}，3月19日（週三）回診` }; };
+    const lastContent = () => openField('memory_fragments', 'content',
+        db.prepare(`SELECT content FROM memory_fragments ORDER BY id DESC LIMIT 1`).get().content);
+    test('預設開啟：寫入前改成同星期最近的日期（2026-03-19 是週四 → 3月18日）', async () => {
+        resetRuns();
+        const msgs = seedMessages(1, { start: '2026-03-10 02:00:00' });
+        llmImpl = () => ({ reply: JSON.stringify({ entries: [dated(1)] }), finishReason: 'stop' });
+        const r = await scribe.runScribe(msgs, '2026-03-10 02:00:00');
+        assert.equal(r.written, 1);
+        assert.match(lastContent(), /3月18日（週三）/);
+    });
+    test('fix_dates=false 原樣寫入', async () => {
+        resetRuns();
+        scribeConfig.setScribeConfigOverride({ fix_dates: false });
+        const msgs = seedMessages(1, { start: '2026-03-11 02:00:00' });
+        llmImpl = () => ({ reply: JSON.stringify({ entries: [dated(1)] }), finishReason: 'stop' });
+        await scribe.runScribe(msgs, '2026-03-11 02:00:00');
+        assert.match(lastContent(), /3月19日（週三）/);
+    });
+});
