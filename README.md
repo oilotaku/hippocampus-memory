@@ -20,6 +20,7 @@ A self-organizing long-term memory system for AI assistants and companions. It e
 | Encryption of memory content with a blind search index | Working (on by default) |
 | Archivist and cognitive model split into focused modules | Done |
 | Memory modules regrouped by hippocampal region (`services/hippocampus/`, old paths kept as forwarders) | Done |
+| Write path in the dentate gyrus (quote check, date check, time fields, encoding strength, dedup); single plug points for memory age and the ranking's time factor; configurable lifecycle thresholds | Done (no behaviour change); see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 | All Chinese text in code, prompts, and UI in Traditional Chinese (Simplified input still matches) | Done |
 | Three-layer persona (core / relationship / situational) with versioned, reviewable, rollback-able relationship proposals | Working |
 | Stable traits (confidence ≥ 0.7) and the relationship layer injected into the chat prompt under their own small token budget | Working |
@@ -35,6 +36,7 @@ A self-organizing long-term memory system for AI assistants and companions. It e
 | Retrieval ranking v2: entities boost instead of flooding, no penalty for full-text-only hits, time decay orders but never filters | Working (on by default; `librarian.ranking=legacy` restores the old ranking) |
 | Retrieval benchmark on LoCoMo and a Traditional Chinese synthetic set (`eval/`) | Done; see [Retrieval evaluation](#retrieval-evaluation) |
 | Time information: local time and weekday for the extractor, per-memory conversation dates, dates shown when memories are injected | Working |
+| Date check: "M月D日（週X）" in an extracted memory is checked against the calendar and corrected before storing; relative phrases ("下週三", "上週六") are recomputed from the message date | Working (on by default, `scribe.fix_dates`); time questions on the long set 44% → 67%, see [Date fix](#date-fix) |
 | End-to-end evaluation (extraction, recall, answering, grading) with a long-context baseline | Done on the Chinese synthetic set; see [End-to-end evaluation](#end-to-end-evaluation) |
 
 ---
@@ -48,6 +50,7 @@ Chat messages
 Scribe ── extracts short facts into memory_fragments
     │    ── every fact must carry a verbatim quote; the code checks
     │       that the quote really appears in the source messages
+    │    ── dates written as "M月D日（週X）" are checked against the calendar
     │    ── duplicates across days add evidence instead of new rows;
     │       sentences that differ in numbers, weekdays, or nouns are never merged
     │
@@ -494,6 +497,8 @@ Cost of all end-to-end runs above, at API-equivalent prices through the Claude C
 - **Extraction is tuned for Chinese.** The 60-character limit on verbatim quotes is too short for English sentences, and the Scribe reserves up to 16,384 output tokens (`scribe.max_output_tokens`), more than an 8k-context local model has; lower it there and let truncated batches be split.
 - **Messages sent in the same second can be skipped.** The extraction cursor is a timestamp and the next run reads messages strictly after it, so a message with exactly the same timestamp as the last processed one is never extracted.
 - **Extraction is unstable and drops details.** With the default prompt, two runs of the same conversation can differ by a dozen memories, and small details (who did a chore, the name of a stretching exercise) are often skipped. The default `v2` prompt reduces both but does not remove them. See [Verification details](#verification-details).
+- **The date check only sees dates with a weekday.** A date written without one ("3月19日回診") cannot be checked against the calendar and is stored as extracted. Whether a bare weekday ("週六", no 上／這／下) means the past or the coming one is decided from a few tense words (了／過／剛 versus 要／會／打算), so unusual phrasings can still resolve to the wrong week.
+- **Time fields follow the emotion switch.** `raised_at`, `event_at`, time slot and weekday are only written when `emotion.enabled` is true; with it off, upcoming-event reminders and anniversaries fall back to dates found in the memory text and `created_at`.
 - **English conversations are stored in Chinese.** The Scribe prompt is written in Chinese, so English conversations end up as Chinese memories that English questions rarely match. End-to-end evaluation on LoCoMo is paused until this and the quote length are fixed.
 - **Entity resolution is broken upstream.** `entityResolver.js` reads a column `related_entity_ids` that no migration creates.
 - **The vector channel needs ChromaDB.** Without it, search falls back to full text and entities only.
