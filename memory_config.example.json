@@ -105,6 +105,10 @@
     "fade_half_life_pos_days": 120,
     "_comment_fade": "Fading affect bias for ranking: negative emotion intensity halves every 60 days, positive every 120. Raw scores are never modified."
   },
+  "scribe": {
+    "_comment_prompt": "Extraction prompt. 'legacy' (default) = the original prompt, unchanged. 'v2' = the reorganized prompt (services/hippocampus/entorhinal/scribePromptV2.js): about half the length, one consistent rule (record every concrete detail the user mentions; only the listed exclusions are skipped) instead of the original's conflicting 'fewer but better / when unsure, skip' versus 'never miss anything'. Duplicates are left to the deterministic deduplication. The output format is identical.",
+    "prompt": "legacy"
+  },
   "librarian": {
     "_comment": "Exclude specific fragment sources from search results.",
     "exclude_sources": [],

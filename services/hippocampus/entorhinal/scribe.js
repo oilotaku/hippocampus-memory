@@ -18,6 +18,8 @@ try { ({ getActiveCorrections, getMergedGuidelines } = require('../ca1/correctio
 const { chromaDBOperation } = require('../ca3/memory');
 const { WORLD_CONTEXT } = require('../../worldContext');
 const { renderTagSpecForPrompt } = require('../../tagRouting');
+const { getScribeConfig } = require('./scribeConfig');
+const { buildScribePromptV2 } = require('./scribePromptV2');
 const { filterEntriesByQuote, normalizedContentHash, findDuplicate, quoteSourceDate } = require('../dentate/scribeQuality');
 const emotion = require('../amygdala');
 const { spawn } = require('child_process');
@@ -642,7 +644,11 @@ async function runScribe(messages, since) {
         console.error('[Scribe] 意圖閉環讀取失敗:', e.message);
     }
 
-    const systemPrompt = sanitizeForJSON(fillPrompt(SCRIBE_SYSTEM_PROMPT)
+    // scribe.prompt：'legacy'（預設，舊版逐字不變）或 'v2'（整理壓縮版，見 scribePromptV2.js）
+    const template = getScribeConfig().prompt === 'v2'
+        ? buildScribePromptV2({ AI, USER, WORLD_CONTEXT, tagSpec: renderTagSpecForPrompt() })
+        : SCRIBE_SYSTEM_PROMPT;
+    const systemPrompt = sanitizeForJSON(fillPrompt(template)
         .replace('{KNOWN_ENTITIES}', knownEntities)
         .replace('{ENTITY_RELATION_CONTEXT}', entityRelationContext)
         .replace('{COMPANION_MEMORY_CONTEXT}', companionMemoryContext)
