@@ -20,7 +20,7 @@ const { WORLD_CONTEXT } = require('../../worldContext');
 const { renderTagSpecForPrompt } = require('../../tagRouting');
 const { getScribeConfig } = require('./scribeConfig');
 const { buildScribePromptV2 } = require('./scribePromptV2');
-const { filterEntriesByQuote, normalizedContentHash, findDuplicate, quoteSourceDate } = require('../dentate/scribeQuality');
+const { filterEntriesByQuote, normalizedContentHash, findDuplicate, quoteSourceDate, parseScribeReply } = require('../dentate/scribeQuality');
 const emotion = require('../amygdala');
 const { spawn } = require('child_process');
 const path = require('path');
@@ -106,6 +106,9 @@ const SCRIBE_CONFIG = {
     MAX_HOURS_STALE: 4,         // 距上次Scribe超過此時長+有30條未處理→觸發（防止連續聊天時永遠不觸發）
     STALE_MIN_MESSAGES: 30,     // 時間兜底觸發的最少訊息數
     MAX_BATCH: 60,              // 單次最多處理訊息數，防止請求過大導致API斷連
+    POISON_SHRINK_AFTER: 3,     // 同一段連續解析失敗 3 次：改用小批次
+    POISON_SHRINK_BATCH: 8,
+    POISON_SINGLE_AFTER: 5,     // 連續 5 次：一則一則處理，單則仍失敗就記 skipped 推進
     CONTEXT_BUFFER: 10,         // 往前取的緩衝訊息數
     API_CONFIG_ID: 52,          // gemini-3.1-flash-lite (was [openrouter]3.1flash-lite, 省一半輸入成本)
     HIGH_EMOTION_KEYWORDS: [
@@ -457,11 +460,12 @@ function hasHighEmotionSignal(messages) {
 async function checkAndRunScribe() {
     const db = getDb();
 
-    // 上次處理到的時間點
+    // 上次處理到的時間點：最後一筆 done 或 skipped（skipped＝確認無法處理而略過的毒訊息，也要推進）。
+    // 以 id 排序：同一秒內寫入多筆時 run_at 分不出先後。
     const lastRun = db.prepare(`
         SELECT processed_until FROM scribe_runs
-        WHERE status = 'done'
-        ORDER BY run_at DESC LIMIT 1
+        WHERE status IN ('done', 'skipped')
+        ORDER BY id DESC LIMIT 1
     `).get();
 
     // 防護：processed_until 必須為有效日期，否則兜底到 2000-01-01（全量重掃）
@@ -474,8 +478,8 @@ async function checkAndRunScribe() {
         // 嘗試修復：取上一個有效 run 的 processed_until
         const prevValid = db.prepare(`
             SELECT processed_until FROM scribe_runs
-            WHERE status = 'done' AND id < (SELECT MAX(id) FROM scribe_runs WHERE status = 'done')
-            ORDER BY run_at DESC LIMIT 1
+            WHERE status IN ('done', 'skipped') AND id < (SELECT MAX(id) FROM scribe_runs WHERE status IN ('done', 'skipped'))
+            ORDER BY id DESC LIMIT 1
         `).get();
         if (prevValid?.processed_until && isValidTimestamp(prevValid.processed_until)) {
             since = prevValid.processed_until;
@@ -527,15 +531,45 @@ async function checkAndRunScribe() {
     const trigger = forceTriggered ? 'FORCE' : staleTriggered ? 'STALE' : silenceReached && hasEmotion ? 'EMOTION' : 'SILENCE';
     console.log(`[Scribe] ${trigger}觸發：${count}條未處理訊息，沉默${Math.floor(minutesSinceLast)}分鐘`);
 
+    // 連續「有回覆但解析不了」的失敗次數（failed_parse，自最後一筆 done/skipped 起算）。
+    // 連線／服務錯誤（failed）不算：LLM 離線時只停下等待，絕不因此跳過訊息。
+    const parseFailStreak = db.prepare(`
+        SELECT COUNT(*) AS c FROM scribe_runs
+        WHERE status = 'failed_parse'
+          AND id > COALESCE((SELECT MAX(id) FROM scribe_runs WHERE status IN ('done', 'skipped')), 0)
+    `).get().c;
+    let batchSize = SCRIBE_CONFIG.MAX_BATCH;
+    if (parseFailStreak >= SCRIBE_CONFIG.POISON_SINGLE_AFTER) batchSize = 1;
+    else if (parseFailStreak >= SCRIBE_CONFIG.POISON_SHRINK_AFTER) batchSize = SCRIBE_CONFIG.POISON_SHRINK_BATCH;
+    if (batchSize !== SCRIBE_CONFIG.MAX_BATCH) {
+        console.warn(`[Scribe] ⚠️ 同一段訊息已連續 ${parseFailStreak} 次解析失敗，本輪改用每批 ${batchSize} 則找出問題訊息`);
+    }
+
     // v5.1: 迴圈處理直到清空積壓（防止 MAX_BATCH 截斷後剩餘訊息永久卡住）
+    // 每批結束後游標（cursor）前進到這批最後一則：下一批的背景訊息是緊接在前的 10 則，
+    // 不是第一批之前的舊訊息（舊做法每批都傳同一個 since）。
+    // 任一批失敗就停：不能讓後面的批次成功而把游標推過失敗批（那批會永久遺失），下次 tick 從失敗批重試。
     const MAX_CONSECUTIVE_BATCHES = 5;  // 安全閥：單次最多處理 5*60=300 條
     let processedTotal = 0;
+    let cursor = since;
     for (let b = 0; b < MAX_CONSECUTIVE_BATCHES && processedTotal < count; b++) {
-        const batch = unprocessed.slice(processedTotal, processedTotal + SCRIBE_CONFIG.MAX_BATCH);
+        const batch = unprocessed.slice(processedTotal, processedTotal + batchSize);
         if (batch.length === 0) break;
-        console.log(`[Scribe]   批次${b + 1}/${Math.ceil(count / SCRIBE_CONFIG.MAX_BATCH)}：處理${batch.length}條`);
-        await runScribe(batch, since);
+        console.log(`[Scribe]   批次${b + 1}/${Math.ceil(count / batchSize)}：處理${batch.length}條`);
+        const r = await runScribe(batch, cursor);
+        if (!r || r.ok === false) {
+            if (batchSize === 1 && r?.reason === 'parse') {
+                // 單則仍解析不了：認定是毒訊息，記 skipped 推進游標並留下 log，避免整個 Scribe 永遠卡在這裡
+                const ts = batch[0].timestamp;
+                db.prepare(`INSERT INTO scribe_runs (processed_until, messages_processed, fragments_written, status) VALUES (?, 1, 0, 'skipped')`).run(ts);
+                console.error(`[Scribe] ❌ 訊息 #${batch[0].id}（${ts}）連續解析失敗，已略過；請檢查這則訊息內容`);
+            } else {
+                console.warn(`[Scribe] 批次${b + 1}失敗（${r?.reason || 'unknown'}），停止本輪，下次重試；${count - processedTotal}條待處理`);
+            }
+            return;
+        }
         processedTotal += batch.length;
+        cursor = batch[batch.length - 1].timestamp;
     }
     if (processedTotal >= count) {
         console.log(`[Scribe] ✅ 積壓清空：${count}條全部處理完畢`);
@@ -544,9 +578,53 @@ async function checkAndRunScribe() {
     }
 }
 
+// 本批訊息的聊天模式（只看本批，不含背景訊息）。cinema 訊息不抽取；其餘取出現最多的模式，同票取 id 最早者。
+// 舊做法用 `WHERE id IN (本批＋背景) LIMIT 1` 沒有排序，整批的模式取決於任意一則（可能是上一段的背景），
+// 判成 cinema 時整批靜默丟棄、也不推進游標。
+function batchChatMode(db, messages) {
+    const ids = messages.map(m => m.id).filter(id => id != null);
+    const cinemaIds = new Set();
+    if (!ids.length) return { mode: 'default', isRP: false, cinemaIds };
+    let rows = [];
+    try {
+        rows = db.prepare(`SELECT id, chat_mode, is_rp FROM messages WHERE id IN (${ids.map(() => '?').join(',')}) ORDER BY id`).all(...ids);
+    } catch (_) { rows = []; }
+    const count = new Map();
+    for (const r of rows) {
+        const mode = r.chat_mode || (r.is_rp ? 'roleplay' : 'default');
+        if (mode === 'cinema') { cinemaIds.add(r.id); continue; }
+        if (!count.has(mode)) count.set(mode, 0);
+        count.set(mode, count.get(mode) + 1);
+    }
+    let mode = 'default', best = 0;
+    for (const [m, c] of count) if (c > best) { mode = m; best = c; }   // Map 依首次出現（id 由小到大）排序，同票取較早者
+    return { mode, isRP: mode === 'roleplay', cinemaIds };
+}
+
+// 單批切半重跑的條件：輸出被截斷且批次夠大（小批次就用救回的條目），最多遞迴兩層
+const SPLIT_MIN_MESSAGES = 8;
+const SPLIT_MAX_DEPTH = 2;
+
 // 執行Scribe
-async function runScribe(messages, since) {
+// 回傳 { ok, written, ... }。ok=false 時不寫 'done'（寫 'failed' 或 'failed_parse'），呼叫端應停下、下次重試，
+// 不能讓游標越過這批。opts.depth 為切半遞迴深度（內部使用）。
+async function runScribe(messages, since, opts = {}) {
     const db = getDb();
+    const depth = opts.depth || 0;
+    const batchAll = messages;                      // 游標與統計以整批為準（含被濾掉的 cinema 訊息）
+    const modeInfo = batchChatMode(db, batchAll);
+    if (modeInfo.cinemaIds.size) {
+        messages = batchAll.filter(m => !modeInfo.cinemaIds.has(m.id));
+        console.log(`[Scribe] 略過 ${modeInfo.cinemaIds.size} 則 cinema 訊息（電影閒聊不進書記官）`);
+    }
+    const lastTs = () => (isValidTimestamp(batchAll[batchAll.length - 1]?.timestamp)
+        ? batchAll[batchAll.length - 1].timestamp
+        : new Date().toISOString().replace('T', ' ').slice(0, 19));
+    if (!messages.length) {
+        db.prepare(`INSERT INTO scribe_runs (processed_until, messages_processed, fragments_written, status) VALUES (?, ?, 0, 'done')`)
+            .run(lastTs(), batchAll.length);
+        return { ok: true, written: 0, duplicates: 0, evidenceMerged: 0, quoteDropped: 0, quoteDroppedByType: {}, aiChitchatDropped: 0, aiChitchatDroppedByType: {} };
+    }
 
     // 取緩衝區（往前10條）
     const buffer = db.prepare(`
@@ -593,7 +671,8 @@ async function runScribe(messages, since) {
         if (userMsgs.length > 0) {
             const userText = userMsgs.map(m => dec(m).slice(0, 300)).join(' ').slice(0, 1000);
             const { searchHybrid } = require('../../librarian');
-            const retrieved = await searchHybrid(userText, 15);
+            // surface:'none'：去重參考不要混入聊天用的「隨機浮現」舊記憶（結果 <3 條時 40% 機率），否則每次參考都不同
+            const retrieved = await searchHybrid(userText, 15, { surface: 'none' });
             if (retrieved.length > 0) {
                 companionMemoryContext = retrieved.map((f, i) => {
                     const dateLabel = f.source_date || f.date_label || '';
@@ -658,21 +737,31 @@ async function runScribe(messages, since) {
         .replace('{EMOTION_RULES}', () => emotion.prompt.rules()));
 
     let result;
+    let truncated = false, salvaged = false;
+    let lastErrKind = 'llm';                 // 'llm'＝連線／服務錯誤（只停下等待）；'parse'＝有回覆但解析不了
     let attempts = 0;
     const maxAttempts = 2;
+    const scfg = getScribeConfig();
     while (attempts < maxAttempts) {
         attempts++;
             try {
+                lastErrKind = 'llm';
                 const raw = await callLLM(
                     [{ role: 'user', parts: [{ text: fillPrompt(fullText) }] }],
                     systemPrompt,
                     null,
-                    { temperature: 0.3, maxOutputTokens: 4096 },
+                    { temperature: scfg.temperature, maxOutputTokens: scfg.max_output_tokens },
                     SCRIBE_CONFIG.API_CONFIG_ID
                 );
 
-                const clean = raw.reply.replace(/```json|```/g, '').trim();
-                result = JSON.parse(clean);
+                lastErrKind = 'parse';
+                const parsed = parseScribeReply(raw.reply);
+                if (!parsed.result || typeof parsed.result !== 'object') {
+                    throw new Error(`回覆無法解析為 JSON（${raw.finishReason === 'length' ? '輸出被上限截斷' : '格式錯誤'}）`);
+                }
+                result = parsed.result;
+                salvaged = parsed.salvaged;
+                truncated = raw.finishReason === 'length' || parsed.truncated;
                 break; // 成功，跳出重試迴圈
             } catch (err) {
             if (attempts < maxAttempts) {
@@ -744,15 +833,34 @@ async function runScribe(messages, since) {
                 } catch (diagOuterErr) {
                     console.error('[Scribe] 診斷外層異常:', diagOuterErr.message, diagOuterErr.stack?.slice(0, 200));
                 }
-                const safeUntil = isValidTimestamp(messages[messages.length - 1]?.timestamp)
-                    ? messages[messages.length - 1].timestamp
-                    : new Date().toISOString().replace('T', ' ').slice(0, 19);
-                db.prepare(`INSERT INTO scribe_runs (processed_until, messages_processed, status) VALUES (?, ?, 'failed')`)
-                    .run(safeUntil, messages.length);
-                return;
+                // 失敗不推進游標：只記錄，呼叫端停下、下次 tick 重試。
+                // failed_parse（有回覆但解析不了）才計入「毒訊息」連續失敗；failed（連線／服務錯誤）只等待，永不跳過訊息。
+                const status = lastErrKind === 'parse' ? 'failed_parse' : 'failed';
+                db.prepare(`INSERT INTO scribe_runs (processed_until, messages_processed, status) VALUES (?, ?, ?)`)
+                    .run(lastTs(), batchAll.length, status);
+                return { ok: false, reason: lastErrKind, written: 0 };
             }
         }
     }
+
+    // 輸出被上限截斷：批次夠大就對半切開各自重跑（丟掉這次不完整的結果，避免同一段寫兩次）；
+    // 已經很小或切到最深就用救回的完整條目。
+    if (truncated && batchAll.length > SPLIT_MIN_MESSAGES && depth < SPLIT_MAX_DEPTH) {
+        const mid = Math.ceil(batchAll.length / 2);
+        console.warn(`[Scribe] 輸出被截斷（${salvaged ? '救回部分條目' : '上限截斷'}），切半重跑：${batchAll.length} → ${mid} + ${batchAll.length - mid} 則`);
+        const a = await runScribe(batchAll.slice(0, mid), since, { depth: depth + 1 });
+        if (!a.ok) return a;
+        const b = await runScribe(batchAll.slice(mid), batchAll[mid - 1].timestamp, { depth: depth + 1 });
+        if (!b.ok) return { ...b, written: a.written + (b.written || 0) };
+        const sumTypes = (x, y) => { const o = { ...(x || {}) }; for (const [k, v] of Object.entries(y || {})) o[k] = (o[k] || 0) + v; return o; };
+        return {
+            ok: true, split: true, written: a.written + b.written,
+            duplicates: a.duplicates + b.duplicates, evidenceMerged: a.evidenceMerged + b.evidenceMerged,
+            quoteDropped: a.quoteDropped + b.quoteDropped, quoteDroppedByType: sumTypes(a.quoteDroppedByType, b.quoteDroppedByType),
+            aiChitchatDropped: a.aiChitchatDropped + b.aiChitchatDropped, aiChitchatDroppedByType: sumTypes(a.aiChitchatDroppedByType, b.aiChitchatDroppedByType),
+        };
+    }
+    if (truncated) console.warn(`[Scribe] 輸出被截斷，批次已無法再切（${batchAll.length} 則、第 ${depth} 層），使用救回的 ${result.entries?.length || 0} 條完整條目`);
 
     let written = 0;
     let hashDedupCount = 0;
@@ -829,22 +937,9 @@ async function runScribe(messages, since) {
             console.error('[Scribe] 迴環過濾查詢失敗，降級為全部寫入:', e.message);
         }
 
-        // 檢查這些訊息的 chat_mode——cinema 訊息不提取（看電影閒聊不進書記官）
-        const msgIds = JSON.parse(sourceMsgIds || '[]');
-        let msgChatMode = 'default';
-        let isRP = false;
-        if (msgIds.length > 0) {
-            const placeholders = msgIds.map(() => '?').join(',');
-            const modeCheck = db.prepare(`SELECT chat_mode, is_rp FROM messages WHERE id IN (${placeholders}) LIMIT 1`).get(...msgIds);
-            if (modeCheck) {
-                msgChatMode = modeCheck.chat_mode || (modeCheck.is_rp ? 'roleplay' : 'default');
-                isRP = (msgChatMode === 'roleplay');
-            }
-        }
-        if (msgChatMode === 'cinema') {
-            console.log(`[Scribe] 跳過cinema訊息 #${msgIds.slice(0,3).join(',')}...（電影閒聊不進書記官）`);
-            return;
-        }
+        // 聊天模式在 runScribe 開頭已依本批訊息判定（cinema 訊息已濾掉，見 batchChatMode）
+        const msgChatMode = modeInfo.mode;
+        const isRP = modeInfo.isRP;
 
         const insert = db.prepare(`
             INSERT INTO memory_fragments (type, entity, content, emotional_weight, source, source_date, source_msg_ids, is_rp, chat_mode, value_tags, priority, content_hash, quote)
@@ -1026,17 +1121,16 @@ async function runScribe(messages, since) {
         }
     }
 
-    const safeUntil = isValidTimestamp(messages[messages.length - 1]?.timestamp)
-        ? messages[messages.length - 1].timestamp
-        : new Date().toISOString().replace('T', ' ').slice(0, 19);
-    if (!isValidTimestamp(messages[messages.length - 1]?.timestamp)) {
-        console.error(`[Scribe] ⚠️ 最後一條訊息時間戳無效，使用當前時間兜底: ${safeUntil} (原值: ${JSON.stringify(messages[messages.length - 1]?.timestamp)})`);
+    // 游標以整批為準（含被濾掉的 cinema 訊息），否則它們會在下次 tick 被重新撈出
+    const safeUntil = lastTs();
+    if (!isValidTimestamp(batchAll[batchAll.length - 1]?.timestamp)) {
+        console.error(`[Scribe] ⚠️ 最後一條訊息時間戳無效，使用當前時間兜底: ${safeUntil} (原值: ${JSON.stringify(batchAll[batchAll.length - 1]?.timestamp)})`);
     }
 
     db.prepare(`
         INSERT INTO scribe_runs (processed_until, messages_processed, fragments_written, status)
         VALUES (?, ?, ?, 'done')
-    `).run(safeUntil, messages.length, written);
+    `).run(safeUntil, batchAll.length, written);
 
     console.log(`[Scribe] 完成：處理${messages.length}條訊息，寫入${written}條記憶片段${hashDedupCount > 0 ? `（重複${hashDedupCount}條，證據累加${evidenceMerged}）` : ''}${quoteDropped > 0 ? `（quote丟棄${quoteDropped}）` : ''}`);
 
@@ -1049,7 +1143,7 @@ async function runScribe(messages, since) {
             console.error('[Scribe] Archivist 事件傳送失敗:', e.message);
         }
     }
-    return { written, duplicates: hashDedupCount, evidenceMerged, quoteDropped, quoteDroppedByType, aiChitchatDropped, aiChitchatDroppedByType };
+    return { ok: true, truncated, salvaged, written, duplicates: hashDedupCount, evidenceMerged, quoteDropped, quoteDroppedByType, aiChitchatDropped, aiChitchatDroppedByType };
 }
 
 module.exports = { checkAndRunScribe, indexNewFragments, runScribe };

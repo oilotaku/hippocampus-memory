@@ -275,8 +275,8 @@ async function callGeminiAPI(geminiMessages, systemPrompt, tools, generationConf
         contents: geminiMessages,
         systemInstruction: { parts: [{ text: systemPrompt }] },
         generationConfig: {
-            temperature: generationConfig.temperature || 1.0,
-            maxOutputTokens: generationConfig.maxOutputTokens || 8192,
+            temperature: generationConfig.temperature ?? 1.0,
+            maxOutputTokens: generationConfig.maxOutputTokens ?? 8192,
             ...generationConfig
         },
         safetySettings: [
@@ -351,8 +351,19 @@ async function callGeminiAPI(geminiMessages, systemPrompt, tools, generationConf
     return {
         reply: reply.trim(),
         functionCalls: functionCalls.length > 0 ? functionCalls : null,
-        usage
+        usage,
+        finishReason: normalizeFinishReason(candidate?.finishReason),
     };
+}
+
+// 兩條路徑的結束原因統一成 'length'（輸出被上限截斷）／'stop'／其他小寫字串／null（不明）。
+// 呼叫端（如 Scribe）據此判斷 JSON 是否被截斷，不必猜。
+function normalizeFinishReason(r) {
+    if (r == null || r === '') return null;
+    const s = String(r).toLowerCase();
+    if (s === 'max_tokens' || s === 'length') return 'length';
+    if (s === 'stop' || s === 'end_turn') return 'stop';
+    return s;
 }
 
 // =================================================================
@@ -442,8 +453,9 @@ async function callOpenAICompatibleAPI(geminiMessages, systemPrompt, tools, gene
     const requestBody = {
         model: apiConfig.model_name,
         messages: messages,
-        temperature: generationConfig.temperature || 0.7,
-        max_tokens: generationConfig.maxOutputTokens || 4000,
+        // ?? 而不是 ||：temperature 0（確定性輸出）是合法值，不能被換成預設
+        temperature: generationConfig.temperature ?? 0.7,
+        max_tokens: generationConfig.maxOutputTokens ?? 4000,
     };
     // 停用thinking：DeepSeek/Gemini/Flash模型預設thinking會吃掉輸出預算
     // 尤其低max_tokens場景(如proactive contact 500 token)會導致0輸出
@@ -530,7 +542,8 @@ async function callOpenAICompatibleAPI(geminiMessages, systemPrompt, tools, gene
             inputTokens: response.data?.usage?.prompt_tokens || 0,
             outputTokens: response.data?.usage?.completion_tokens || 0,
             totalTokens: response.data?.usage?.total_tokens || 0
-        }
+        },
+        finishReason: normalizeFinishReason(finishReason),
     };
 }
 

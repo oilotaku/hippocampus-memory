@@ -190,9 +190,61 @@ function quoteSourceDate(quote, msgs) {
     return null;
 }
 
+/**
+ * Scribe 回覆的容錯解析。原本只拿掉 ``` 就整段 JSON.parse，輸出一被上限截斷（實測大多數批次會超過舊上限 4096 token）
+ * 整批作廢，連前面已經完整的條目也一起丟。這裡依序嘗試：
+ *   1. 第一個「{」起整段解析；2. 截到最後一個「}」解析（去掉尾巴的說明文字）；
+ *   3. 從 "entries": [ 起逐一掃描物件（追蹤字串與跳脫、括號深度），把每個完整的 entry 救回來。
+ * 回傳 { result, salvaged, truncated }：
+ *   result     解析結果（{ entries, fulfilled_intention_ids }）；完全無法解析時為 null
+ *   salvaged   true＝走了逐條救回（整段 JSON 不合法）
+ *   truncated  true＝entries 陣列沒有正常結束（最後一條不完整），代表輸出被截斷、後面還有內容沒拿到
+ */
+function parseScribeReply(raw) {
+    const text = String(raw || '').replace(/```(?:json)?/gi, '').trim();
+    const start = text.indexOf('{');
+    if (start < 0) return { result: null, salvaged: false, truncated: false };
+    try { return { result: JSON.parse(text.slice(start)), salvaged: false, truncated: false }; } catch (_) { /* 往下試 */ }
+    const end = text.lastIndexOf('}');
+    if (end > start) {
+        try { return { result: JSON.parse(text.slice(start, end + 1)), salvaged: false, truncated: false }; } catch (_) { /* 往下試 */ }
+    }
+    const m = /"entries"\s*:\s*\[/.exec(text.slice(start));
+    if (!m) return { result: null, salvaged: false, truncated: false };
+    let i = start + m.index + m[0].length;
+    const entries = [];
+    let closed = false;
+    while (i < text.length) {
+        while (i < text.length && /[\s,]/.test(text[i])) i++;
+        if (text[i] === ']') { closed = true; break; }
+        if (text[i] !== '{') break;
+        let depth = 0, inStr = false, esc = false, j = i;
+        for (; j < text.length; j++) {
+            const c = text[j];
+            if (inStr) {
+                if (esc) esc = false;
+                else if (c === '\\') esc = true;
+                else if (c === '"') inStr = false;
+                continue;
+            }
+            if (c === '"') inStr = true;
+            else if (c === '{') depth++;
+            else if (c === '}' && --depth === 0) break;
+        }
+        if (j >= text.length) break;                        // 物件沒結束：被截斷
+        try { entries.push(JSON.parse(text.slice(i, j + 1))); } catch (_) { /* 單條格式壞掉就跳過這條 */ }
+        i = j + 1;
+    }
+    let fulfilled = [];
+    const fm = /"fulfilled_intention_ids"\s*:\s*\[([^\]]*)\]/.exec(text);
+    if (fm) { try { fulfilled = JSON.parse(`[${fm[1]}]`); } catch (_) { fulfilled = []; } }
+    return { result: { entries, fulfilled_intention_ids: fulfilled }, salvaged: true, truncated: !closed };
+}
+
 module.exports = {
     normalizeText, validateQuote, filterEntriesByQuote, detectQuoteSource, isAiChitchat,
     normalizedContentHash, isNearDuplicate, findDuplicate,
     AI_QUOTE_TYPES, MAX_QUOTE_LEN,
     quoteSourceDate,
+    parseScribeReply,
 };

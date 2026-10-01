@@ -2531,6 +2531,10 @@
   [
    "quoteSourceDate",
    "function"
+  ],
+  [
+   "parseScribeReply",
+   "function"
   ]
  ],
  "services/summary.js": [
