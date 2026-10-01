@@ -3,6 +3,7 @@
 // 用法：
 //   node scripts/setup_llm.js                      （互動式，推薦）
 //   node scripts/setup_llm.js --provider openrouter --key sk-xxx --model "deepseek/deepseek-chat"
+//   echo sk-xxx | node scripts/setup_llm.js --provider openrouter --key -   （key 從 stdin 讀，不留在命令列與 shell 歷史）
 //
 // 說明：
 //   記憶管線（Scribe 提取碎片 / Archivist 分類整合 / Consolidator 編敘事）
@@ -19,6 +20,7 @@
 //   ollama       本機 Ollama（OpenAI 相容），http://127.0.0.1:11434/v1，不需要 API Key
 //                ⚠️ 需另設環境變數 LLM_ENDPOINT_ALLOWLIST=http://127.0.0.1:11434（SSRF 防護預設拒絕私有地址/http）
 
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });   // 資料庫加密金鑰在 .env
 const readline = require('readline');
 const { initDatabase, getDb } = require('../database');
 
@@ -45,8 +47,19 @@ function ask(rl, q) {
     return new Promise(res => rl.question(q, res));
 }
 
+function readStdinLine() {
+    return new Promise((resolve, reject) => {
+        let buf = '';
+        process.stdin.setEncoding('utf8');
+        process.stdin.on('data', d => { buf += d; });
+        process.stdin.on('end', () => resolve(buf.split(/\r?\n/)[0].trim()));
+        process.stdin.on('error', reject);
+    });
+}
+
 async function main() {
     const flags = parseArgs(process.argv.slice(2));
+    if (flags.key === '-') flags.key = await readStdinLine();
 
     let providerKey, apiKey, model, endpoint, name;
 
