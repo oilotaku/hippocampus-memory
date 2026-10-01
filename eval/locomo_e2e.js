@@ -8,6 +8,8 @@
 //   環境變數 E2E_MODEL（預設 qwen3-8b-zh-8k）
 //            E2E_LLM_BASE（預設 http://127.0.0.1:11434/v1；接 eval/claude_shim.py 時設 http://127.0.0.1:18765/v1）
 //            E2E_TAG（資料庫與抽取檔名的標籤，讓不同模型的抽取結果並存；預設空）
+//            E2E_SCRIBE_PROMPT（legacy|v2：抽取用的 Scribe 提示詞版本）
+//   extract 結束時把證據召回率（非無解題的證據輪次被已存記憶涵蓋的比例）寫進 e2e_<對話>_extract.json 的 recall。
 //   嵌入（--vector）固定走本機 Ollama 的 bge-m3。
 const fs = require('fs');
 const os = require('os');
@@ -41,6 +43,9 @@ fs.writeFileSync(CFG, JSON.stringify(example));
 process.on('exit', () => { try { fs.unlinkSync(CFG); } catch (_) {} });
 
 const llm = require('../services/llm');
+// E2E_SCRIBE_PROMPT=legacy|v2：抽取用哪一版 Scribe 提示詞（未設定時依 memory_config 的 scribe.prompt，預設 legacy）
+const { getScribeConfig, setScribeConfigOverride } = require('../services/hippocampus/entorhinal/scribeConfig');
+if (process.env.E2E_SCRIBE_PROMPT) setScribeConfigOverride({ prompt: process.env.E2E_SCRIBE_PROMPT });
 const memory = require('../services/memory');
 memory.chromaDBOperation = async () => { throw new Error('Chroma 未啟動（評測刻意降級）'); };
 const { initDatabase, getDb } = require('../database');
@@ -60,6 +65,37 @@ function msgTs(t) {
     const same = conv.turns.filter(x => x.session === t.session);
     d.setUTCSeconds(d.getUTCSeconds() + 10 * same.indexOf(t));
     return d.toISOString().slice(0, 19).replace('T', ' ');
+}
+
+// 碎片 → 來源輪次（quote 在批次內輪次文字中逐字比對；source_msg_ids 涵蓋緩衝區＋批次）。extract 與 qa 共用。
+function mapFragments(idToDia) {
+    const turnByDia = new Map(conv.turns.map(t => [t.dia_id, t]));
+    const nz = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    const frags = db.prepare('SELECT id, entity, content, quote, source_msg_ids, source_date FROM memory_fragments WHERE status = ?').all('active');
+    const fragDia = new Map(); const covered = new Set(); let unmapped = 0;
+    for (const f of frags) {
+        let ids = []; try { ids = JSON.parse(f.source_msg_ids || '[]'); } catch (_) {}
+        const q = nz(f.quote);
+        const hit = q ? ids.map(i => idToDia[i]).filter(d => d && nz(turnByDia.get(d).text).includes(q)) : [];
+        if (!hit.length) unmapped++;
+        fragDia.set(f.id, hit);
+        hit.forEach(d => covered.add(d));
+    }
+    return { frags, fragDia, covered, unmapped };
+}
+
+// 證據召回率（不需跑問答）：非無解題的證據輪次，有多少被至少一條已存記憶的 quote 涵蓋。
+// turn＝證據輪次層級；question_any＝至少一個證據輪次被涵蓋的題目比例；question_all＝全部證據都被涵蓋的題目比例。
+function evidenceRecall(covered) {
+    const qs = conv.qa.filter(q => q.category !== 5 && q.evidence && q.evidence.length);
+    const ev = new Set(qs.flatMap(q => q.evidence));
+    const hitEv = [...ev].filter(d => covered.has(d)).length;
+    return {
+        questions: qs.length, evidence_turns: ev.size, evidence_turns_covered: hitEv,
+        turn: ev.size ? hitEv / ev.size : null,
+        question_any: qs.length ? qs.filter(q => q.evidence.some(e => covered.has(e))).length / qs.length : null,
+        question_all: qs.length ? qs.filter(q => q.evidence.every(e => covered.has(e))).length / qs.length : null,
+    };
 }
 
 async function extract() {
@@ -100,7 +136,11 @@ async function extract() {
         since = batch[batch.length - 1].timestamp;
         fs.writeFileSync(path.join(OUT, `e2e_${conv.id}${TAG}_extract.json`), JSON.stringify({ conv: conv.id, batches, total_ms: Date.now() - T0, idToDia }, null, 1));
     }
-    fs.writeFileSync(path.join(OUT, `e2e_${conv.id}${TAG}_extract.json`), JSON.stringify({ conv: conv.id, batches, total_ms: Date.now() - T0, idToDia, done: true }, null, 1));
+    const m = mapFragments(idToDia);
+    const recall = evidenceRecall(m.covered);
+    log(`碎片 ${m.frags.length} 條；涵蓋輪次 ${m.covered.size}/${conv.turns.length}；證據召回 ${(recall.turn * 100).toFixed(1)}%（題目任一證據 ${(recall.question_any * 100).toFixed(1)}%）`);
+    fs.writeFileSync(path.join(OUT, `e2e_${conv.id}${TAG}_extract.json`), JSON.stringify({ conv: conv.id, scribe_prompt: getScribeConfig().prompt, batches, total_ms: Date.now() - T0, idToDia,
+        n_frags: m.frags.length, covered: [...m.covered], unmapped: m.unmapped, recall, done: true }, null, 1));
     log('抽取完成', ((Date.now() - T0) / 60000).toFixed(1), '分鐘');
 }
 
@@ -191,18 +231,7 @@ async function qa() {
     const idToDia = ext.idToDia;
     const turnByDia = new Map(conv.turns.map(t => [t.dia_id, t]));
 
-    // 碎片 → 來源輪次（quote 在批次內輪次文字中逐字比對；source_msg_ids 涵蓋緩衝區＋批次）
-    const nz = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
-    const frags = db.prepare('SELECT id, entity, content, quote, source_msg_ids, source_date FROM memory_fragments WHERE status = ?').all('active');
-    const fragDia = new Map(); const covered = new Set(); let unmapped = 0;
-    for (const f of frags) {
-        let ids = []; try { ids = JSON.parse(f.source_msg_ids || '[]'); } catch (_) {}
-        const q = nz(f.quote);
-        const hit = q ? ids.map(i => idToDia[i]).filter(d => d && nz(turnByDia.get(d).text).includes(q)) : [];
-        if (!hit.length) unmapped++;
-        fragDia.set(f.id, hit);
-        hit.forEach(d => covered.add(d));
-    }
+    const { frags, fragDia, covered, unmapped } = mapFragments(idToDia);
     log(`碎片 ${frags.length} 條；涵蓋輪次 ${covered.size}/${conv.turns.length}；無法對應來源輪次 ${unmapped}`);
 
     if (flag('--shift')) {   // 碎片 created_at 平移到「現在」（最後一個 session ≈ 昨天）
