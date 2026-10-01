@@ -7,7 +7,7 @@
 //   1. 原話佐證（quote 必須是來源訊息的逐字子串）與助理閒聊過濾
 //   2. 日期與星期一致性校正（scribe.fix_dates）
 //   3. 向量去重（ChromaDB，迴環過濾）＋本地確定性去重（同實體、近似重複 → 證據累加）
-//   4. 寫入碎片，附上情緒與時間欄位（杏仁核）、標籤路由、實體連結
+//   4. 寫入碎片，附上時間欄位（timeFields）與情緒欄位（杏仁核）、標籤路由、實體連結
 // 寫入之後的索引、指代消解、情緒基準更新、意圖閉環與游標仍由 Scribe 調度。
 const { toLocalMinute, parseDbTime } = require('../../../utils/time');
 const { USER } = require('../../nameResolver');
@@ -16,6 +16,7 @@ const { chromaDBOperation } = require('../ca3/memory');
 const { getScribeConfig } = require('../entorhinal/scribeConfig');
 const { filterEntriesByQuote, normalizedContentHash, findDuplicate, quoteSourceDate } = require('./scribeQuality');
 const { fixDateWeekday } = require('./dateFix');
+const { resolveRaisedAt, applyTimeFields } = require('./timeFields');
 const emotion = require('../amygdala');
 
 // 校驗 processed_until 是否為有效日期字串（防止非日期值寫入導致 Scribe 永久跳過）
@@ -207,9 +208,17 @@ async function encodeEntries(db, result, { messages, buffer, modeInfo, dec }) {
             const fragId = info.lastInsertRowid;
             newFragmentIds.push(fragId);
 
-            // G2：八維情緒、事件日期、三種時間與時段（emotion.enabled=false 時不做任何事；失敗不影響寫入）
+            // 時間欄位（事件日期、提出時間、時段、星期）由齒狀迴寫，八維情緒交給杏仁核。
+            // 兩者都只在 emotion.enabled=true 時寫（G2 的既有設計；關閉時 CA3 改用內文日期與 created_at）。
+            // 失敗都不影響寫入
+            const raisedAt = resolveRaisedAt(entry.quote, emoMsgs);
             try {
-                emotion.applyScribeEmotion(db, fragId, entry, { raisedAt: emotion.resolveRaisedAt(entry.quote, emoMsgs) });
+                if (emotion.isEnabled()) applyTimeFields(db, fragId, entry, { raisedAt });
+            } catch (e) {
+                console.warn(`[Scribe] 時間欄位寫入失敗 frag#${fragId}: ${e.message}`);
+            }
+            try {
+                emotion.applyScribeEmotion(db, fragId, entry, { raisedAt, timeFields: false });
             } catch (e) {
                 console.warn(`[Scribe] 情緒欄位寫入失敗 frag#${fragId}: ${e.message}`);
             }

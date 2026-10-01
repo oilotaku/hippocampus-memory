@@ -1,73 +1,37 @@
 // =================================================================
 // 情緒引擎的資料層
-//   階段 A（Scribe 寫入碎片當下）：applyScribeEmotion —— 情緒欄位、三種時間、時段
+//   階段 A（Scribe 寫入碎片當下）：applyScribeEmotion —— 情緒欄位（時間欄位見 dentate/timeFields）
 //   階段 B（實體連結完成之後）：processFragments —— OU/Kalman 狀態更新、轉折偵測、事件歸因
 //   rebuildEmotionState —— 依 raised_at 順序重放全部碎片（設定改變、補資料時用）
 // =================================================================
 const { getEmotionConfig } = require('./config');
 const { SKIP_NAMES } = require('../../memoryConfig');
-const { DIMS, analyzeEmotions, parseEventAt, floored } = require('./scoring');
+const { DIMS, analyzeEmotions, floored } = require('./scoring');
 const { SLOTS, parseUtc, toSqlUtc, localParts, slotOfHour } = require('./time');
 const { estimate, kalmanStep, zScore, robustResidualSq } = require('./ou');
-const { parseEventDateFromText } = require('../../../utils/dateParse');
+const { resolveRaisedAt, resolveEventAt, timeColumns } = require('../dentate/timeFields');
 
 const DAY_MS = 86400000;
-const TIMELESS_TYPES = new Set(['preference', 'fact', 'entity_new', 'reflection']);
 
 // ── 階段 A ──────────────────────────────────────────────
 
-// 該條碎片的「話題被提出的時間」：來源訊息（含 quote 那幾則）中最早的一則；找不到就用整批最早
-// msgs: [{ ts, text }]；回傳 UTC 'YYYY-MM-DD HH:MM:SS' 或 null
-function resolveRaisedAt(quote, msgs) {
-    const q = String(quote || '').trim();
-    const withTime = (msgs || []).map(m => ({ d: parseUtc(m.ts), text: m.text || '' })).filter(m => m.d);
-    if (!withTime.length) return null;
-    let pool = q ? withTime.filter(m => m.text.includes(q)) : [];
-    if (!pool.length) pool = withTime;
-    const earliest = pool.reduce((a, b) => (b.d < a.d ? b : a));
-    return toSqlUtc(earliest.d);
-}
+// resolveRaisedAt／resolveEventAt 與時間欄位的算法在齒狀迴 dentate/timeFields.js（這裡轉出，介面不變）
 
-// 事件日期：由程式從 quote（原話）依「來源訊息時間」確定性換算，模型輸出只當備援。
-// 8B 模型的 event_at 不可靠：常把日常狀態填成訊息當天，「下個月十五號」也會算錯月份。
-//   1. 沒有時間性的類型 → null
-//   2. quote 解析得到日期 → 以程式結果為準（不看模型）
-//   3. 解析不到 → 採用模型輸出，但若它等於訊息當天（當地或 UTC 日期）就視為不可信 → null
-//      （quote 已確認沒有日期片語；連「今天」都沒說，卻標成今天多半是拿訊息日期充數）
-function resolveEventAt(entry, raisedUtc, tz) {
-    if (TIMELESS_TYPES.has(entry?.type)) return null;
-    const lp = localParts(raisedUtc, tz);
-    if (lp) {
-        const ref = new Date(Date.UTC(lp.year, lp.month - 1, lp.day));   // 以當地日曆日為「今天」
-        const fromQuote = parseEventDateFromText(entry?.quote, ref);
-        if (fromQuote) return fromQuote;
-    }
-    const model = parseEventAt(entry?.event_at);
-    if (!model) return null;
-    if (model.length === 10) {
-        const local = lp ? `${lp.year}-${String(lp.month).padStart(2, '0')}-${String(lp.day).padStart(2, '0')}` : null;
-        if (model === local || model === String(raisedUtc).slice(0, 10)) return null;
-    }
-    return model;
-}
-
-// 寫入情緒欄位與時間欄位；emotion.enabled=false 時什麼都不做。回傳分析結果（或 null）
-function applyScribeEmotion(db, fragId, entry, { raisedAt } = {}) {
+// 寫入情緒欄位；emotion.enabled=false 時什麼都不做。回傳分析結果（或 null）
+// timeFields（預設 true）：一併寫時間欄位（相容舊呼叫端與測試）。Scribe 寫入流程（dentate/encode）
+// 已先用 dentate/timeFields 的 applyTimeFields 寫好時間欄位，會傳 timeFields: false。
+function applyScribeEmotion(db, fragId, entry, { raisedAt, timeFields = true } = {}) {
     const cfg = getEmotionConfig();
     if (!cfg.enabled) return null;
     const an = analyzeEmotions(entry?.emotions, cfg);
-    const raised = raisedAt || toSqlUtc(new Date());
-    const eventAt = resolveEventAt(entry, raised, cfg.timezone);
-    const lp = localParts(raised, cfg.timezone);
-    const sets = ['raised_at = ?', 'event_at = ?', 'raised_slot = ?', 'weekday = ?', 'tz = ?'];
-    const vals = [raised, eventAt, lp ? slotOfHour(lp.hour) : null, lp ? lp.weekday : null, cfg.timezone];
+    const { sets, vals } = timeFields ? timeColumns(entry, raisedAt, cfg.timezone) : { sets: [], vals: [] };
     if (an) {
         for (const d of DIMS) { sets.push(`emo_${d} = ?`); vals.push(an.raw[d]); }
         sets.push('emotion_conf = ?', 'intensity = ?', 'valence = ?', 'emotional_weight = ?');
         // 舊排序公式讀 emotional_weight，且多處以 `|| 0.5` 當預設，0 會被當成缺值 → 設下限 0.1
         vals.push(an.confidence, an.intensity, an.valence, Math.max(0.1, an.intensity));
     }
-    db.prepare(`UPDATE memory_fragments SET ${sets.join(', ')} WHERE id = ?`).run(...vals, fragId);
+    if (sets.length) db.prepare(`UPDATE memory_fragments SET ${sets.join(', ')} WHERE id = ?`).run(...vals, fragId);
     return an;
 }
 
