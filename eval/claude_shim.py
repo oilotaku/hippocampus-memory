@@ -15,6 +15,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import uuid
@@ -68,13 +69,24 @@ def build_prompt(messages):
 def call_claude(system, prompt, model):
     cmd = [CLAUDE, "-p", "--model", model, "--setting-sources", "project", "--strict-mcp-config",
            "--tools", "", "--no-session-persistence", "--output-format", "json"]
-    # 一律帶 --system-prompt：不帶時 CLI 會套用 Claude Code 自己約 6.5k token 的預設系統提示詞（實測）
-    cmd += ["--system-prompt", system or "You are a helpful assistant."]
+    # 一律帶系統提示詞：不帶時 CLI 會套用 Claude Code 自己約 6.5k token 的預設系統提示詞（實測）。
+    # 用 --system-prompt-file 而不是 --system-prompt：Linux 單一命令列參數上限 128KB（MAX_ARG_STRLEN），
+    # 整段長對話（約 6 萬個中文字＝約 19 萬位元組）放進參數會 E2BIG「Argument list too long」。
+    fd, sp_path = tempfile.mkstemp(prefix="sysprompt-", suffix=".txt", dir=WORKDIR)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(system or "You are a helpful assistant.")
+    cmd += ["--system-prompt-file", sp_path]
     t0 = time.time()
     # 預設關閉延伸思考（MAX_THINKING_TOKENS=0）：開著時 Haiku 一批 Scribe 抽取輸出約 2.3 萬 token、209 秒；
     # 關閉後輸出約少 5 倍。本機 qwen3 的思考也是關閉的，兩邊條件一致。SHIM_THINKING 可覆寫。
     env = dict(os.environ, MAX_THINKING_TOKENS=os.environ.get("SHIM_THINKING", "0"))
-    p = subprocess.run(cmd, input=prompt, capture_output=True, text=True, cwd=WORKDIR, timeout=900, env=env)
+    try:
+        p = subprocess.run(cmd, input=prompt, capture_output=True, text=True, cwd=WORKDIR, timeout=900, env=env)
+    finally:
+        try:
+            os.unlink(sp_path)
+        except OSError:
+            pass
     if p.returncode != 0:
         raise RuntimeError(f"claude exit {p.returncode}: {(p.stderr or p.stdout)[-400:]}")
     out = json.loads(p.stdout)
