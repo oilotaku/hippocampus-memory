@@ -27,6 +27,9 @@ function normStr(s) {
         .replace(RE_DATETIME, '<T>')
         .replace(RE_DATE, '<D>')
         .replace(/\b\d{2}-\d{2} \d{2}:\d{2}\b/g, '<T>')
+        // archivist/relations.js 的證據行用 source_date.slice(5) 寫成「[MM-DD]」；播種日期相對於今天，
+        // 不正規化的話指紋只在錄製當天成立（2026-10-01 起每天失敗）
+        .replace(/\[\d{2}-\d{2}\]/g, '[<MD>]')
         .replace(/\b\d{1,2}:\d{2}(:\d{2})?\b/g, '<HM>')
         .replace(RE_MD, '<MD>');
 }
