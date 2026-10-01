@@ -516,7 +516,7 @@ This version would not exist without the foundation they built. The original doc
 | Extraction reliability | Truncation-tolerant parsing and halving instead of discarding a batch; failed batches stop the run instead of being skipped (parse failures shrink the batch and finally skip a single unreadable message, connection failures only wait); each batch gets its own preceding messages as context; chat mode decided from the batch itself; output limit and temperature configurable |
 | Extraction prompt | Reorganized Scribe prompt, now the default: half the length, one consistent coverage rule, same output format; the original stays available as `scribe.prompt=legacy` and is locked byte-for-byte by a test |
 | Pre-answer check | Optional CA1 comparator (`recall.verify`): checks the question's concrete details against the retrieved memories before answering; off by default |
-| Evaluation | End-to-end runner with separately configurable extractor, answerer and grader, a long-context baseline, a Claude CLI shim, and premise-aware grading of trick questions |
+| Evaluation | End-to-end runner with separately configurable extractor, answerer and grader, a long-context baseline, and a Claude CLI shim |
 | Dependencies | `better-sqlite3` upgraded to 12 for prebuilt Node 24 binaries; license field corrected from ISC to MIT |
 
 ## License
