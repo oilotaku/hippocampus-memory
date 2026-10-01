@@ -17,6 +17,7 @@ const { getScribeConfig } = require('../entorhinal/scribeConfig');
 const { filterEntriesByQuote, normalizedContentHash, findDuplicate, quoteSourceDate } = require('./scribeQuality');
 const { fixDateWeekday } = require('./dateFix');
 const { resolveRaisedAt, applyTimeFields } = require('./timeFields');
+const { initialWeight, CONFIDENCE_STEP, CONFIDENCE_MAX, CONFIDENCE_DEFAULT } = require('./strength');
 const emotion = require('../amygdala');
 
 // 校驗 processed_until 是否為有效日期字串（防止非日期值寫入導致 Scribe 永久跳過）
@@ -137,7 +138,7 @@ async function encodeEntries(db, result, { messages, buffer, modeInfo, dec }) {
         `);
         const bumpStmt = db.prepare(`
             UPDATE memory_fragments
-            SET confidence = MIN(1.0, COALESCE(confidence, 0.5) + 0.05),
+            SET confidence = MIN(?, COALESCE(confidence, ?) + ?),
                 evidence_count = COALESCE(evidence_count, 1) + 1,
                 quote = COALESCE(quote, ?)
             WHERE id = ?
@@ -182,7 +183,7 @@ async function encodeEntries(db, result, { messages, buffer, modeInfo, dec }) {
             if (hashDup) {
                 hashDedupCount++;
                 if (hashDup.source_msg_ids !== sourceMsgIds) {  // 同一批訊息重跑不算新證據
-                    bumpStmt.run(sealField('memory_fragments', 'quote', String(entry.quote || '').trim()), hashDup.id);
+                    bumpStmt.run(CONFIDENCE_MAX, CONFIDENCE_DEFAULT, CONFIDENCE_STEP, sealField('memory_fragments', 'quote', String(entry.quote || '').trim()), hashDup.id);
                     evidenceMerged++;
                 }
                 console.log(`[Scribe] 去重: "${String(entry.content).slice(0, 40)}" = 既有片段 #${hashDup.id}，證據+1`);
@@ -194,7 +195,7 @@ async function encodeEntries(db, result, { messages, buffer, modeInfo, dec }) {
                 entry.type || 'observation',
                 primaryEntity,
                 sealField('memory_fragments', 'content', entry.content),
-                entry.emotional_weight ?? 0.3,
+                initialWeight(entry),
                 fragmentSource,
                 quoteSourceDate(entry.quote, msgDates) || sourceDate,
                 sourceMsgIds,

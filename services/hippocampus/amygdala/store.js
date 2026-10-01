@@ -9,6 +9,7 @@ const { SKIP_NAMES } = require('../../memoryConfig');
 const { DIMS, analyzeEmotions, floored } = require('./scoring');
 const { SLOTS, parseUtc, toSqlUtc, localParts, slotOfHour } = require('./time');
 const { estimate, kalmanStep, zScore, robustResidualSq } = require('./ou');
+const { weightFromIntensity } = require('../dentate/strength');
 const { resolveRaisedAt, resolveEventAt, timeColumns } = require('../dentate/timeFields');
 
 const DAY_MS = 86400000;
@@ -29,7 +30,7 @@ function applyScribeEmotion(db, fragId, entry, { raisedAt, timeFields = true } =
         for (const d of DIMS) { sets.push(`emo_${d} = ?`); vals.push(an.raw[d]); }
         sets.push('emotion_conf = ?', 'intensity = ?', 'valence = ?', 'emotional_weight = ?');
         // 舊排序公式讀 emotional_weight，且多處以 `|| 0.5` 當預設，0 會被當成缺值 → 設下限 0.1
-        vals.push(an.confidence, an.intensity, an.valence, Math.max(0.1, an.intensity));
+        vals.push(an.confidence, an.intensity, an.valence, weightFromIntensity(an.intensity));
     }
     if (sets.length) db.prepare(`UPDATE memory_fragments SET ${sets.join(', ')} WHERE id = ?`).run(...vals, fragId);
     return an;
