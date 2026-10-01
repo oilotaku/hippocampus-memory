@@ -45,7 +45,7 @@ fs.writeFileSync(CFG, JSON.stringify(example));
 process.on('exit', () => { try { fs.unlinkSync(CFG); } catch (_) {} });
 
 const llm = require('../services/llm');
-// E2E_SCRIBE_PROMPT=legacy|v2：抽取用哪一版 Scribe 提示詞（未設定時依 memory_config 的 scribe.prompt，預設 legacy）
+// E2E_SCRIBE_PROMPT=legacy|v2：抽取用哪一版 Scribe 提示詞（未設定時依 memory_config 的 scribe.prompt，預設 v2）
 const { getScribeConfig, setScribeConfigOverride } = require('../services/hippocampus/entorhinal/scribeConfig');
 // E2E_SCRIBE_MAX_OUTPUT_TOKENS：抽取輸出上限（搭配轉接器 SHIM_ENFORCE_MAX_TOKENS=1 重現正式環境的截斷）
 if (process.env.E2E_SCRIBE_PROMPT || process.env.E2E_SCRIBE_MAX_OUTPUT_TOKENS) {

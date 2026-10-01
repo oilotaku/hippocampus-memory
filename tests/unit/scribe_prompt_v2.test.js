@@ -28,7 +28,7 @@ const { runScribe } = require('../../services/scribe');
 const { setScribeConfigOverride, getScribeConfig } = require('../../services/hippocampus/entorhinal/scribeConfig');
 const emotion = require('../../services/emotion');
 
-// 舊版提示詞在空資料庫、預設設定下的 SHA-256。用改動前的程式（main 9e856d8 之後、本分支之前）算出；
+// 舊版提示詞（scribe.prompt=legacy）在空資料庫下的 SHA-256。用改動前的程式（main 9e856d8 之後、本分支之前）算出；
 // 這個值變了代表 legacy 提示詞被改動——'legacy' 必須與舊版逐字相同。
 const LEGACY_SHA256 = 'db0d5b3f59e4451f644fb6f59c7d6a4c694af3add30930514875c8108a909660';
 
@@ -53,17 +53,17 @@ const sha = (s) => crypto.createHash('sha256').update(s).digest('hex');
 
 test.afterEach(() => { setScribeConfigOverride(null); emotion._setOverride(null); });
 
-test('設定：預設 legacy，只認 v2，其他值回退 legacy', () => {
+test('設定：預設 v2，只認 legacy，其他值回退 v2', () => {
     setScribeConfigOverride({});
-    assert.equal(getScribeConfig().prompt, 'legacy');
-    setScribeConfigOverride({ prompt: 'v2' });
     assert.equal(getScribeConfig().prompt, 'v2');
-    setScribeConfigOverride({ prompt: 'V2!' });
+    setScribeConfigOverride({ prompt: 'legacy' });
     assert.equal(getScribeConfig().prompt, 'legacy');
+    setScribeConfigOverride({ prompt: 'Legacy!' });
+    assert.equal(getScribeConfig().prompt, 'v2');
 });
 
 test('legacy：與舊版提示詞逐字相同（SHA-256 鎖定）', async () => {
-    const { prompt } = await promptFor({});
+    const { prompt } = await promptFor({ prompt: 'legacy' });
     assert.equal(sha(prompt), LEGACY_SHA256);
 });
 
@@ -97,7 +97,7 @@ test('v2：情緒開啟時含 emotions／event_at 段落；關閉時全文不提
 });
 
 test('v2：長度不到舊版的 60%（記錄實際字數）', async () => {
-    const legacy = (await promptFor({})).prompt;
+    const legacy = (await promptFor({ prompt: 'legacy' })).prompt;
     const v2 = (await promptFor({ prompt: 'v2' })).prompt;
     console.log(`[scribe_prompt_v2] legacy ${legacy.length} 字，v2 ${v2.length} 字（${Math.round(v2.length / legacy.length * 100)}%）`);
     assert.ok(v2.length < legacy.length * 0.6);

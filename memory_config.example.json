@@ -110,8 +110,8 @@
     "_comment_fade": "Fading affect bias for ranking: negative emotion intensity halves every 60 days, positive every 120. Raw scores are never modified."
   },
   "scribe": {
-    "_comment_prompt": "Extraction prompt. 'legacy' (default) = the original prompt, unchanged. 'v2' = the reorganized prompt (services/hippocampus/entorhinal/scribePromptV2.js): about half the length, one consistent rule (record every concrete detail the user mentions; only the listed exclusions are skipped) instead of the original's conflicting 'fewer but better / when unsure, skip' versus 'never miss anything'. Duplicates are left to the deterministic deduplication. The output format is identical.",
-    "prompt": "legacy",
+    "_comment_prompt": "Extraction prompt. 'v2' (default) = the reorganized prompt (services/hippocampus/entorhinal/scribePromptV2.js): about half the length, one consistent rule (record every concrete detail the user mentions; only the listed exclusions are skipped) instead of the original's conflicting 'fewer but better / when unsure, skip' versus 'never miss anything'. Duplicates are left to the deterministic deduplication. The output format is identical. 'legacy' = the original prompt, unchanged byte for byte. v2 became the default after it answered more questions correctly on the Chinese synthetic sets (69% -> 79% short, 71% -> 78% long) without more invented answers.",
+    "prompt": "v2",
     "_comment_max_output_tokens": "Output limit for one extraction batch. The original fixed 4096 truncated most batches: a 60-message batch measured about 5,500-6,100 output tokens at the median and up to 12,000, and a truncated reply used to discard the whole batch. Local models are limited by their context size instead; truncated replies are split in half and retried.",
     "max_output_tokens": 16384,
     "_comment_temperature": "Extraction temperature (0 allowed).",

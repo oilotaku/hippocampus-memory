@@ -1,4 +1,5 @@
-// 印出 Scribe 在空資料庫、預設設定下實際送出的系統提示詞 SHA-256 與字數（用來確認 legacy 提示詞逐字不變）。
+// 印出 Scribe 在空資料庫、scribe.prompt=legacy 下實際送出的系統提示詞 SHA-256 與字數（用來確認 legacy 提示詞逐字不變）。
+// 加參數 v2 則印目前預設的 v2 提示詞。
 // 用法：node eval/scribe_prompt_hash.js   （LLM／Chroma／Librarian 全部 stub，不打外部服務）
 const crypto = require('crypto');
 const os = require('os');
@@ -13,6 +14,7 @@ memory.chromaDBOperation = async () => { throw new Error('stub'); };
 const libPath = require.resolve('../services/librarian');
 require.cache[libPath] = { id: libPath, filename: libPath, loaded: true, exports: { searchHybrid: async () => [] } };
 require('../database').initDatabase();
+require('../services/hippocampus/entorhinal/scribeConfig').setScribeConfigOverride({ prompt: process.argv[2] === 'v2' ? 'v2' : 'legacy' });
 const { runScribe } = require('../services/scribe');
 const m = [{ id: 1, sender: 'user', content: '我今天去爬山，好累', timestamp: '2026-05-02 05:22:00', message_type: 'text', is_encrypted: 0 }];
 runScribe(m, m[0].timestamp).then(() => {
