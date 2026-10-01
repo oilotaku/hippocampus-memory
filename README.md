@@ -28,6 +28,7 @@ A self-organizing long-term memory system for AI assistants and companions. It e
 | Retrieval timing gate: skip memory lookup for greetings and commands, adaptive result count, context-triggered surfacing, upcoming-event reminders, capped hard triggers | Working (on by default; `recall.gate=false` restores the old behaviour) |
 | `injected_count` (put in the prompt) split from `cited_count` (actually used) | Working; `cited_count` is fed by the `recall_memory` tool, and by `recallGate.markCitedFromReply()` for hosts that can pass the assistant's reply |
 | Eight-dimension emotion engine: per-fragment scores, personal time-of-day baselines, turning-point attribution to entities, anniversaries, fading | Working (on by default, `emotion.enabled`) |
+| Scribe extraction no longer loses whole batches: truncated replies are salvaged or split, a failed batch stops the run instead of being skipped, each batch gets the messages right before it as context | Working (see [Verification details](#verification-details)) |
 | Scribe prompt v2: half the length, one consistent "record every concrete detail" rule instead of conflicting keep-it-short / never-miss-anything rules | Optional (`scribe.prompt=v2`); default stays `legacy`, see [Verification details](#verification-details) |
 | Retrieval ranking v2: entities boost instead of flooding, no penalty for full-text-only hits, time decay orders but never filters | Working (on by default; `librarian.ranking=legacy` restores the old ranking) |
 | Retrieval benchmark on LoCoMo and a Traditional Chinese synthetic set (`eval/`) | Done; see [Retrieval evaluation](#retrieval-evaluation) |
@@ -208,6 +209,8 @@ Personalization lives here: user and assistant names, relationship, and colors. 
 | `recall.prospective_days / prospective_max` | 7 / 3 | Events dated within this many days are added to an upcoming-events block even if the message did not match them. Dates are parsed from fragment text (`M月D日`, `M/D`, `下週X`, `週X`, `明天`, ...) relative to when the fragment was written; an `event_at` column is used if present |
 | `recall.hard_trigger_max` | 3 | Most hard-trigger memories injected per message; tags now match on two-character tokens instead of raw substrings |
 | `recall.cite_min_overlap / cite_min_shared` | 0.3 / 3 | How much of a fragment's two-character tokens must appear in a reply for `markCitedFromReply()` to count it as cited |
+| `scribe.max_output_tokens` | 16384 | Output limit for one extraction batch. The original fixed 4096 was below what a 60-message batch needs (median about 5,500-6,100 tokens), so most batches were truncated and, before this fix, discarded. Truncated replies are now split in half and retried, so a lower limit costs extra calls rather than memories |
+| `scribe.temperature` | 0.3 | Extraction temperature; 0 is allowed |
 | `scribe.prompt` | `legacy` | Extraction prompt. `v2` is the reorganized prompt (4,077 instead of 9,507 characters; records every concrete detail the user mentions and leaves duplicates to the deterministic deduplication). It extracts more, more consistently, and answered more questions correctly, but on long histories it made lure questions ("not mentioned" answers that differ from a real fact by one detail) easier to get wrong; see [Verification details](#verification-details) |
 | `librarian.ranking` | `v2` | Retrieval ranking. `legacy` restores the original: entity channel injects its latest 10 fragments at fixed ranks, full-text-only hits ×0.7, time decay used as a score cutoff |
 | `librarian.entity_boost` | 0.1 | Candidates already found by full text or vectors that link to an entity named in the message get relevance × (1 + boost). The user's and assistant's own names never trigger it |
@@ -316,6 +319,7 @@ What this shows:
   | about 80k tokens (60 sessions) | 84% | 69% | 15 points |
 
   Claude Haiku answered just as well with an 80k-token transcript as with a short one, so no crossover appeared. What did change with length is invention: on questions whose answer never came up, the whole-transcript baseline made something up in a third of cases at 80k tokens (39/59 correct refusals), while the memory system refused correctly 117/118 times. The memory system's losses are concentrated in multi-hop questions (43% vs 94%) and single facts the extractor skipped (70% vs 96%), which points back at extraction rather than retrieval.
+- **The original extractor silently dropped most batches.** Its 4,096-token output limit truncated most replies, a truncated reply discarded the whole batch, and the next successful batch moved the cursor past it. With that limit reproduced, only 13% of the evidence was ever stored. The evaluation shim had not applied the limit, so earlier runs did not show this. After the fix the same setup keeps 79%. See [Verification details](#verification-details).
 - **A shorter, consistent extraction prompt helps most.** Prompt v2 (`scribe.prompt=v2`) raised the short set from 68% to 79% (the whole-transcript baseline is 86%) and the long set from 65% to 68%. It also made extraction steadier: evidence coverage went from 78% ± 11% to 86% ± 8% across repeated runs. The cost is about 25% more memories, which on the long set made lure questions slip from 78% to 65% correct refusals. The default stays `legacy` until that is addressed.
 - **The time fix helped time questions slightly** (22/60 to 26/60 over two runs each); the overall score did not move beyond run-to-run noise.
 
@@ -373,6 +377,16 @@ Extraction only (no answering), short set, each prompt run three times on each o
 |---|---|---|---|---|---|
 | legacy | 9,507 characters (about 5.4k tokens) | 46.6 | 77.8% ± 11.4% | 48.1% | 78.1% |
 | v2 | 4,077 characters (about 2.3k tokens) | 57.9 | 85.9% ± 8.4% | 73.1% | 91.9% |
+
+#### Output truncation: before and after the fix
+
+Extraction only, short set, default prompt, two runs per row. The Claude CLI cannot cap its output, so the shim was run with `SHIM_ENFORCE_MAX_TOKENS=1`: when a reply exceeds the requested `max_tokens` it is cut proportionally and returned with `finish_reason: "length"`, as a real API would.
+
+| Code | Output limit | Batches lost | Batches split and retried | Model calls | Memories stored | Evidence recall |
+|---|---|---|---|---|---|---|
+| Before the fix | 4,096 | 8 of 12 | — | 21 | 49 | 13.1% ± 13.8% |
+| After the fix | 4,096 | 0 of 12 | 8 | 30 | 252 | 79.0% ± 4.3% |
+| After the fix | 16,384 (new default) | 0 of 12 | 0 | 12 | 260 | 79.4% ± 10.1% |
 
 #### Memory system runs in detail
 
@@ -433,6 +447,7 @@ Cost of all end-to-end runs above, at API-equivalent prices through the Claude C
 - **Local models need a context of at least 8k tokens.** The Scribe extraction prompt is about 5.4k tokens with `scribe.prompt=legacy` (about 2.3k with `v2`) (Traditional Chinese tokenizes about 10% longer than Simplified). With Ollama's default `num_ctx` of 4096 the prompt is silently truncated and an 8B model stops returning `type`/`quote`, so every entry is dropped. Create a model variant with `PARAMETER num_ctx 8192` (or set `OLLAMA_CONTEXT_LENGTH`).
 - **Assistant replies get extracted.** In testing with an 8B local model, half of the extracted fragments were the assistant's own small talk. The small-talk word list is Chinese only, so English small talk is not filtered.
 - **Extraction is tuned for Chinese.** The 60-character limit on verbatim quotes is too short for English sentences, and the Scribe reserves 4,096 output tokens, which leaves little room for input in an 8k context.
+- **Messages sent in the same second can be skipped.** The extraction cursor is a timestamp and the next run reads messages strictly after it, so a message with exactly the same timestamp as the last processed one is never extracted.
 - **Extraction is unstable and drops details.** With the default prompt, two runs of the same conversation can differ by a dozen memories, and small details (who did a chore, the name of a stretching exercise) are often skipped. `scribe.prompt=v2` reduces both, but on long histories the extra memories make the answerer more likely to accept a near-miss memory for a lure question; checking each claim against the cited memory before replying (the planned CA1 step) is the intended fix. See [Verification details](#verification-details).
 - **English conversations are stored in Chinese.** The Scribe prompt is written in Chinese, so English conversations end up as Chinese memories that English questions rarely match. End-to-end evaluation on LoCoMo is paused until this and the quote length are fixed.
 - **Entity resolution is broken upstream.** `entityResolver.js` reads a column `related_entity_ids` that no migration creates.
@@ -470,6 +485,7 @@ This version would not exist without the foundation they built. The original doc
 | Structure | The 311 KB Archivist and 157 KB cognitive-model files were split into focused modules of at most 40 KB each, verified to be a pure move |
 | Retrieval ranking | Ranking v2 (entity boost, no full-text penalty, decay orders only), with a LoCoMo and Traditional Chinese retrieval benchmark |
 | Time information | Messages reach the extractor in local time with the weekday (they were in UTC), each memory keeps the date of the message its quote came from, and injected memories show that date instead of "0 days ago" |
+| Extraction reliability | Truncation-tolerant parsing and halving instead of discarding a batch; failed batches stop the run instead of being skipped (parse failures shrink the batch and finally skip a single unreadable message, connection failures only wait); each batch gets its own preceding messages as context; chat mode decided from the batch itself; output limit and temperature configurable |
 | Extraction prompt | Optional reorganized Scribe prompt (`scribe.prompt=v2`): half the length, one consistent coverage rule, same output format; the original prompt stays the default and is locked byte-for-byte by a test |
 | Evaluation | End-to-end runner with separately configurable extractor, answerer and grader, a long-context baseline, and a Claude CLI shim |
 | Dependencies | `better-sqlite3` upgraded to 12 for prebuilt Node 24 binaries; license field corrected from ISC to MIT |
