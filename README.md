@@ -100,7 +100,7 @@ Without a vector store, only one channel can hit, so no result reaches the Cite 
 | Fragments | 14 days without access | 30 more days; vector removed | 90 more days; content wiped |
 | Episodes | Permanent | 6 months to mature | 12 months to archived |
 
-Recalling a memory resets its timer.
+Recalling a memory resets its timer. The thresholds are set in `lifecycle.*` (`fragment_cooling_days`, `fragment_frozen_days`, `fragment_tombstone_days`, `episode_mature_months`, `episode_archive_months`; flash episodes take twice as long).
 
 ---
 
@@ -215,6 +215,7 @@ Personalization lives here: user and assistant names, relationship, and colors. 
 | `recall.cite_min_overlap / cite_min_shared` | 0.3 / 3 | How much of a fragment's two-character tokens must appear in a reply for `markCitedFromReply()` to count it as cited |
 | `scribe.max_output_tokens` | 16384 | Output limit for one extraction batch. The original fixed 4096 was below what a 60-message batch needs (median about 5,500-6,100 tokens), so most batches were truncated and, before this fix, discarded. Truncated replies are now split in half and retried, so a lower limit costs extra calls rather than memories |
 | `scribe.temperature` | 0.3 | Extraction temperature; 0 is allowed |
+| `scribe.fix_dates` | true | Check every "M月D日（週X）" in an extracted memory against the calendar before storing it. Models converting "next Wednesday" usually copy the weekday correctly but get the date one to three days off (19 of 37 such pairs on the long Chinese set). A date written in the quote wins and the weekday is fixed; otherwise the quote's relative phrase is recomputed from the message date with the same parser as `event_at`; otherwise the weekday wins and the date moves to the nearest such weekday |
 | `scribe.prompt` | `v2` | Extraction prompt. `v2` is the reorganized prompt (4,077 instead of 9,507 characters; records every concrete detail the user mentions and leaves duplicates to the deterministic deduplication). It extracts more, more consistently, and answered more questions correctly without inventing more. `legacy` is the original prompt, locked byte for byte by a test |
 | `librarian.ranking` | `v2` | Retrieval ranking. `legacy` restores the original: entity channel injects its latest 10 fragments at fixed ranks, full-text-only hits ×0.7, time decay used as a score cutoff |
 | `librarian.entity_boost` | 0.1 | Candidates already found by full text or vectors that link to an entity named in the message get relevance × (1 + boost). The user's and assistant's own names never trigger it |
