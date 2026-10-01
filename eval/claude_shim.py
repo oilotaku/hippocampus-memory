@@ -10,6 +10,7 @@
 環境變數：SHIM_PORT(18765) SHIM_MODEL(覆蓋請求的 model；預設 haiku) SHIM_CONCURRENCY(2)
           SHIM_MAX_COST(0=不限) SHIM_LOG(每次呼叫一行 JSONL) SHIM_WORKDIR
           SHIM_THINKING(傳給 MAX_THINKING_TOKENS，預設 0＝不思考)
+          SHIM_ENFORCE_MAX_TOKENS(1＝依請求的 max_tokens 截斷回覆並回 finish_reason=length，重現正式 API 的截斷)
 """
 import json
 import os
@@ -24,6 +25,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 PORT = int(os.environ.get("SHIM_PORT", "18765"))
 MODEL = os.environ.get("SHIM_MODEL", "haiku")
 MAX_COST = float(os.environ.get("SHIM_MAX_COST", "0") or 0)
+ENFORCE_MAX_TOKENS = os.environ.get("SHIM_ENFORCE_MAX_TOKENS", "") not in ("", "0")
 LOG = os.environ.get("SHIM_LOG", "")
 WORKDIR = os.environ.get("SHIM_WORKDIR", f"/tmp/claude-shim-{os.getuid()}")
 CLAUDE = os.environ.get("CLAUDE_BIN", "claude")
@@ -147,17 +149,26 @@ class H(BaseHTTPRequestHandler):
             print(f"[shim] 錯誤：{e}", file=sys.stderr, flush=True)
             return self._json(502, {"error": {"message": str(e)[:500]}})
         cid = "chatcmpl-" + uuid.uuid4().hex[:12]
-        usage = {"prompt_tokens": rec["in"] + rec["cache_read"] + rec["cache_write"], "completion_tokens": rec["out"]}
+        # SHIM_ENFORCE_MAX_TOKENS=1：重現正式 API 的輸出上限。claude -p 無法設定輸出上限，所以在回覆超過請求的
+        # max_tokens 時，依 token 比例截斷文字並回 finish_reason="length"（正式環境截斷時的樣子）。
+        finish = "stop"
+        max_tok = body.get("max_tokens")
+        if ENFORCE_MAX_TOKENS and isinstance(max_tok, int) and max_tok > 0 and rec["out"] > max_tok and text:
+            text = text[: max(1, int(len(text) * max_tok / rec["out"]))]
+            finish = "length"
+            with LOCK:
+                STATE["truncated"] = STATE.get("truncated", 0) + 1
+        usage = {"prompt_tokens": rec["in"] + rec["cache_read"] + rec["cache_write"], "completion_tokens": min(rec["out"], max_tok) if finish == "length" else rec["out"]}
         usage["total_tokens"] = usage["prompt_tokens"] + usage["completion_tokens"]
         if not body.get("stream"):
             return self._json(200, {"id": cid, "object": "chat.completion", "model": model, "usage": usage,
-                                    "choices": [{"index": 0, "finish_reason": "stop",
+                                    "choices": [{"index": 0, "finish_reason": finish,
                                                  "message": {"role": "assistant", "content": text}}]})
         chunks = [
             {"id": cid, "object": "chat.completion.chunk", "model": model,
              "choices": [{"index": 0, "delta": {"role": "assistant", "content": text}, "finish_reason": None}]},
             {"id": cid, "object": "chat.completion.chunk", "model": model, "usage": usage,
-             "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]},
+             "choices": [{"index": 0, "delta": {}, "finish_reason": finish}]},
         ]
         payload = "".join(f"data: {json.dumps(c, ensure_ascii=False)}\n\n" for c in chunks) + "data: [DONE]\n\n"
         b = payload.encode()

@@ -8,7 +8,7 @@
 //   環境變數 E2E_MODEL（預設 qwen3-8b-zh-8k）
 //            E2E_LLM_BASE（預設 http://127.0.0.1:11434/v1；接 eval/claude_shim.py 時設 http://127.0.0.1:18765/v1）
 //            E2E_TAG（資料庫與抽取檔名的標籤，讓不同模型的抽取結果並存；預設空）
-//            E2E_SCRIBE_PROMPT（legacy|v2：抽取用的 Scribe 提示詞版本）
+//            E2E_SCRIBE_PROMPT（legacy|v2：抽取用的 Scribe 提示詞版本）、E2E_SCRIBE_MAX_OUTPUT_TOKENS（抽取輸出上限）
 //   extract 結束時把證據召回率（非無解題的證據輪次被已存記憶涵蓋的比例）寫進 e2e_<對話>_extract.json 的 recall。
 //   嵌入（--vector）固定走本機 Ollama 的 bge-m3。
 const fs = require('fs');
@@ -45,7 +45,13 @@ process.on('exit', () => { try { fs.unlinkSync(CFG); } catch (_) {} });
 const llm = require('../services/llm');
 // E2E_SCRIBE_PROMPT=legacy|v2：抽取用哪一版 Scribe 提示詞（未設定時依 memory_config 的 scribe.prompt，預設 legacy）
 const { getScribeConfig, setScribeConfigOverride } = require('../services/hippocampus/entorhinal/scribeConfig');
-if (process.env.E2E_SCRIBE_PROMPT) setScribeConfigOverride({ prompt: process.env.E2E_SCRIBE_PROMPT });
+// E2E_SCRIBE_MAX_OUTPUT_TOKENS：抽取輸出上限（搭配轉接器 SHIM_ENFORCE_MAX_TOKENS=1 重現正式環境的截斷）
+if (process.env.E2E_SCRIBE_PROMPT || process.env.E2E_SCRIBE_MAX_OUTPUT_TOKENS) {
+    const o = {};
+    if (process.env.E2E_SCRIBE_PROMPT) o.prompt = process.env.E2E_SCRIBE_PROMPT;
+    if (process.env.E2E_SCRIBE_MAX_OUTPUT_TOKENS) o.max_output_tokens = Number(process.env.E2E_SCRIBE_MAX_OUTPUT_TOKENS);
+    setScribeConfigOverride(o);
+}
 const memory = require('../services/memory');
 memory.chromaDBOperation = async () => { throw new Error('Chroma 未啟動（評測刻意降級）'); };
 const { initDatabase, getDb } = require('../database');
@@ -127,7 +133,8 @@ async function extract() {
         let proposed = null;
         try { proposed = JSON.parse((calls[calls.length - 1]?.reply || '').replace(/```json|```/g, '').trim()).entries?.length ?? null; } catch (_) {}
         const rec = { batch: batches.length + 1, first: batch[0].dia_id, last: batch[batch.length - 1].dia_id, msgs: batch.length, ms,
-            llm_calls: calls.length - nCalls, proposed, written: r?.written ?? 0, added_rows: after - before, duplicates: r?.duplicates ?? 0,
+            llm_calls: calls.length - nCalls, proposed, written: r?.written ?? 0,
+            ok: r ? r.ok !== false : false, truncated: !!r?.truncated, split: !!r?.split, added_rows: after - before, duplicates: r?.duplicates ?? 0,
             quoteDropped: r?.quoteDropped ?? 0, quoteDroppedByType: r?.quoteDroppedByType || {},
             aiChitchatDropped: r?.aiChitchatDropped ?? 0, aiChitchatDroppedByType: r?.aiChitchatDroppedByType || {}, error: err,
             prompt_tokens: calls[calls.length - 1]?.usage ?? null };
