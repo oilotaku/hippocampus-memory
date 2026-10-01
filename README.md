@@ -6,6 +6,33 @@ A self-organizing long-term memory system for AI assistants and companions. It e
 
 ---
 
+## Results at a glance
+
+Measured end to end (extract → recall → answer → grade) on Traditional Chinese synthetic conversations, against a baseline that puts the whole transcript in the prompt. Claude Haiku 4.5 extracts and answers; Claude Sonnet grades. Full tables, methods and caveats are in [End-to-end evaluation](#end-to-end-evaluation) and [Verification details](#verification-details).
+
+| What was measured | Memory system | Whole transcript in the prompt |
+|---|---|---|
+| Accuracy, ~26k-token history (current defaults: prompt v2 + date fix, two runs) | 200/246 (81%) | 100/123 (81%) |
+| Accuracy, ~7.8k-token history (prompt v2, two runs) | 227/288 (79%) | 124/144 (86%) |
+| Questions about things never said, or with one wrong detail, ~80k-token history | **118/118 answered "not mentioned" or corrected the detail** | invented an answer in 9 of 59 |
+| Time questions, ~26k-token history, same memories before / after the date fix | 21/48 → 32/48 | — |
+
+| Pipeline robustness | Before | After |
+|---|---|---|
+| Evidence ever stored when replies hit the output limit (truncation fix) | 13% | 79% |
+| Evidence stored, mean ± spread over 9 runs (extraction prompt v2) | 78% ± 11% | 86% ± 8% |
+| Run-to-run agreement of what gets stored | 78% | 92% |
+
+Read these with the limits in mind:
+
+- **Short histories do not need a memory system.** Under about 10k tokens the whole transcript is simply more accurate; the memory system's value is bounded context and not inventing answers as history grows.
+- **The extraction model decides most of the result.** The same pipeline with a local qwen3-8b extractor on CPU scored 59/144 (41%), stored no dates, and took 3.7 hours where Claude took 4 minutes.
+- **Runs vary.** Two extraction runs of the same conversation can differ by several points; every number above is two or more runs.
+- **Synthetic data only.** No real-user conversations have been evaluated. The ~80k-token set has not been re-run with prompt v2 (the older prompt scored 69% there against 88% for the whole transcript).
+- The ~26k-token accuracy uses Sonnet re-grading of the date-fix runs; the Haiku grader that ran during them gives 192/246 (78%). See [Date fix](#date-fix).
+
+---
+
 ## Status
 
 | Area | State |
@@ -464,7 +491,7 @@ Analysing the wrong answers of the two prompt v2 long-set runs showed where they
 | Unanswerable | 71/74 | 72/74 |
 | Overall | 180/246 (73%) | 192/246 (78%) |
 
-The fix changed 12 dates in one run's 199 memories, for example "8月12日（週六）" to 8月15日 for an engagement party. Re-graded by Sonnet the overall moves the same way (191 to 200). A relative phrase in the quote with 上／這／下 ("上週六", "下週三") is recomputed from the message date; a bare "週六" is not, because it can mean the coming or the past Saturday ("週六陪她在公園玩太久了" said on a Tuesday is the past one), so the date moves to the nearest such weekday instead. The same tense rule now applies to `event_at`.
+The fix changed 12 dates in one run's 199 memories, for example "8月12日（週六）" to 8月15日 for an engagement party. Re-graded by Sonnet the overall moves the same way (191 to 200). A relative phrase in the quote with 上／這／下 ("上週六", "下週三") is recomputed from the message date; a bare "週六" is not, because it can mean the coming or the past Saturday ("週六陪她在公園玩太久了" said on a Tuesday is the past one), so the date moves to the nearest such weekday instead. For `event_at`, a bare weekday takes the past or the coming one, whichever is closer to the date the extractor wrote: the extractor sees the whole conversation and usually gets the direction right even when the day is off. Only when it gave no date does a tense rule decide, looking at the clause around the weekday (了／過／剛 versus 要／會／打算). These two `event_at` changes were made after the runs above and have not been evaluated end to end.
 
 #### Grader comparison
 
@@ -497,7 +524,7 @@ Cost of all end-to-end runs above, at API-equivalent prices through the Claude C
 - **Extraction is tuned for Chinese.** The 60-character limit on verbatim quotes is too short for English sentences, and the Scribe reserves up to 16,384 output tokens (`scribe.max_output_tokens`), more than an 8k-context local model has; lower it there and let truncated batches be split.
 - **Messages sent in the same second can be skipped.** The extraction cursor is a timestamp and the next run reads messages strictly after it, so a message with exactly the same timestamp as the last processed one is never extracted.
 - **Extraction is unstable and drops details.** With the default prompt, two runs of the same conversation can differ by a dozen memories, and small details (who did a chore, the name of a stretching exercise) are often skipped. The default `v2` prompt reduces both but does not remove them. See [Verification details](#verification-details).
-- **The date check only sees dates with a weekday.** A date written without one ("3月19日回診") cannot be checked against the calendar and is stored as extracted. Whether a bare weekday ("週六", no 上／這／下) means the past or the coming one is decided from a few tense words (了／過／剛 versus 要／會／打算), so unusual phrasings can still resolve to the wrong week.
+- **The date check only sees dates with a weekday.** A date written without one ("3月19日回診") cannot be checked against the calendar and is stored as extracted. Whether a bare weekday ("週六", no 上／這／下) in `event_at` means the past or the coming one follows the extractor's own date, so it is wrong when the extractor picked the wrong week; without an extractor date a few tense words in the same clause decide, and unusual phrasings can still resolve to the wrong week.
 - **Time fields follow the emotion switch.** `raised_at`, `event_at`, time slot and weekday are only written when `emotion.enabled` is true; with it off, upcoming-event reminders and anniversaries fall back to dates found in the memory text and `created_at`.
 - **English conversations are stored in Chinese.** The Scribe prompt is written in Chinese, so English conversations end up as Chinese memories that English questions rarely match. End-to-end evaluation on LoCoMo is paused until this and the quote length are fixed.
 - **Entity resolution is broken upstream.** `entityResolver.js` reads a column `related_entity_ids` that no migration creates.
