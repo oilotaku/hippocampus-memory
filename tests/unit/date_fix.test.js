@@ -21,10 +21,16 @@ describe('fixDateWeekday', () => {
         assert.equal(fixDateWeekday('3月12日（週三）', '明天要開會', '2026-03-10').content, '3月11日（週三）');
         assert.equal(fixDateWeekday('3月14日（週五）', '大後天出發', '2026-03-10').content, '3月13日（週五）');
     });
-    test('原話只說「週六」→ 與 event_at 相同取下一個週六', () => {
-        const r = fixDateWeekday('全家於8月12日（週六）前往高雄', '週六要去高雄參加訂婚宴', '2026-08-11');
-        assert.equal(r.content, '全家於8月15日（週六）前往高雄');
-        assert.equal(r.fixes[0].how, 'relative');
+    test('原話只說「週六」（可能是過去或未來）→ 不換算，取最近的同星期日期', () => {
+        // 週二（1/20）說「週六陪她去公園玩」＝剛過去的 1/17；換算成下週六（1/24）是錯的
+        const r = fixDateWeekday('1月18日（週六）陪語safe去永康公園', '可能是週六陪語safe在永康公園玩太久了', '2026-01-20');
+        assert.equal(r.content, '1月17日（週六）陪語safe去永康公園');
+        assert.equal(r.fixes[0].how, 'nearest');
+        assert.equal(fixDateWeekday('全家於8月12日（週六）前往高雄', '週六要去高雄參加訂婚宴', '2026-08-11').content, '全家於8月15日（週六）前往高雄');
+    });
+    test('「上週六」「下週三」有前綴 → 依訊息日期換算（實測兩例）', () => {
+        assert.equal(fixDateWeekday('4月5日（週六）騎腳踏車', '上週六在永康公園就已經能騎一小段了', '2026-04-14').content, '4月11日（週六）騎腳踏車');
+        assert.equal(fixDateWeekday('10月9日（週三）校外教學', '下週三要帶小宇去校外教學', '2026-10-06').content, '10月14日（週三）校外教學');
     });
     test('沒有相對說法 → 信星期，改成前後 3 天內同星期的日期', () => {
         const r = fixDateWeekday('全家於8月12日（週六）前往高雄', '要去高雄參加訂婚宴', '2026-08-11');

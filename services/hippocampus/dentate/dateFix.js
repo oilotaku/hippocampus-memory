@@ -7,7 +7,7 @@
 // 2026-03-19 其實是週四）。問答時日期題因此答錯，而且錯在記憶本身，檢索與回答都救不回來。
 // 原話的日期換算與 event_at 共用 utils/dateParse（同一套規則，一週從週一開始），對不上時依序：
 //   1. 原話寫了這個日期（「3月19日」「3/19」）→ 信日期，改星期；
-//   2. 原話換算出唯一一個同星期的日期（下週三、這週六、明天…）→ 用它；
+//   2. 原話換算出唯一一個同星期的日期（下週三、這週六、明天…；不含沒有前綴的「週六」）→ 用它；
 //   3. 其餘 → 信星期，改成原日期前後 3 天內同星期的那天。
 // refDate 是說這句話那則訊息的當地日期 'YYYY-MM-DD'。
 const { scanDates } = require('../../../utils/dateParse');
@@ -17,6 +17,9 @@ const WD_ZH = '日一二三四五六';
 const DATE_RE = /(?:(\d{4})年)?(\d{1,2})月(\d{1,2})[日號号]\s*([（(])\s*(週|周|星期|禮拜|礼拜)([一二三四五六日天])\s*([）)])/g;
 const DAY_MS = 86400000;
 const OPTS = { past: true, nearest: true };
+// 沒有上／這／下前綴的「週六」可能指剛過去或即將到來的週六（dateParse 一律取下一個）：
+// 實測「週二說『週六陪她去公園玩』」被換算成下週六。這種說法不拿來換算，交給第 3 步取最近的同星期日期
+const BARE_WEEKDAY = /(?<![上下這这本個个])(?:週|周|星期|禮拜|礼拜)[一二三四五六日天]/g;
 
 function parseYmd(s) {
     const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(s || ''));
@@ -52,7 +55,7 @@ function fixDateWeekday(content, quote, refDate) {
             const x = new Date(ms);
             return `${y ? `${x.getUTCFullYear()}年` : ''}${x.getUTCMonth() + 1}月${x.getUTCDate()}日${lp}${word}${wdc}${rp}`;
         };
-        if (!quoteDates) quoteDates = scanDates(quote, ref, OPTS).map(x => x.ms);
+        if (!quoteDates) quoteDates = scanDates(String(quote || '').replace(BARE_WEEKDAY, ' '), ref, OPTS).map(x => x.ms);
         const md = (ms) => new Date(ms).toISOString().slice(5, 10);
         let to, how;
         if (quoteDates.some(ms => md(ms) === md(t))) {
