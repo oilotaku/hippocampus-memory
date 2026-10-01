@@ -495,8 +495,9 @@ async function checkAndRunScribe() {
     const lastTimestamp = parseDbTime(unprocessed[unprocessed.length - 1].timestamp);
     const minutesSinceLast = (Date.now() - lastTimestamp) / 60000;
 
-    const silenceReached = minutesSinceLast >= SCRIBE_CONFIG.SILENCE_MINUTES;
-    const forceTriggered = count >= SCRIBE_CONFIG.FORCE_TRIGGER_MESSAGES;
+    const trig = getScribeConfig();   // 觸發門檻可由 memory_config.json scribe.* 調整（預設同 SCRIBE_CONFIG）
+    const silenceReached = minutesSinceLast >= trig.silence_minutes;
+    const forceTriggered = count >= trig.force_messages;
     const hasEmotion = hasHighEmotionSignal(unprocessed);
 
     // 時間兜底：距上次Scribe超過MAX_HOURS_STALE且有足夠未處理訊息→觸發
@@ -504,12 +505,12 @@ async function checkAndRunScribe() {
     const hoursSinceLastRun = lastRun
         ? (Date.now() - parseDbTime(lastRun.processed_until).getTime()) / 3600000
         : Infinity;
-    const staleTriggered = hoursSinceLastRun >= SCRIBE_CONFIG.MAX_HOURS_STALE
-        && count >= SCRIBE_CONFIG.STALE_MIN_MESSAGES;
+    const staleTriggered = hoursSinceLastRun >= trig.stale_hours
+        && count >= trig.stale_min_messages;
 
     const shouldRun = forceTriggered ||
         staleTriggered ||
-        (silenceReached && count >= SCRIBE_CONFIG.MIN_MESSAGES) ||
+        (silenceReached && count >= trig.min_messages) ||
         (silenceReached && hasEmotion);
 
     if (!shouldRun) {
@@ -517,7 +518,7 @@ async function checkAndRunScribe() {
         const lastSkipKey = `${Math.floor(Date.now() / 7200000)}_scribe_skip`;
         if (!checkAndRunScribe._lastSkipKey || checkAndRunScribe._lastSkipKey !== lastSkipKey) {
             checkAndRunScribe._lastSkipKey = lastSkipKey;
-            console.log(`[Scribe] 跳過: ${count}條未處理 | 沉默${Math.floor(minutesSinceLast)}min(需${SCRIBE_CONFIG.SILENCE_MINUTES}) | 距上次${hoursSinceLastRun.toFixed(1)}h(兜底需≥${SCRIBE_CONFIG.MAX_HOURS_STALE}h+${SCRIBE_CONFIG.STALE_MIN_MESSAGES}條) | 情緒=${hasEmotion}`);
+            console.log(`[Scribe] 跳過: ${count}條未處理 | 沉默${Math.floor(minutesSinceLast)}min(需${trig.silence_minutes}) | 距上次${hoursSinceLastRun.toFixed(1)}h(兜底需≥${trig.stale_hours}h+${trig.stale_min_messages}條) | 情緒=${hasEmotion}`);
         }
         return;
     }

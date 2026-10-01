@@ -117,7 +117,13 @@
     "_comment_temperature": "Extraction temperature (0 allowed).",
     "temperature": 0.3,
     "_comment_fix_dates": "Before storing, check every 'M月D日（週X）' in a memory against the calendar. Models converting 'next Wednesday' often get the weekday right but the date one to three days off. When they disagree: a date written in the quote wins and the weekday is fixed; otherwise a relative phrase in the quote (下週三, 明天) is recomputed from the message date; otherwise the weekday wins and the date moves to the nearest such weekday.",
-    "fix_dates": true
+    "fix_dates": true,
+    "_comment_triggers": "When extraction runs. After silence_minutes without a new message, extract if at least min_messages are waiting; extract anyway at force_messages; and after stale_hours since the last run, extract if stale_min_messages are waiting. Lower these when the host sends few messages (for example a command-style assistant).",
+    "silence_minutes": 20,
+    "min_messages": 60,
+    "force_messages": 100,
+    "stale_hours": 4,
+    "stale_min_messages": 30
   },
   "librarian": {
     "_comment": "Exclude specific fragment sources from search results.",
