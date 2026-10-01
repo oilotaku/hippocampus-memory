@@ -296,7 +296,7 @@ Results on the Traditional Chinese synthetic set (3 conversations of about 7.8k 
 | Setup | Correct | Time questions |
 |---|---|---|
 | Whole transcript in the prompt (no memory system) | 86% | 17/30 |
-| Memory system, Claude Haiku extracting | 68–72% | 10–13/30 |
+| Memory system, Claude Haiku extracting | 63–72% (4 runs) | 10–13/30 |
 | Memory system, qwen3-8b (local, CPU) extracting | 40% | 0/30 |
 
 What this shows:
@@ -315,6 +315,99 @@ What this shows:
 
   Claude Haiku answered just as well with an 80k-token transcript as with a short one, so no crossover appeared. What did change with length is invention: on questions whose answer never came up, the whole-transcript baseline made something up in a third of cases at 80k tokens (39/59 correct refusals), while the memory system refused correctly 117/118 times. The memory system's losses are concentrated in multi-hop questions (43% vs 94%) and single facts the extractor skipped (70% vs 96%), which points back at extraction rather than retrieval.
 - **The time fix helped time questions slightly** (22/60 to 26/60 over two runs each); the overall score did not move beyond run-to-run noise.
+
+
+### Verification details
+
+The numbers behind the summary above. Every setup used the same questions; only the part named in the "Setup" column changed. The raw per-question results (questions, gold answers, model answers, both grades, retrieved memories) stay outside the repository with the datasets.
+
+How a run is checked:
+
+1. **Extraction**: the Scribe processes the conversation in batches of up to 60 messages; every stored memory must quote its source message word for word.
+2. **Recall**: for each question the recall gate decides whether to search, then full text and the vector channel retrieve memories, which are injected with their conversation dates.
+3. **Answering**: Claude Haiku answers from the injected memories only, or says "not mentioned".
+4. **Grading**: an LLM compares the answer with the gold answer; unanswerable questions count as correct only when the answer is a refusal.
+5. **Tracing**: each question's evidence turns are checked against the turns the stored memories quote and the memories that were retrieved, which locates where a wrong answer lost the information.
+
+#### Datasets
+
+All three sets were generated with `eval/synth/generate_zh.py`: two Claude Haiku instances chat as the user and the assistant, and Claude Sonnet plans the timeline, edits contradictions and writes the questions. Each session has 16 messages.
+
+| Set | Conversations | Sessions each | Messages each | Transcript size | Questions | Multi-hop | Time | Reasoning | Single fact | Unanswerable | Generation cost (API-equivalent) |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| Short | 3 | 6 | 96 | about 7.8k tokens | 144 | 21 | 30 | 9 | 49 | 35 | $5.91 |
+| Long | 2 | 20 | 320 | about 26k tokens | 123 | 16 | 24 | 7 | 39 | 37 | $5.59 |
+| Very long | 2 | 60 | 960 | about 80k tokens | 238 | 34 | 48 | 13 | 84 | 59 | $22.08 |
+
+#### Accuracy by question type
+
+Graded by Claude Sonnet (see the grader comparison below). Answers were always produced by Claude Haiku 4.5; the memory system used full text plus a bge-m3 vector channel. "Unanswerable" counts correct refusals.
+
+| Set | Setup | Overall | Multi-hop | Time | Reasoning | Single fact | Unanswerable |
+|---|---|---|---|---|---|---|---|
+| Short | Whole transcript in the prompt | **124/144 (86%)** | 18/21 (86%) | 17/30 (57%) | 8/9 (89%) | 48/49 (98%) | 33/35 (94%) |
+| Short | Memory system, Claude extracting, before time fix, run 1 | **104/144 (72%)** | 15/21 (71%) | 10/30 (33%) | 8/9 (89%) | 36/49 (73%) | 35/35 (100%) |
+| Short | Memory system, Claude extracting, before time fix, run 2 | **91/144 (63%)** | 12/21 (57%) | 12/30 (40%) | 5/9 (56%) | 29/49 (59%) | 33/35 (94%) |
+| Short | Memory system, Claude extracting, after time fix, run 1 | **97/144 (67%)** | 11/21 (52%) | 13/30 (43%) | 4/9 (44%) | 35/49 (71%) | 34/35 (97%) |
+| Short | Memory system, Claude extracting, after time fix, run 2 | **101/144 (70%)** | 12/21 (57%) | 13/30 (43%) | 8/9 (89%) | 35/49 (71%) | 33/35 (94%) |
+| Short | Memory system, qwen3-8b extracting (local CPU) | **58/144 (40%)** | 4/21 (19%) | 0/30 (0%) | 3/9 (33%) | 17/49 (35%) | 34/35 (97%) |
+| Long | Whole transcript in the prompt | **93/123 (76%)** | 13/16 (81%) | 11/24 (46%) | 5/7 (71%) | 36/39 (92%) | 28/37 (76%) |
+| Long | Memory system, Claude extracting, run 1 | **82/123 (67%)** | 9/16 (56%) | 12/24 (50%) | 3/7 (43%) | 30/39 (77%) | 28/37 (76%) |
+| Long | Memory system, Claude extracting, run 2 | **79/123 (64%)** | 7/16 (44%) | 8/24 (33%) | 3/7 (43%) | 31/39 (79%) | 30/37 (81%) |
+| Very long | Whole transcript in the prompt | **199/238 (84%)** | 32/34 (94%) | 35/48 (73%) | 12/13 (92%) | 81/84 (96%) | 39/59 (66%) |
+| Very long | Memory system, Claude extracting, run 1 | **167/238 (70%)** | 16/34 (47%) | 27/48 (56%) | 7/13 (54%) | 58/84 (69%) | 59/59 (100%) |
+| Very long | Memory system, Claude extracting, run 2 | **160/238 (67%)** | 13/34 (38%) | 22/48 (46%) | 8/13 (62%) | 59/84 (70%) | 58/59 (98%) |
+
+#### Memory system runs in detail
+
+Each row is one conversation in one run. "Evidence turns covered" is how many dialogue turns at least one stored memory quotes. Wrong answers are split by where the evidence was lost: never extracted, extracted but not retrieved, or retrieved but answered wrongly.
+
+| Set | Run | Conversation | Memories stored | Evidence turns covered | Correct | Lost at extraction | Lost at retrieval | Lost at answering |
+|---|---|---|---|---|---|---|---|---|
+| Short | Claude extracting, before time fix, run 1 | zh-1 | 53 | 37/96 | 36/48 (75%) | 1 | 4 | 7 |
+| Short | Claude extracting, before time fix, run 1 | zh-2 | 40 | 26/96 | 34/48 (71%) | 6 | 1 | 7 |
+| Short | Claude extracting, before time fix, run 1 | zh-3 | 37 | 31/96 | 34/48 (71%) | 5 | 1 | 8 |
+| Short | Claude extracting, before time fix, run 2 | zh-1 | 26 | 20/96 | 19/48 (40%) | 11 | 3 | 15 |
+| Short | Claude extracting, before time fix, run 2 | zh-2 | 64 | 40/96 | 37/48 (77%) | 2 | 3 | 6 |
+| Short | Claude extracting, before time fix, run 2 | zh-3 | 44 | 31/96 | 35/48 (73%) | 5 | 2 | 4 |
+| Short | Claude extracting, after time fix, run 1 | zh-1 | 40 | 29/96 | 26/48 (54%) | 10 | 1 | 11 |
+| Short | Claude extracting, after time fix, run 1 | zh-2 | 52 | 31/96 | 36/48 (75%) | 3 | 3 | 6 |
+| Short | Claude extracting, after time fix, run 1 | zh-3 | 35 | 30/96 | 35/48 (73%) | 5 | 1 | 6 |
+| Short | Claude extracting, after time fix, run 2 | zh-1 | 46 | 34/96 | 36/48 (75%) | 3 | 1 | 7 |
+| Short | Claude extracting, after time fix, run 2 | zh-2 | 36 | 25/96 | 30/48 (62%) | 8 | 1 | 9 |
+| Short | Claude extracting, after time fix, run 2 | zh-3 | 39 | 30/96 | 35/48 (73%) | 5 | 2 | 5 |
+| Short | qwen3-8b extracting (local CPU) | zh-1 | 18 | 16/96 | 19/48 (40%) | 12 | 1 | 15 |
+| Short | qwen3-8b extracting (local CPU) | zh-2 | 16 | 13/96 | 17/48 (35%) | 20 | 1 | 10 |
+| Short | qwen3-8b extracting (local CPU) | zh-3 | 36 | 28/96 | 22/48 (46%) | 10 | 2 | 14 |
+| Long | Claude extracting, run 1 | zh-11 | 148 | 105/320 | 46/63 (73%) | 2 | 5 | 7 |
+| Long | Claude extracting, run 1 | zh-12 | 175 | 117/320 | 36/60 (60%) | 3 | 4 | 11 |
+| Long | Claude extracting, run 2 | zh-11 | 172 | 119/320 | 44/63 (70%) | 3 | 3 | 9 |
+| Long | Claude extracting, run 2 | zh-12 | 168 | 99/320 | 35/60 (58%) | 5 | 4 | 13 |
+| Very long | Claude extracting, run 1 | zh-21 | 329 | 236/960 | 86/120 (72%) | 20 | 12 | 2 |
+| Very long | Claude extracting, run 1 | zh-22 | 395 | 281/960 | 81/118 (69%) | 11 | 17 | 9 |
+| Very long | Claude extracting, run 2 | zh-21 | 325 | 236/960 | 81/120 (68%) | 24 | 9 | 6 |
+| Very long | Claude extracting, run 2 | zh-22 | 367 | 261/960 | 79/118 (67%) | 11 | 12 | 15 |
+
+#### Grader comparison
+
+Every run was graded twice: by Claude Haiku during the run, and afterwards by Claude Sonnet reviewing all answers of a conversation at once. Haiku is stricter (it marks answers with extra correct detail as wrong). Comparisons between setups hold under either grader.
+
+| Set | Setup | Haiku grader | Sonnet grader | Agreement |
+|---|---|---|---|---|
+| Short | Whole transcript in the prompt | 116/144 (81%) | 124/144 (86%) | 92% |
+| Short | Memory system, Claude extracting, before time fix, run 1 | 93/144 (65%) | 104/144 (72%) | 92% |
+| Short | Memory system, Claude extracting, before time fix, run 2 | 87/144 (60%) | 91/144 (63%) | 96% |
+| Short | Memory system, Claude extracting, after time fix, run 1 | 89/144 (62%) | 97/144 (67%) | 92% |
+| Short | Memory system, Claude extracting, after time fix, run 2 | 98/144 (68%) | 101/144 (70%) | 92% |
+| Short | Memory system, qwen3-8b extracting (local CPU) | 57/144 (40%) | 58/144 (40%) | 98% |
+| Long | Whole transcript in the prompt | 88/123 (72%) | 93/123 (76%) | 96% |
+| Long | Memory system, Claude extracting, run 1 | 74/123 (60%) | 82/123 (67%) | 93% |
+| Long | Memory system, Claude extracting, run 2 | 75/123 (61%) | 79/123 (64%) | 93% |
+| Very long | Whole transcript in the prompt | 199/238 (84%) | 199/238 (84%) | 97% |
+| Very long | Memory system, Claude extracting, run 1 | 166/238 (70%) | 167/238 (70%) | 97% |
+| Very long | Memory system, Claude extracting, run 2 | 156/238 (66%) | 160/238 (67%) | 95% |
+
+Cost of all end-to-end runs above, at API-equivalent prices through the Claude CLI: about $34 for generating the three sets and about $15 for extraction, answering and grading.
 
 ---
 
