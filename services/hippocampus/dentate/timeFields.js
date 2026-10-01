@@ -34,17 +34,17 @@ function resolveRaisedAt(quote, msgs) {
 function resolveEventAt(entry, raisedUtc, tz) {
     if (TIMELESS_TYPES.has(entry?.type)) return null;
     const lp = localParts(raisedUtc, tz);
+    const local = lp ? `${lp.year}-${String(lp.month).padStart(2, '0')}-${String(lp.day).padStart(2, '0')}` : null;
+    const model = parseEventAt(entry?.event_at);
+    // 模型只填當天多半是「沒有具體日期」的預設值，不拿來替「週X」選邊
+    const isToday = (v) => v.length === 10 && (v === local || v === String(raisedUtc).slice(0, 10));
     if (lp) {
         const ref = new Date(Date.UTC(lp.year, lp.month - 1, lp.day));   // 以當地日曆日為「今天」
-        const fromQuote = parseEventDateFromText(entry?.quote, ref);
+        const hint = model && !isToday(model) ? model : null;
+        const fromQuote = parseEventDateFromText(entry?.quote, ref, { past: true, nearest: true, hint });
         if (fromQuote) return fromQuote;
     }
-    const model = parseEventAt(entry?.event_at);
-    if (!model) return null;
-    if (model.length === 10) {
-        const local = lp ? `${lp.year}-${String(lp.month).padStart(2, '0')}-${String(lp.day).padStart(2, '0')}` : null;
-        if (model === local || model === String(raisedUtc).slice(0, 10)) return null;
-    }
+    if (!model || isToday(model)) return null;
     return model;
 }
 

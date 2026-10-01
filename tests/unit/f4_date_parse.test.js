@@ -93,6 +93,24 @@ describe('週幾', () => {
         assert.equal(ev('週六玩太久了，累死', '2026-01-20'), '2026-01-17');        // 同一子句的「了」仍算
         assert.equal(ev('週六去過日本料理店', '2026-01-20'), '2026-01-17');        // 「去過」＋日本，不是「過日子」
     });
+    test('hint（模型日期）決定沒有前綴的週X往前或往後；明確說法不受影響', () => {
+        const H = (hint) => ({ past: true, nearest: true, hint });
+        // 2026-01-20 週二：語氣規則判成過去的，模型說下週 → 下週六（模型日期差一天也對齊到週六）
+        assert.equal(ev('週六的報告寫完了', '2026-01-20', H('2026-01-23')), '2026-01-24');
+        // 語氣規則判成未來的，模型說上週 → 上週六
+        assert.equal(ev('週六在公園遇到她', '2026-01-20', H('2026-01-17')), '2026-01-17');
+        assert.equal(ev('週六在公園遇到她', '2026-01-20', H('2026-01-17T15:00')), '2026-01-17');
+        // 沒有 hint → 語氣規則
+        assert.equal(ev('週六的報告寫完了', '2026-01-20'), '2026-01-17');
+        // hint 只取日期、比距離（上週六差 3 天、下週六差 4 天）；當天的 hint 由 resolveEventAt 先濾掉
+        assert.equal(ev('週六去爬山', '2026-01-20', H('2026-01-20T12:00')), '2026-01-17');
+        // 明確說法（下週六、上週六、日期）不看 hint
+        assert.equal(ev('下週六去爬山', '2026-01-20', H('2026-01-17')), '2026-01-31');
+        assert.equal(ev('上週六去爬山', '2026-01-20', H('2026-01-31')), '2026-01-17');
+        assert.equal(ev('1月24日去爬山', '2026-01-20', H('2026-01-17')), '2026-01-24');
+        // 當天說「週二」沒有歧義
+        assert.equal(ev('週二剛跑完步', '2026-01-20', H('2026-01-13')), '2026-01-20');
+    });
 });
 
 describe('既有寫法維持（G1）', () => {
@@ -157,6 +175,13 @@ describe('emotion.resolveEventAt：quote 為準、模型為備援', () => {
     test('無時間性類型一律 null；亂碼 null', () => {
         assert.equal(resolveEventAt({ type: 'preference', quote: '下個月十五號', event_at: '2026-07-15' }, raised, TZ), null);
         assert.equal(resolveEventAt({ type: 'event', quote: '嗯', event_at: '明天' }, raised, TZ), null);
+    });
+    test('沒有前綴的週X：依模型 event_at 選上週或下週；模型只填當天不算', () => {
+        // 台北 2026-06-01（週一）
+        assert.equal(resolveEventAt({ type: 'event', quote: '週六的報告寫完了', event_at: '2026-06-05' }, raised, TZ), '2026-06-06');
+        assert.equal(resolveEventAt({ type: 'event', quote: '週六去爬山', event_at: '2026-05-30' }, raised, TZ), '2026-05-30');
+        assert.equal(resolveEventAt({ type: 'event', quote: '週六去爬山', event_at: '2026-06-01' }, raised, TZ), '2026-06-06');
+        assert.equal(resolveEventAt({ type: 'event', quote: '週六玩太久了', event_at: null }, raised, TZ), '2026-05-30');
     });
     test('「今天」在 quote 中 → 事件就是訊息當天（有日期片語，可信）', () => {
         assert.equal(resolveEventAt({ type: 'event', quote: '今天去看牙醫', event_at: null }, raised, TZ), '2026-06-01');

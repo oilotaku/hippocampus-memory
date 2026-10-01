@@ -63,7 +63,10 @@ function scanDates(text, ref, opts = {}) {
     const refY = ref.getUTCFullYear(), refM = ref.getUTCMonth();   // refM: 0-11
     const refWd = (new Date(refDay).getUTCDay() + 6) % 7;          // 週一=0
     const out = [];
-    const push = (ms, idx, weak = false) => { if (ms != null && !out.some(x => x.ms === ms)) out.push({ ms, idx, weak }); };
+    const push = (ms, idx, weak = false) => {
+        if (ms == null || out.some(x => x.ms === ms)) return null;
+        const x = { ms, idx, weak }; out.push(x); return x;
+    };
     const pushPast = (ms, idx) => { if (opts.past) push(ms, idx); };
 
     const nextOccurrence = (m, d) => {
@@ -155,6 +158,7 @@ function scanDates(text, ref, opts = {}) {
     // 週X 所在子句有完成語氣（了／過／剛）且沒有未來語氣（要／會／打算…）→ 取最近一個過去的（含當天）。
     // 實測：週二說「週六陪她在公園玩太久了」是剛過去的週六，取下一個會差一週。
     // 只看同一子句：「累死了，週六去爬山」的「了」屬於前一句，週六仍是未來。
+    // 語氣只是猜測：past 模式下另附上一個／下一個兩個候選（cands），呼叫端有模型給的日期時以它選邊。
     const clauseAt = (i) => {
         const before = t.slice(0, i), after = t.slice(i);
         const start = Math.max(...[...CLAUSE_END].map(c => before.lastIndexOf(c))) + 1;
@@ -165,7 +169,8 @@ function scanDates(text, ref, opts = {}) {
         const fwd = (WEEKDAY[a[1]] - refWd + 7) % 7;
         const clause = opts.past ? clauseAt(i) : '';
         const back = opts.past && PAST_TONE.test(clause) && !FUTURE_TONE.test(clause);
-        push(refDay + (back && fwd > 0 ? fwd - 7 : fwd) * DAY_MS, i);
+        const x = push(refDay + (back && fwd > 0 ? fwd - 7 : fwd) * DAY_MS, i);
+        if (x && opts.past && fwd > 0) x.cands = [refDay + (fwd - 7) * DAY_MS, refDay + fwd * DAY_MS];
     });
 
     // 相對日
@@ -186,13 +191,25 @@ function parseDatesFromText(text, ref, opts) {
     return scanDates(text, ref, opts).map(x => new Date(x.ms));
 }
 
-/** 文字 → 文中最先出現的那個日期（'YYYY-MM-DD'），沒有回 null。Scribe 寫 event_at 用。 */
+/**
+ * 文字 → 文中最先出現的那個日期（'YYYY-MM-DD'），沒有回 null。Scribe 寫 event_at 用。
+ * opts.hint（'YYYY-MM-DD…'，模型給的 event_at）：選中的是沒有前綴的「週X」時，
+ * 在剛過去／下一個之間取離 hint 較近者（模型看得到上下文，方向較準；日期常差幾天，所以只拿來選邊）。
+ */
 function parseEventDateFromText(text, ref, opts = { past: true, nearest: true }) {
     // 「今天／昨天／前天」只是敘述時間的錨點，句中另有具體日期（下個月十五號）時以具體者為準
     const all = scanDates(text, ref, opts);
     const strong = all.filter(x => !x.weak);
     const list = (strong.length ? strong : all).sort((a, b) => a.idx - b.idx);
-    return list.length ? new Date(list[0].ms).toISOString().slice(0, 10) : null;
+    if (!list.length) return null;
+    let ms = list[0].ms;
+    const hint = opts.hint ? Date.parse(String(opts.hint).slice(0, 10) + 'T00:00:00Z') : NaN;
+    if (list[0].cands && Number.isFinite(hint)) {
+        const [back, next] = list[0].cands;
+        const db = Math.abs(hint - back), dn = Math.abs(hint - next);
+        if (db !== dn) ms = db < dn ? back : next;   // 等距時維持語氣規則的結果
+    }
+    return new Date(ms).toISOString().slice(0, 10);
 }
 
 module.exports = { parseDatesFromText, parseEventDateFromText, cnToInt, scanDates };
