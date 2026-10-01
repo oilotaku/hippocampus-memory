@@ -4,7 +4,7 @@ const { fragmentsMatchQuery, memoriesMatchQuery } = require('../../memoryCrypto'
 const { AI, SKIP_NAMES } = require('../../nameResolver');
 const { toQueryTokens } = require('../../../utils/cjkTokenize');
 const { toTraditionalChars } = require('../../../utils/zhNormalize');
-const { parseDbTime, weekdayZh, daysSinceLocalDate } = require('../../../utils/time');
+const { weekdayZh, daysSinceLocalDate } = require('../../../utils/time');
 const { effectiveIntensity } = require('../amygdala/fading');
 const { getEmotionConfig } = require('../amygdala/config');
 const { getRecallConfig } = require('./recallGate');
@@ -27,41 +27,9 @@ const EXCLUDE_SOURCE_PARAMS = EXCLUDED_SOURCES;
 // 檢索排序設定（librarian.ranking／entity_boost／fts_only_penalty／decay_weight／min_relevance／candidate_overfetch）見 ./librarianConfig.js
 const { getLibrarianConfig } = require('./librarianConfig');
 
-// 時間衰減：半衰期由 emotional_weight 決定
-// ew ≥ 0.8 → λ=0.005 (140天半衰期)  重要記憶持久
-// ew ≥ 0.6 → λ=0.01  (70天半衰期)   標準
-// ew ≥ 0.4 → λ=0.02  (35天半衰期)   輕度記憶較快消退
-// ew  < 0.4 → λ=0.04  (17天半衰期)   瑣碎資訊快速沉底
-function getDecayLambda(emotionalWeight) {
-  const ew = emotionalWeight || 0.5;
-  if (ew >= 0.8) return 0.005;
-  if (ew >= 0.6) return 0.01;
-  if (ew >= 0.4) return 0.02;
-  return 0.04;
-}
-
-// 分段衰減（Ombre Brain 啟發）：前3天新鮮度主導，3天後情緒強度主導
-// 短線：timeWeight=0.7 emotionWeight=0.3 → 新鮮事優先浮現
-// 長線：timeWeight=0.3 emotionWeight=0.7 → 高ew記憶頑強存活，低ew瑣碎快速沉底
-const STM_TIME_WEIGHT = 0.7;     // ≤3天：時間新鮮度權重
-const LTM_EMOTION_WEIGHT = 0.7;  // >3天：情緒強度權重
-const SEGMENT_DAYS = 3;          // 分段切換天數
-
-function segmentedDecay(days, emotionalWeight) {
-  const ew = emotionalWeight || 0.5;
-  const lambda = getDecayLambda(ew);
-  // 純時間衰減
-  const timeDecay = Math.exp(-lambda * days);
-  // 情緒保留：越高ew記憶越不容易被時間沖淡
-  const emotionRetention = 0.3 + ew * 0.7;
-
-  if (days <= SEGMENT_DAYS) {
-    // 短期：新鮮度為王。近期發生的事即使分量輕也值得浮現
-    return STM_TIME_WEIGHT * timeDecay + (1 - STM_TIME_WEIGHT) * emotionRetention;
-  }
-  // 長期：情緒接管。3天後時間不再是最重要的——ew=0.8的記憶可能比ew=0.3的存活長4倍
-  return (1 - LTM_EMOTION_WEIGHT) * timeDecay + LTM_EMOTION_WEIGHT * emotionRetention;
-}
+// 時間衰減（半衰期、分段、時效加權）見 ./decay.js；記憶年齡見 ../entorhinal/timing.js
+const { timeFactorParts } = require('./decay');
+const { memoryAgeDays } = require('../entorhinal/timing');
 
 // 召回分數底線：低於此值的碎片不返回（被衰減+低權重自然淘汰）
 // YantrikDB 思路：召回端多道關卡，訊號弱時寧可空返回也不塞噪音
@@ -78,15 +46,9 @@ function noveltyPenalty(readCount) {
   return 1 / (1 + Math.log10(readCount + 1));
 }
 
-// parseDbTime：DB 的無時區時間字串是 UTC，見 utils/time.js
-
+// 記憶年齡的計算在 entorhinal/timing.js（單一來源）；此處保留匯出的薄包裝
 function daysAgo(dateLabel) {
-  if (!dateLabel) return 365;
-  try {
-    const d = parseDbTime(dateLabel);
-    if (isNaN(d.getTime())) return 365;
-    return Math.max(0, (Date.now() - d.getTime()) / (1000 * 60 * 60 * 24));
-  } catch { return 365; }
+  return memoryAgeDays(dateLabel);
 }
 
 // ── 實體聚合輔助：從使用者訊息中識別已知實體 → 按 entity_id 全量撈碎片 ──
@@ -603,13 +565,10 @@ async function searchHybrid(userMessage, limit = 6, opts = {}) {
     const dateForDecay = item._created_at || item.date_label;
     const days = daysAgo(dateForDecay);
     const ew = weightOf(item);
-    const actualDays = intent === 'long_term' ? days * 0.4 : days;  // long_term 意圖下時間走得慢
-    const decay = segmentedDecay(actualDays, ew);
+    const { decay, recencyBoost } = timeFactorParts({ days, ew, intent });
     const importance = 0.4 + ew * 0.6;
     const novelty = noveltyPenalty(injectedById.has(item.id) && item.source_table === 'fragment' ? injectedById.get(item.id) : (item._read_count || 0));
     const wmBoost = boostMap.get(`${item.source_table}-${item.id}`) || 1.0;
-    // 時效加權：語義相近時，新記憶優先。≤1天的×1.3，≤3天×1.15，≤7天×1.05，之後無加成
-    const recencyBoost = days <= 1 ? 1.3 : days <= 3 ? 1.15 : days <= 7 ? 1.05 : 1.0;
     if (!v2) {
       const combinedScore = item._rrf * decay * importance * novelty * wmBoost * recencyBoost;
       return { ...item, _rrf: combinedScore, _decay: decay, _importance: importance, _novelty: novelty, _daysAgo: Math.round(days), _wmBoost: wmBoost, _recencyBoost: recencyBoost };
