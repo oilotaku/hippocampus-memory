@@ -328,6 +328,7 @@ What this shows:
 - **A shorter, consistent extraction prompt helps most.** Prompt v2, now the default, raised the short set from 69% to 79% (the whole-transcript baseline is 86%) and the long set from 71% to 78% (baseline 81%). It also made extraction steadier: evidence coverage went from 78% ± 11% to 86% ± 8% across repeated runs. It stores about 25% more memories without inventing more answers.
 - **The apparent lure-question problem was a grading artifact.** Trick questions such as "Is her pottery class on Saturday morning?" (it is on Sunday) were first graded as correct only when the answer was a refusal, so "No, it is on Sunday morning" counted as wrong. Graded so that rejecting or correcting the false premise also counts, every memory-system setup scores 94-100% on these questions, and the earlier "v2 drops lure questions from 78% to 65%" disappears (71/74 for both prompts on the long set). All tables now use this rule.
 - **The pre-answer check (CA1) did not help.** With lure questions already near 100%, it has nothing left to fix there, and on answerable questions it was within run-to-run noise on the short set (117/144 against 111 and 116) and slightly lower on the long set (75% and 74% against 80% and 75%). It stays available as `recall.verify` but off.
+- **Many wrong dates were wrong in the memory itself.** When the extractor turns "next Wednesday" into a date, it usually copies the weekday right but gets the date one to three days off: 19 of 37 "M月D日（週X）" pairs in the long-set memories disagreed with the calendar. Checking them before storing (`scribe.fix_dates`, on by default) raised time questions from 21/48 to 32/48 on the same memories, and the long set from 73% to 78% overall. See [Date fix](#date-fix).
 - **The time fix helped time questions slightly** (22/60 to 26/60 over two runs each); the overall score did not move beyond run-to-run noise.
 
 
@@ -447,6 +448,21 @@ On the short set the two rules differ by at most one question per run.
 
 `recall.verify=true`, answering with the memories already extracted in the prompt v2 runs (two long-set runs, one short-set run). The check ran on 185 of the 390 questions; the others had no concrete detail or no retrieved memory. Its verdicts were mostly right: 17 of the 74 long-set lure questions were judged `contradicted` with the correct differing detail (Saturday vs Sunday, 1,500 vs 2,000), and the answers then corrected the premise. But the answers without the check already did the same, so the score did not move. On answerable questions the check occasionally talked the answerer out of a correct answer (for example judging "which evening does she jog now" as contradicted because older memories named another day), which, together with answering noise, explains the slightly lower long-set score. Extra cost: one short model call (at most eight memories) per checked question.
 
+#### Date fix
+
+Analysing the wrong answers of the two prompt v2 long-set runs showed where they go wrong: most failed time questions had the evidence extracted and retrieved, but the stored date was off ("3月19日（週三）" for a Wednesday that is 18 March). The fix was evaluated on exactly the same memories: the two runs' databases were copied, `scribe.fix_dates` was applied to them (`node eval/locomo_e2e.js fixdates <conversation>`), and the questions were answered again. Answerable questions use the grader that ran during each run (Claude Haiku) on both sides, because the Sonnet re-grading marked identical year-less answers ("5月15日") differently between the two runs; unanswerable questions use premise-aware grading.
+
+| Question type | Prompt v2, two runs | Same memories + date fix |
+|---|---|---|
+| Time | 21/48 (44%) | 32/48 (67%) |
+| Reasoning | 3/14 | 6/14 |
+| Multi-hop | 18/32 | 18/32 |
+| Single fact | 67/78 | 64/78 |
+| Unanswerable | 71/74 | 72/74 |
+| Overall | 180/246 (73%) | 192/246 (78%) |
+
+The fix changed 12 dates in one run's 199 memories, for example "8月12日（週六）" to 8月15日 for an engagement party. Re-graded by Sonnet the overall moves the same way (191 to 200). A relative phrase in the quote with 上／這／下 ("上週六", "下週三") is recomputed from the message date; a bare "週六" is not, because it can mean the coming or the past Saturday ("週六陪她在公園玩太久了" said on a Tuesday is the past one), so the date moves to the nearest such weekday instead. The same tense rule now applies to `event_at`.
+
 #### Grader comparison
 
 Every run was graded twice: by Claude Haiku during the run, and afterwards by Claude Sonnet reviewing all answers of a conversation at once. Haiku is stricter (it marks answers with extra correct detail as wrong). Comparisons between setups hold under either grader. This table uses the original refusal-only rule for unanswerable questions in both columns.
@@ -516,6 +532,8 @@ This version would not exist without the foundation they built. The original doc
 | Time information | Messages reach the extractor in local time with the weekday (they were in UTC), each memory keeps the date of the message its quote came from, and injected memories show that date instead of "0 days ago" |
 | Extraction reliability | Truncation-tolerant parsing and halving instead of discarding a batch; failed batches stop the run instead of being skipped (parse failures shrink the batch and finally skip a single unreadable message, connection failures only wait); each batch gets its own preceding messages as context; chat mode decided from the batch itself; output limit and temperature configurable |
 | Extraction prompt | Reorganized Scribe prompt, now the default: half the length, one consistent coverage rule, same output format; the original stays available as `scribe.prompt=legacy` and is locked byte-for-byte by a test |
+| Dates | Extracted dates are checked against the calendar before storing (`scribe.fix_dates`); a bare weekday in a past-tense sentence resolves to the past day for `event_at` |
+| Architecture | The write path, date fix, time fields and encoding strength live in the dentate gyrus (`dentate/`); memory age (`entorhinal/timing.js`) and the ranking's time factor (`ca3/decay.js`) are single plug points; lifecycle thresholds are configurable (`lifecycle.*`) |
 | Pre-answer check | Optional CA1 comparator (`recall.verify`): checks the question's concrete details against the retrieved memories before answering; off by default |
 | Evaluation | End-to-end runner with separately configurable extractor, answerer and grader, a long-context baseline, and a Claude CLI shim |
 | Dependencies | `better-sqlite3` upgraded to 12 for prebuilt Node 24 binaries; license field corrected from ISC to MIT |
