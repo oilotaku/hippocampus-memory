@@ -80,7 +80,11 @@
     "prospective_lookback_days": 120,
     "hard_trigger_max": 3,
     "cite_min_overlap": 0.3,
-    "cite_min_shared": 3
+    "cite_min_shared": 3,
+    "_comment_verify": "CA1 check before replying (off by default). When the message mentions concrete details (dates, weekdays, numbers, times, known people or places) and memories were retrieved, one extra LLM call checks whether the memories support those details. On a mismatch (asked about Friday, memory says Wednesday) or a miss, a <memory_check> note tells the reply model not to use the near-miss memory. Skipped on timeout or error.",
+    "verify": false,
+    "verify_max_memories": 8,
+    "verify_timeout_ms": 30000
   },
   "emotion": {
     "_comment": "Eight-dimension emotion engine (Plutchik: joy, trust, fear, surprise, sadness, disgust, anger, anticipation). Scribe emits scores for each fact in the same LLM call (no extra calls); the engine learns a personal, time-of-day baseline per dimension (Ornstein-Uhlenbeck + Kalman, hierarchical shrinkage) and flags emotional turning points. enabled=false: Scribe stops emitting emotion fields and nothing else in this section runs.",

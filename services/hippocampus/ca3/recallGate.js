@@ -52,6 +52,10 @@ const DEFAULT_CONFIG = {
     // 引用判斷
     cite_min_overlap: 0.3,
     cite_min_shared: 3,
+    // CA1 比對器：回覆前核對問題的具體細節與取回的記憶是否相符（預設關）
+    verify: false,
+    verify_max_memories: 8,     // 最多拿幾條取回的記憶去核對
+    verify_timeout_ms: 30000,   // 核對超時就略過（不擋回覆）
 };
 
 let _override = null;   // 測試用：整份覆蓋（含 undefined 表示走檔案）
@@ -106,6 +110,9 @@ function getRecallConfig(cfg) {
         hard_trigger_max: numOr(r.hard_trigger_max, D.hard_trigger_max, { min: 0, int: true }),
         cite_min_overlap: numOr(r.cite_min_overlap, D.cite_min_overlap, { min: 0, max: 1 }),
         cite_min_shared: numOr(r.cite_min_shared, D.cite_min_shared, { min: 1, int: true }),
+        verify: r.verify === true,
+        verify_max_memories: numOr(r.verify_max_memories, D.verify_max_memories, { min: 1, int: true }),
+        verify_timeout_ms: numOr(r.verify_timeout_ms, D.verify_timeout_ms, { min: 1000, int: true }),
     };
 }
 

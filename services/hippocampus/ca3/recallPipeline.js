@@ -9,6 +9,7 @@
 const { getDb } = require('../../../database');
 const recall = require('./recallGate');
 const { getMemoryTokenBudget, estimateTokens, takeWithinBudget, splitEntityBlocks } = require('../homeostasis/memoryBudget');
+const { hasConcreteDetail, verifyRecall } = require('../ca1/verify');
 
 // 上一則訊息的話題狀態（僅記憶體：重啟後第一則一定會查，是保守方向）
 let lastTurn = null;
@@ -57,7 +58,9 @@ function bumpInjected(items, db) {
  *   wrapMemoryContext(libText) → 包上說明文字的 <memory_context> 區塊
  *   USER/AI 不需要——文字由 wrapMemoryContext 與 context.js 決定
  *   now / rng / db / cfg：測試可注入
- * @returns {Promise<{parts:string[], tokens:number, injected:Array, decision:object}>}
+ *   callLLM：測試可注入（CA1 核對用）
+ * @returns {Promise<{parts:string[], tokens:number, injected:Array, decision:object, check:object|null}>}
+ *   check：CA1 核對結果（recall.verify 開啟且有核對時），否則 null
  */
 async function buildGatedMemory(userMessage, o = {}) {
     const db = o.db || getDb();
@@ -72,6 +75,7 @@ async function buildGatedMemory(userMessage, o = {}) {
     const parts = [];
     let tokens = 0;
     const injected = [];
+    let check = null;
 
     const total = o.budget != null ? o.budget : getMemoryTokenBudget();
     const share = recall.splitBudget(total, cfg.budget_share);
@@ -157,6 +161,19 @@ async function buildGatedMemory(userMessage, o = {}) {
             tokens += Math.ceil(libText.length / 4);
             console.log(`buildSmartContext: recall gate injected ${frags.length} fragments${surfaced.length ? ` + ${surfaced.length} 浮現` : ''}`);
             for (const f of memoryItems) injected.push({ id: f.id, source_table: f.source_table });
+
+            // CA1 比對器（recall.verify）：這句話含具體細節時，核對記憶是否支持它的前提，
+            // 不符或找不到就附上 <memory_check>，避免作答時拿「話題相近、細節不同」的記憶充數
+            if (cfg.verify && hasConcreteDetail(userMessage, db)) {
+                const res = await verifyRecall(userMessage, memoryItems, {
+                    maxMemories: cfg.verify_max_memories, timeoutMs: cfg.verify_timeout_ms, callLLM: o.callLLM,
+                });
+                if (res) {
+                    check = res;
+                    if (res.note) { parts.push(res.note); tokens += Math.ceil(res.note.length / 4); }
+                    console.log(`[CA1] 核對 ${res.verdict}${res.mismatches.length ? `（${res.mismatches.length} 處不符）` : ''}，${res.ms}ms`);
+                }
+            }
             if (surfaced.length > 0) {
                 recall.recordSurfaced(surfaced, db, now);
                 console.log(`[recallGate] 浮現 ${surfaced.length} 條（${[...new Set(surfaced.map(f => f._surfaceReason))].join('、')}）`);
@@ -197,7 +214,7 @@ async function buildGatedMemory(userMessage, o = {}) {
         }
     } catch (e) { console.error('[recallGate] 前瞻失敗:', e.message); }
 
-    return { parts, tokens, injected, decision };
+    return { parts, tokens, injected, decision, check };
 }
 
 module.exports = { buildGatedMemory, loadPoolFragments, resetPipelineState };

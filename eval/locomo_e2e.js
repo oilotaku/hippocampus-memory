@@ -39,6 +39,8 @@ process.env.LLM_REQUEST_TIMEOUT_MS = process.env.LLM_REQUEST_TIMEOUT_MS || '1500
 const CFG = path.join(__dirname, '..', 'memory_config.json');
 const example = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'memory_config.example.json'), 'utf8'));
 example.user.name = conv.speaker_a; example.ai.name = conv.speaker_b;
+// E2E_RECALL_VERIFY=1：開啟 CA1 比對器（recall.verify），作答前核對問題細節與取回記憶
+if (process.env.E2E_RECALL_VERIFY === '1') example.recall = { ...(example.recall || {}), verify: true };
 fs.writeFileSync(CFG, JSON.stringify(example));
 process.on('exit', () => { try { fs.unlinkSync(CFG); } catch (_) {} });
 
@@ -285,6 +287,7 @@ async function qa() {
             const g = await buildGatedMemory(q.question, {});
             rec.recall_ms = Date.now() - t0;
             rec.retrieve = g.decision?.retrieve; rec.gate_reason = g.decision?.reason;
+            rec.check = g.check ? { verdict: g.check.verdict, mismatches: g.check.mismatches, ms: g.check.ms } : null;
             rec.injected_ids = g.injected.filter(x => x.source_table === 'fragment').map(x => x.id);
             const dias = new Set(rec.injected_ids.flatMap(id => fragDia.get(id) || []));
             rec.retrieved_dia = [...dias];
