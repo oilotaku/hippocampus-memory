@@ -291,7 +291,7 @@ E2E_LLM_BASE=http://127.0.0.1:18765/v1 E2E_MODEL=haiku E2E_TAG=claude \
 E2E_LLM_BASE=http://127.0.0.1:18765/v1 E2E_MODEL=haiku node eval/locomo_e2e.js longctx 0 LC
 ```
 
-Results on the Traditional Chinese synthetic set (3 conversations of about 7.8k tokens each, 144 questions; `eval/synth/generate_zh.py --sessions 20` makes longer ones). Answers were produced by Claude Haiku 4.5 and graded by Claude Sonnet; the memory system used full-text plus a bge-m3 vector channel:
+Results on the Traditional Chinese synthetic set (3 conversations of about 7.8k tokens each, 144 questions; `eval/synth/generate_zh.py --sessions 20` or `--sessions 60` makes longer ones). Answers were produced by Claude Haiku 4.5 and graded by Claude Sonnet; the memory system used full-text plus a bge-m3 vector channel:
 
 | Setup | Correct | Time questions |
 |---|---|---|
@@ -305,7 +305,15 @@ What this shows:
 - **Extraction varies a lot between runs.** The same code on the same conversation scored 36 and 19 correct in two runs, a larger swing than any single change measured so far.
 - **The memory system refuses better.** On questions whose answer never came up it said "not mentioned" 35/35 times; the whole-transcript baseline invented an answer twice.
 - **Short histories do not need a memory system.** At under 10k tokens, putting the transcript in the prompt is simply more accurate.
-- **The gap narrows as histories grow.** On a longer synthetic set (2 conversations of 20 sessions and about 26k tokens each, 123 questions), the whole-transcript baseline fell to 76% while the memory system held at 65% (two runs), so the gap went from 18 to 11 points. Time questions were even (46% vs 42%). Two data points are not enough to place the crossover; a straight-line guess puts it somewhere around 80–100k tokens.
+- **Longer histories did not close the gap, up to about 80k tokens.** The same comparison on longer synthetic sets (two conversations each):
+
+  | History length | Whole transcript | Memory system (two runs) | Gap |
+  |---|---|---|---|
+  | about 7.8k tokens (6 sessions) | 86% | 68% | 18 points |
+  | about 26k tokens (20 sessions) | 76% | 65% | 11 points |
+  | about 80k tokens (60 sessions) | 84% | 69% | 15 points |
+
+  Claude Haiku answered just as well with an 80k-token transcript as with a short one, so no crossover appeared. What did change with length is invention: on questions whose answer never came up, the whole-transcript baseline made something up in a third of cases at 80k tokens (39/59 correct refusals), while the memory system refused correctly 117/118 times. The memory system's losses are concentrated in multi-hop questions (43% vs 94%) and single facts the extractor skipped (70% vs 96%), which points back at extraction rather than retrieval.
 - **The time fix helped time questions slightly** (22/60 to 26/60 over two runs each); the overall score did not move beyond run-to-run noise.
 
 ---
