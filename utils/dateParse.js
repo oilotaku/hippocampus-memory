@@ -29,6 +29,9 @@ const WD = '([一二三四五六日天])';
 const CN_DIGIT = { '零': 0, '〇': 0, '一': 1, '二': 2, '兩': 2, '两': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9 };
 const NUM = '(\\d{1,3}|[零〇一二兩两三四五六七八九十]{1,3})';
 const DAYSUF = '[日號号]';
+// 語氣（文字已轉繁體）：只用於 past 模式下沒有前綴的「週X」該往前還是往後算
+const PAST_TONE = /了|過(?![來去幾])|剛/;   // 「過來／過去／過幾天」不是完成語氣
+const FUTURE_TONE = /要|會|打算|準備|預計|計畫|計劃|將|想去|約好|排了/;
 
 /** '15'／'十五'／'二十'／'三十一'／'兩' → 整數；認不得回 null */
 function cnToInt(s) {
@@ -145,7 +148,14 @@ function scanDates(text, ref, opts = {}) {
     eat(new RegExp(`上(?:個)?${WK}${WD}`, 'g'), (a, i) => pushPast(monday + (WEEKDAY[a[1]] - 7) * DAY_MS, i));
     eat(new RegExp(`下(?:個)?${WK}${WD}`, 'g'), (a, i) => push(monday + (7 + WEEKDAY[a[1]]) * DAY_MS, i));
     eat(new RegExp(`(?:這|本)(?:個)?${WK}${WD}`, 'g'), (a, i) => push(monday + WEEKDAY[a[1]] * DAY_MS, i));
-    eat(new RegExp(`${WK}${WD}`, 'g'), (a, i) => push(refDay + ((WEEKDAY[a[1]] - refWd + 7) % 7) * DAY_MS, i));   // 含當天
+    // 沒有前綴的「週X」：預設取 ref 起下一個（含當天）。past 模式（敘述已發生的事）下依語氣：
+    // 有完成語氣（了／過／剛）且沒有未來語氣（要／會／打算…）→ 取最近一個過去的（含當天）。
+    // 實測：週二說「週六陪她在公園玩太久了」是剛過去的週六，取下一個會差一週。
+    const bareBack = opts.past && PAST_TONE.test(t) && !FUTURE_TONE.test(t);
+    eat(new RegExp(`${WK}${WD}`, 'g'), (a, i) => {
+        const fwd = (WEEKDAY[a[1]] - refWd + 7) % 7;
+        push(refDay + (bareBack && fwd > 0 ? fwd - 7 : fwd) * DAY_MS, i);
+    });
 
     // 相對日
     eat(/大後天|大后天/g, (a, i) => push(refDay + 3 * DAY_MS, i));
