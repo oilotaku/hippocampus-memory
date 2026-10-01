@@ -12,15 +12,11 @@ const { callLLM } = require('../../llm');
 const { USER, AI } = require('../../nameResolver');
 const { sqlNow, sqlDaysAgo } = require('../../../utils/time');
 const { getRecallConfig } = require('../ca3/recallGate');
+const { getLifecycleConfig } = require('./lifecycleConfig');
 
+// 生命週期門檻（冷卻/凍結/墓碑天數、成熟/歸檔月數、實體最少碎片數、糾正追溯天數）
+// 移到 lifecycleConfig.js（memory_config.json 的 lifecycle.*），呼叫時才讀；這裡只留非門檻常數
 const CONFIG = {
-    FRAGMENT_COOLING_DAYS: 14,     // 14天無人訪問 → 冷卻
-    FRAGMENT_FROZEN_DAYS: 30,      // 冷卻後30天 → 凍結（從ChromaDB刪除向量）
-    FRAGMENT_TOMBSTONE_DAYS: 90,   // 凍結後90天 → 墓碑（清空內容，僅留證據鏈）
-    EPISODE_MATURE_MONTHS: 6,      // 6個月未觸達 → 成熟（權重減半）
-    EPISODE_ARCHIVE_MONTHS: 12,    // 12個月 → 歸檔
-    MIN_FRAGS_FOR_ENTITY: 2,       // 實體最少碎片數才提取
-    CORRECTION_DAYS_LOOKBACK: 7,   // 糾正反饋追溯天數
     LLM_API_NAME: '[書庫]DS',
     LLM_API_NAME_SIMPLIFIED: '[书库]DS',  // 舊資料庫存的是簡體渠道名（migration 108 會轉成繁體，讀取端兩者都接受）
 };
@@ -40,7 +36,7 @@ async function runFragmentGC() {
     const gateOn = getRecallConfig().gate;
 
     // 1. 活躍 → 冷卻：14天以上沒人看過
-    const coolingCutoff = sqlDaysAgo(CONFIG.FRAGMENT_COOLING_DAYS);
+    const coolingCutoff = sqlDaysAgo(getLifecycleConfig().fragment_cooling_days);
     const toCool = db.prepare(`
         SELECT id, chroma_id FROM memory_fragments
         WHERE status = 'active'
@@ -70,7 +66,7 @@ async function runFragmentGC() {
     stats.resurrected = resurrected.length;
 
     // 3. 冷卻 → 凍結：冷卻30天以上 → 刪除ChromaDB向量
-    const frozenCutoff = sqlDaysAgo(CONFIG.FRAGMENT_FROZEN_DAYS);
+    const frozenCutoff = sqlDaysAgo(getLifecycleConfig().fragment_frozen_days);
     const toFreeze = db.prepare(`
         SELECT id, chroma_id FROM memory_fragments
         WHERE status = 'cooling'
@@ -91,7 +87,7 @@ async function runFragmentGC() {
     stats.frozen = toFreeze.length;
 
     // 4. 凍結 → 墓碑：凍結90天 → 清空內容，僅保留證據鏈
-    const tombstoneCutoff = sqlDaysAgo(CONFIG.FRAGMENT_TOMBSTONE_DAYS);
+    const tombstoneCutoff = sqlDaysAgo(getLifecycleConfig().fragment_tombstone_days);
     const toTombstone = db.prepare(`
         SELECT id FROM memory_fragments
         WHERE status = 'frozen'
@@ -122,8 +118,9 @@ async function runEpisodeDecay() {
     const stats = { matured: 0, archived: 0 };
 
     // permanent → mature: 6個月（標準）/ 12個月（flash）
-    const matureCutoff = sqlDaysAgo((CONFIG.EPISODE_MATURE_MONTHS) * 30);
-    const matureFlashCutoff = sqlDaysAgo(CONFIG.EPISODE_MATURE_MONTHS * 2 * 30);
+    const lcCfg = getLifecycleConfig();
+    const matureCutoff = sqlDaysAgo(lcCfg.episode_mature_months * 30);
+    const matureFlashCutoff = sqlDaysAgo(lcCfg.episode_mature_months * 2 * 30);
 
     // 標準 episode
     const toMatureStandard = db.prepare(`
@@ -156,8 +153,8 @@ async function runEpisodeDecay() {
     stats.matured = toMature.length;
 
     // mature → archived: 12個月（標準）/ 24個月（flash）
-    const archiveCutoff = sqlDaysAgo((CONFIG.EPISODE_ARCHIVE_MONTHS) * 30);
-    const archiveFlashCutoff = sqlDaysAgo(CONFIG.EPISODE_ARCHIVE_MONTHS * 2 * 30);
+    const archiveCutoff = sqlDaysAgo(lcCfg.episode_archive_months * 30);
+    const archiveFlashCutoff = sqlDaysAgo(lcCfg.episode_archive_months * 2 * 30);
 
     const toArchiveStandard = db.prepare(`
         SELECT id FROM memories
@@ -237,7 +234,7 @@ async function runEntityExtraction() {
     }
 
     for (const [entity, fragList] of Object.entries(groups)) {
-        if (fragList.length < CONFIG.MIN_FRAGS_FOR_ENTITY) {
+        if (fragList.length < getLifecycleConfig().min_frags_for_entity) {
             stats.skipped++;
             continue;
         }
@@ -325,7 +322,7 @@ async function runCorrectionFeedback() {
     const stats = { processed: 0, cascaded: 0 };
 
     // 拿到最近7天內新增的糾正記錄
-    const cutoffDate = sqlDaysAgo(CONFIG.CORRECTION_DAYS_LOOKBACK);
+    const cutoffDate = sqlDaysAgo(getLifecycleConfig().correction_days_lookback);
     const corrections = db.prepare(`
         SELECT * FROM correction_log
         WHERE status = 'active'

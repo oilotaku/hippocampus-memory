@@ -139,5 +139,22 @@
     "_comment": "按值標自動建星座：提取時打的標 → 一顆專門的星座（程式碼直連，不靠分類器）。可選值跑 scripts/list_tag_routing.js 看。不填 = 一顆都不建。",
     "_example": "intimacy -> 親密時刻, health -> 健康"
   },
+  "lifecycle": {
+    "_comment": "Lifecycle thresholds for the daily maintenance run. Every key is optional and must be a positive integer; invalid values fall back to the defaults shown.",
+    "fragment_cooling_days": 14,
+    "_comment_fragment_cooling_days": "Active fragments nobody has read/cited for this many days become 'cooling' (1-3650).",
+    "fragment_frozen_days": 30,
+    "_comment_fragment_frozen_days": "Days a fragment stays cooling before it is frozen and its vector is deleted from ChromaDB (1-3650).",
+    "fragment_tombstone_days": 90,
+    "_comment_fragment_tombstone_days": "Days after freezing before the content is wiped, leaving only the evidence chain (1-3650).",
+    "episode_mature_months": 6,
+    "_comment_episode_mature_months": "Months untouched before an episode matures and its weight is halved (1-120). A month counts as 30 days; flash episodes use twice this.",
+    "episode_archive_months": 12,
+    "_comment_episode_archive_months": "Months before a mature episode is archived (1-120). A month counts as 30 days; flash episodes use twice this.",
+    "min_frags_for_entity": 2,
+    "_comment_min_frags_for_entity": "Minimum number of fragments an entity needs before it is extracted (1-100).",
+    "correction_days_lookback": 7,
+    "_comment_correction_days_lookback": "How many days back the correction-feedback pass looks (1-365)."
+  },
   "source_routing": {}
 }
