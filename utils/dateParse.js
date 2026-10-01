@@ -30,8 +30,11 @@ const CN_DIGIT = { '零': 0, '〇': 0, '一': 1, '二': 2, '兩': 2, '两': 2, '
 const NUM = '(\\d{1,3}|[零〇一二兩两三四五六七八九十]{1,3})';
 const DAYSUF = '[日號号]';
 // 語氣（文字已轉繁體）：只用於 past 模式下沒有前綴的「週X」該往前還是往後算
-const PAST_TONE = /了|過(?![來去幾])|剛/;   // 「過來／過去／過幾天」不是完成語氣
+// 「過來／過去／過幾天／過生日／過年／過節／過夜／過日子」與「不過」都不是完成語氣
+const PAST_TONE = /了|(?<!不)過(?![來去幾生年節夜]|日子)|剛/;
 const FUTURE_TONE = /要|會|打算|準備|預計|計畫|計劃|將|想去|約好|排了/;
+const CLAUSE_END = '，,。．.；;！!？?\n';      // 語氣判斷以子句為範圍
+const CLAUSE_END_RE = /[，,。．.；;！!？?\n]/;
 
 /** '15'／'十五'／'二十'／'三十一'／'兩' → 整數；認不得回 null */
 function cnToInt(s) {
@@ -149,12 +152,20 @@ function scanDates(text, ref, opts = {}) {
     eat(new RegExp(`下(?:個)?${WK}${WD}`, 'g'), (a, i) => push(monday + (7 + WEEKDAY[a[1]]) * DAY_MS, i));
     eat(new RegExp(`(?:這|本)(?:個)?${WK}${WD}`, 'g'), (a, i) => push(monday + WEEKDAY[a[1]] * DAY_MS, i));
     // 沒有前綴的「週X」：預設取 ref 起下一個（含當天）。past 模式（敘述已發生的事）下依語氣：
-    // 有完成語氣（了／過／剛）且沒有未來語氣（要／會／打算…）→ 取最近一個過去的（含當天）。
+    // 週X 所在子句有完成語氣（了／過／剛）且沒有未來語氣（要／會／打算…）→ 取最近一個過去的（含當天）。
     // 實測：週二說「週六陪她在公園玩太久了」是剛過去的週六，取下一個會差一週。
-    const bareBack = opts.past && PAST_TONE.test(t) && !FUTURE_TONE.test(t);
+    // 只看同一子句：「累死了，週六去爬山」的「了」屬於前一句，週六仍是未來。
+    const clauseAt = (i) => {
+        const before = t.slice(0, i), after = t.slice(i);
+        const start = Math.max(...[...CLAUSE_END].map(c => before.lastIndexOf(c))) + 1;
+        const m = after.search(CLAUSE_END_RE);
+        return t.slice(start, m < 0 ? t.length : i + m);
+    };
     eat(new RegExp(`${WK}${WD}`, 'g'), (a, i) => {
         const fwd = (WEEKDAY[a[1]] - refWd + 7) % 7;
-        push(refDay + (bareBack && fwd > 0 ? fwd - 7 : fwd) * DAY_MS, i);
+        const clause = opts.past ? clauseAt(i) : '';
+        const back = opts.past && PAST_TONE.test(clause) && !FUTURE_TONE.test(clause);
+        push(refDay + (back && fwd > 0 ? fwd - 7 : fwd) * DAY_MS, i);
     });
 
     // 相對日
