@@ -21,8 +21,13 @@ describe('fixDateWeekday', () => {
         assert.equal(fixDateWeekday('3月12日（週三）', '明天要開會', '2026-03-10').content, '3月11日（週三）');
         assert.equal(fixDateWeekday('3月14日（週五）', '大後天出發', '2026-03-10').content, '3月13日（週五）');
     });
-    test('沒有相對說法 → 信星期，改成前後 3 天內同星期的日期', () => {
+    test('原話只說「週六」→ 與 event_at 相同取下一個週六', () => {
         const r = fixDateWeekday('全家於8月12日（週六）前往高雄', '週六要去高雄參加訂婚宴', '2026-08-11');
+        assert.equal(r.content, '全家於8月15日（週六）前往高雄');
+        assert.equal(r.fixes[0].how, 'relative');
+    });
+    test('沒有相對說法 → 信星期，改成前後 3 天內同星期的日期', () => {
+        const r = fixDateWeekday('全家於8月12日（週六）前往高雄', '要去高雄參加訂婚宴', '2026-08-11');
         assert.equal(r.content, '全家於8月15日（週六）前往高雄');
         assert.equal(r.fixes[0].how, 'nearest');
         assert.equal(fixDateWeekday('2月24日（週三）下午3點開會', '要開IEP會議', '2026-02-17').content, '2月25日（週三）下午3點開會');

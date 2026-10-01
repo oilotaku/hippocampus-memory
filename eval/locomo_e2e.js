@@ -5,6 +5,7 @@
 //        # 階段二：對每題組裝記憶、生成答案、評分；--vector 加 bge-m3 向量通道；--shift 把碎片 created_at 平移到「現在」
 //   node eval/locomo_e2e.js longctx <對話索引> <名稱> [--limit N]
 //        # 對照組：不經記憶系統，整段對話直接放進系統提示詞作答，評分方式與 qa 相同
+//   node eval/locomo_e2e.js fixdates <對話索引>         # 對既有抽取資料庫套用日期與星期校正（scribe.fix_dates）
 //   環境變數 E2E_MODEL（預設 qwen3-8b-zh-8k）
 //            E2E_LLM_BASE（預設 http://127.0.0.1:11434/v1；接 eval/claude_shim.py 時設 http://127.0.0.1:18765/v1）
 //            E2E_TAG（資料庫與抽取檔名的標籤，讓不同模型的抽取結果並存；預設空）
@@ -312,5 +313,25 @@ async function qa() {
     log('QA 完成', ((Date.now() - T0) / 60000).toFixed(1), '分鐘');
 }
 
-(MODE === 'extract' ? extract() : MODE === 'qa' ? qa() : MODE === 'longctx' ? longctx() : Promise.reject(new Error('mode: extract|qa|longctx')))
+// fixdates：對既有抽取資料庫套用寫入時的日期與星期校正（scribe.fix_dates），讓同一批記憶可以前後對照問答
+async function fixdates() {
+    const { fixDateWeekday } = require('../services/hippocampus/dentate/dateFix');
+    const { sealField, openField } = require('../services/memoryCrypto');
+    const rows = db.prepare(`SELECT id, content, quote, source_date FROM memory_fragments`).all();
+    const up = db.prepare(`UPDATE memory_fragments SET content = ? WHERE id = ?`);
+    let changed = 0, n = 0;
+    for (const r of rows) {
+        const content = openField('memory_fragments', 'content', r.content);
+        const quote = openField('memory_fragments', 'quote', r.quote);
+        const f = fixDateWeekday(content, quote, r.source_date);
+        if (!f.fixes.length) continue;
+        up.run(sealField('memory_fragments', 'content', f.content), r.id);
+        changed++; n += f.fixes.length;
+        for (const x of f.fixes) log(`#${r.id} ${x.how}: ${x.from} → ${x.to}`);
+    }
+    log(`日期校正：${rows.length} 條記憶中 ${changed} 條、共 ${n} 處`);
+}
+
+(MODE === 'extract' ? extract() : MODE === 'qa' ? qa() : MODE === 'longctx' ? longctx() : MODE === 'fixdates' ? fixdates()
+    : Promise.reject(new Error('mode: extract|qa|longctx|fixdates')))
     .then(() => process.exit(0)).catch(e => { console.error('失敗:', e); process.exit(1); });
