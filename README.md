@@ -323,6 +323,8 @@ The legacy ranking scored far below plain full-text search (MRR 0.370 on LoCoMo)
 
 The extraction model, the answering model and the grader can be set separately (`E2E_LLM_BASE`/`E2E_MODEL`, `E2E_ANSWER_BASE`/`E2E_ANSWER_MODEL`, `E2E_JUDGE_BASE`/`E2E_JUDGE_MODEL`), so a comparison can change only the extractor. `eval/claude_shim.py` exposes the Claude CLI (`claude -p`) as a local OpenAI-compatible endpoint for these runs; it binds to 127.0.0.1 only and turns extended thinking off by default. Memories are sent to Anthropic in plain text this way, so use it with synthetic or public data only.
 
+The runner points `CHROMA_URL` at an unreachable address unless `E2E_CHROMA_URL` is set. The default (`127.0.0.1:7707`) is where a production `chroma_service` listens, so an evaluation on the same machine would otherwise query the production vectors, whose fragment ids also collide with the evaluation database's. Likewise, run the shim on a port the production deployment does not use.
+
 ```bash
 python3 eval/claude_shim.py                                   # 127.0.0.1:18765
 E2E_LLM_BASE=http://127.0.0.1:18765/v1 E2E_MODEL=haiku E2E_TAG=claude node eval/locomo_e2e.js extract 0
@@ -491,7 +493,7 @@ Analysing the wrong answers of the two prompt v2 long-set runs showed where they
 | Unanswerable | 71/74 | 72/74 |
 | Overall | 180/246 (73%) | 192/246 (78%) |
 
-The fix changed 12 dates in one run's 199 memories, for example "8月12日（週六）" to 8月15日 for an engagement party. Re-graded by Sonnet the overall moves the same way (191 to 200). A relative phrase in the quote with 上／這／下 ("上週六", "下週三") is recomputed from the message date; a bare "週六" is not, because it can mean the coming or the past Saturday ("週六陪她在公園玩太久了" said on a Tuesday is the past one), so the date moves to the nearest such weekday instead. For `event_at`, a bare weekday takes the past or the coming one, whichever is closer to the date the extractor wrote: the extractor sees the whole conversation and usually gets the direction right even when the day is off. Only when it gave no date does a tense rule decide, looking at the clause around the weekday (了／過／剛 versus 要／會／打算). These two `event_at` changes were made after the runs above and have not been evaluated end to end.
+The fix changed 12 dates in one run's 199 memories, for example "8月12日（週六）" to 8月15日 for an engagement party. Re-graded by Sonnet the overall moves the same way (191 to 200). A relative phrase in the quote with 上／這／下 ("上週六", "下週三") is recomputed from the message date; a bare "週六" is not, because it can mean the coming or the past Saturday ("週六陪她在公園玩太久了" said on a Tuesday is the past one), so the date moves to the nearest such weekday instead. For `event_at`, a bare weekday takes the past or the coming one, whichever is closer to the date the extractor wrote: the extractor sees the whole conversation and usually gets the direction right even when the day is off. Only when it gave no date does a tense rule decide, looking at the clause around the weekday (了／過／剛 versus 要／會／打算). These two `event_at` changes were evaluated end to end on 2 October 2026 in one fresh run with the current defaults (new extraction, prompt v2, date fix on), graded by Sonnet with premise-aware grading for unanswerable questions: the long set scored 95/123 (77%) and the short set 114/144 (79%). Under the same grading the earlier long-set runs scored 92, 99, 95 and 105 of 123 (prompt v2 runs, then the same memories with the date fix) and the short set's prompt v2 runs 111 and 116 of 144, so the change sits inside run-to-run variation: no regression and no measurable gain. Time questions came to 14/24, against 27/48 for the two date-fix runs.
 
 #### Grader comparison
 
@@ -567,7 +569,7 @@ This version would not exist without the foundation they built. The original doc
 | Dates | Extracted dates are checked against the calendar before storing (`scribe.fix_dates`); a bare weekday in a past-tense sentence resolves to the past day for `event_at` |
 | Architecture | The write path, date fix, time fields and encoding strength live in the dentate gyrus (`dentate/`); memory age (`entorhinal/timing.js`) and the ranking's time factor (`ca3/decay.js`) are single plug points; lifecycle thresholds are configurable (`lifecycle.*`) |
 | Pre-answer check | Optional CA1 comparator (`recall.verify`): checks the question's concrete details against the retrieved memories before answering; off by default |
-| Evaluation | End-to-end runner with separately configurable extractor, answerer and grader, a long-context baseline, and a Claude CLI shim |
+| Evaluation | End-to-end runner with separately configurable extractor, answerer and grader, a long-context baseline, and a Claude CLI shim; the runner never reaches a Chroma service on the same machine |
 | Dependencies | `better-sqlite3` upgraded to 12 for prebuilt Node 24 binaries; license field corrected from ISC to MIT |
 
 ## License

@@ -10,6 +10,7 @@
 //            E2E_LLM_BASE（預設 http://127.0.0.1:11434/v1；接 eval/claude_shim.py 時設 http://127.0.0.1:18765/v1）
 //            E2E_TAG（資料庫與抽取檔名的標籤，讓不同模型的抽取結果並存；預設空）
 //            E2E_SCRIBE_PROMPT（legacy|v2：抽取用的 Scribe 提示詞版本）、E2E_SCRIBE_MAX_OUTPUT_TOKENS（抽取輸出上限）
+//            E2E_CHROMA_URL（預設不可達位址：評測絕不連到同機正式的 chroma_service；只在接評測專用 Chroma 時設定）
 //   extract 結束時把證據召回率（非無解題的證據輪次被已存記憶涵蓋的比例）寫進 e2e_<對話>_extract.json 的 recall。
 //   嵌入（--vector）固定走本機 Ollama 的 bge-m3。
 const fs = require('fs');
@@ -31,6 +32,9 @@ const DB = path.join(os.tmpdir(), `locomo-e2e-${conv.id}${TAG}.db`);
 const OUT = path.join(__dirname, 'results');
 fs.mkdirSync(OUT, { recursive: true });
 process.env.DB_PATH = DB;
+// 隔離：ca3/memory.js 的 CHROMA_URL 預設 127.0.0.1:7707，同一台機器若跑著正式 chroma_service，評測會讀到正式記憶的向量
+// （碎片 id 還會跟評測資料庫撞號）。一律指向不可達位址，與「Chroma 刻意降級」一致；要接評測專用的 Chroma 才設 E2E_CHROMA_URL。
+process.env.CHROMA_URL = process.env.E2E_CHROMA_URL || 'http://127.0.0.1:9';
 process.env.MEMORY_ENCRYPTION = process.env.MEMORY_ENCRYPTION || 'on';
 process.env.SANCTUARY_ENCRYPTION_KEY = '0'.repeat(64);
 process.env.LLM_ENDPOINT_ALLOWLIST = process.env.LLM_ENDPOINT_ALLOWLIST || [...new Set([OLLAMA, new URL(LLM_BASE).origin])].join(',');
